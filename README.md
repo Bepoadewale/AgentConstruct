@@ -16,6 +16,10 @@ The product is **not** a replacement for AWS, Azure, Google Cloud, Claude Enterp
 
 This is a strategy and product-planning repository. It contains no customer data, production credentials, or commercial product implementation. The flagship should begin only after the ten focused public repositories are complete and their reusable patterns have been validated independently.
 
+See [project status](PROJECT_STATUS.md), [implementation status](docs/IMPLEMENTATION_STATUS.md),
+and [validation scope](docs/VALIDATION.md). This repository is not evidence that the
+commercial product or public flagship has been implemented.
+
 ## Documents
 
 - [Product vision](docs/product-vision.md)
