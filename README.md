@@ -25,6 +25,7 @@ This is a strategy and product-planning repository. It contains no customer data
 - [Go-to-market plan](docs/go-to-market.md)
 - [Career and category-leadership plan](docs/category-leadership.md)
 - [Portfolio-to-flagship architecture](docs/portfolio-integration.md)
+- [Flagship evolution plan](docs/flagship-evolution-plan.md)
 - [Decision log](docs/decision-log.md)
 
 ## Engineering principles
