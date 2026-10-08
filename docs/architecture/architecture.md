@@ -22,4 +22,6 @@ Prometheus scrapes the API; Grafana reads Prometheus.
 
 The product boundary is deliberate: natural language can propose a typed specification, but it cannot call a shell, Terraform, Kubernetes or cloud APIs. A future AWS adapter will assume a customer-scoped role using short-lived credentials after policy and approval.
 
+The local cloud connection record stores only tenant-scoped connection metadata and the intended `byoc_role_contract` mode. It stores no access key or cloud credential.
+
 See [security](../security/security-model.md) and [product vision](../product/vision.md).

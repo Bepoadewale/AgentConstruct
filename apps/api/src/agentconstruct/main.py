@@ -12,7 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from agentconstruct.db import SessionLocal, run_migrations, session
-from agentconstruct.domain import ApprovalRequest, IntentRequest, LocalLoginRequest, ProjectRequest
+from agentconstruct.domain import (
+    ApprovalRequest,
+    CloudConnectionRequest,
+    IntentRequest,
+    LocalLoginRequest,
+    ProjectRequest,
+)
 from agentconstruct.models import Environment
 from agentconstruct.security import Principal, issue_local_token, verify_token
 from agentconstruct.service import ProductService
@@ -73,6 +79,19 @@ def create_project(request: ProjectRequest, principal: Principal = Depends(verif
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
     return {"id": project.id, "name": project.name, "repository_url": project.repository_url}
+
+
+@app.post("/api/v1/cloud-connections", status_code=201)
+def create_cloud_connection(request: CloudConnectionRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    REQUESTS.labels("cloud_connections.create").inc()
+    connection = service.create_cloud_connection(principal, request.display_name, request.provider, request.connection_mode)
+    return {"id": connection.id, "display_name": connection.display_name, "provider": connection.provider, "mode": connection.connection_mode, "executed": False}
+
+
+@app.get("/api/v1/cloud-connections")
+def list_cloud_connections(principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    REQUESTS.labels("cloud_connections.list").inc()
+    return [{"id": item.id, "display_name": item.display_name, "provider": item.provider, "mode": item.connection_mode, "executed": False} for item in service.cloud_connections(principal)]
 
 
 @app.post("/api/v1/intents", status_code=201)

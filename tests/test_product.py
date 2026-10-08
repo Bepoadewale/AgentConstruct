@@ -157,3 +157,12 @@ def test_durable_audit_survives_a_new_service_instance():
     service.create_intent(founder(), project.id, complete_prompt(), None, "idem-restart-safe")
     restarted = ProductService(db, policy=PolicyClient(fixture=True), executor=LocalExecutor())
     assert any(event.action == "intent.interpreted" for event in restarted.audits(founder()))
+
+
+def test_cloud_connection_is_tenant_scoped_metadata_not_credentials():
+    service, _ = make_service()
+    connection = service.create_cloud_connection(founder(), "Demo AWS account", "aws", "byoc_role_contract")
+    assert connection.organization_id == founder().organization_id
+    assert connection.connection_mode == "byoc_role_contract"
+    other_subject, other_org, other_role = LOCAL_USERS["other-tenant"]
+    assert service.cloud_connections(Principal(other_subject, other_org, other_role)) == []

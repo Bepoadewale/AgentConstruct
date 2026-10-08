@@ -19,6 +19,7 @@ from agentconstruct.intent import DeterministicIntentProvider, IntentProvider
 from agentconstruct.models import (
     Approval,
     AuditEvent,
+    CloudConnection,
     DeploymentPlan,
     Environment,
     ExecutionJob,
@@ -66,6 +67,17 @@ class ProductService:
         self.audit(principal, "project.created", "project", project.id, {"name": name})
         self.db.commit()
         return project
+
+    def create_cloud_connection(self, principal: Principal, display_name: str, provider: str, connection_mode: str) -> CloudConnection:
+        connection = CloudConnection(organization_id=principal.organization_id, display_name=display_name, provider=provider, connection_mode=connection_mode)
+        self.db.add(connection)
+        self.db.flush()
+        self.audit(principal, "cloud_connection.created", "cloud_connection", connection.id, {"provider": provider, "mode": connection_mode})
+        self.db.commit()
+        return connection
+
+    def cloud_connections(self, principal: Principal) -> list[CloudConnection]:
+        return list(self.db.scalars(select(CloudConnection).where(CloudConnection.organization_id == principal.organization_id).order_by(CloudConnection.created_at)))
 
     def _project(self, principal: Principal, project_id: str) -> Project:
         project = self.db.get(Project, project_id)

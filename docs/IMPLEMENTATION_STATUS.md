@@ -8,6 +8,7 @@
 | Architecture and cost proposal | Constrained AWS V1 planner with assumptions and cost ranges |
 | Governance | Live OPA policy, immutable SHA-256 plan hash, independent approval and audit |
 | Durable state | PostgreSQL in Compose; SQLite only in fast unit tests |
+| Cloud connection | Tenant-scoped BYOC role-contract metadata only; no AWS credential is stored or used |
 | Local execution | Fixed fixture executor reports READY, FAILED or DESTROYED; API observes the result |
 | UI and monitoring | Browser UI, `/metrics`, Prometheus and provisioned Grafana dashboard for request, plan-policy and observed-execution outcomes |
 
