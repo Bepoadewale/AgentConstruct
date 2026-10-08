@@ -1,0 +1,74 @@
+name: Cloud pilot operator
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Terraform operation
+        required: true
+        type: choice
+        options: [plan, apply, destroy]
+      confirmation:
+        description: Type PLAN_AGENTCONSTRUCT_PILOT, APPLY_AGENTCONSTRUCT_PILOT, or DESTROY_AGENTCONSTRUCT_PILOT
+        required: true
+        type: string
+      aws_role_arn:
+        description: Future scoped AWS role ARN. Do not use an access key.
+        required: true
+        type: string
+      aws_region:
+        description: AWS region
+        required: true
+        default: us-east-1
+        type: string
+      state_bucket:
+        description: Existing dedicated Terraform state bucket
+        required: true
+        type: string
+      lock_table:
+        description: Existing dedicated Terraform lock table
+        required: true
+        type: string
+      project:
+        description: Project tag/name
+        required: true
+        default: agentconstruct
+        type: string
+      expected_account_id:
+        description: Expected AWS account ID; prevents an accidental cross-account action
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  pilot:
+    if: >-
+      (inputs.operation == 'plan' && inputs.confirmation == 'PLAN_AGENTCONSTRUCT_PILOT') ||
+      (inputs.operation == 'apply' && inputs.confirmation == 'APPLY_AGENTCONSTRUCT_PILOT') ||
+      (inputs.operation == 'destroy' && inputs.confirmation == 'DESTROY_AGENTCONSTRUCT_PILOT')
+    environment: cloud-pilot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.aws_role_arn }}
+          aws-region: ${{ inputs.aws_region }}
+      - name: Verify short-lived identity
+        run: aws sts get-caller-identity
+      - name: Run the guarded Terraform operation
+        env:
+          EXPECTED_AWS_ACCOUNT_ID: ${{ inputs.expected_account_id }}
+          AWS_REGION: ${{ inputs.aws_region }}
+          TF_STATE_BUCKET: ${{ inputs.state_bucket }}
+          TF_LOCK_TABLE: ${{ inputs.lock_table }}
+          PROJECT: ${{ inputs.project }}
+          CONFIRM_APPLY: ${{ inputs.operation == 'apply' && 'APPLY_AGENTCONSTRUCT_PILOT' || '' }}
+          CONFIRM_DESTROY: ${{ inputs.operation == 'destroy' && 'DESTROY_AGENTCONSTRUCT_PILOT' || '' }}
+        run: |
+          chmod +x scripts/pilot-cloud.sh
+          scripts/pilot-cloud.sh "${{ inputs.operation }}"

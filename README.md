@@ -2,7 +2,7 @@
 
 AgentConstruct turns an AI workload request into a governed infrastructure plan. A customer describes the outcome, reviews the design, cost and risks, approves the exact plan, and sees a safe local deployment result.
 
-**Delivery state: executable local V1 foundation; cloud-pilot contracts validated statically.** The local workflow is real: FastAPI, PostgreSQL, OPA, a bounded execution fixture, Prometheus, Tempo and Grafana run in Docker Compose. The AWS/EKS/GitOps design has Terraform and Kubernetes contracts, but no AWS resource, customer GitHub App, customer-cloud role or real deployment has been executed.
+**Delivery state: executable local V1 foundation; cloud-pilot contracts and future operator workflow validated statically.** The local workflow is real: FastAPI, PostgreSQL, OPA, a bounded execution fixture, Prometheus, Tempo and Grafana run in Docker Compose. The AWS/EKS/GitOps design, GitHub OIDC workflow and operator commands exist, but no AWS resource, customer GitHub App, customer-cloud role or real deployment has been executed.
 
 ## What it does
 

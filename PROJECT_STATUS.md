@@ -23,11 +23,11 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 
 - This does **not** deploy into AWS or a customer account.
 - The local identity issuer, intent provider and execution target are fixtures.
-- GitHub App, AWS STS/OIDC, GitOps/Argo, enterprise IdP and billing are next work, not evidence.
+- GitHub App, live AWS STS/OIDC execution, GitOps/Argo execution, enterprise IdP and billing are next work, not evidence.
 
 ## Next delivery sequence
 
-1. Add GitHub OIDC operator workflow, future cloud commands and final static evidence without AWS creation.
+1. Run a separately authorised cloud pilot: plan, create, smoke, failure proof, observability, cost query, destroy and absence verification.
 
 ## Clean-room reproducibility
 
@@ -36,3 +36,7 @@ Status: validated with two clean local-runtime cycles plus one rebuilt-image con
 ## Cloud contract validation
 
 `terraform fmt`, `init -backend=false` and `validate` passed for both Terraform roots on 2026-10-08. This is static validation only; no authenticated plan or AWS apply occurred.
+
+## Future operator workflow
+
+CI now validates Terraform and Kubernetes contracts. A manual GitHub Actions workflow defines future GitHub OIDC plan/apply/destroy gates, but it has not been dispatched and no AWS role has been assumed.

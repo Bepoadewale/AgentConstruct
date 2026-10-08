@@ -4,6 +4,29 @@
 
 Terraform is the only planned authority for creating and destroying AgentConstruct AWS foundation resources. A future pilot must use a dedicated state bucket, lock table, project tags and an account/region guardrail.
 
+## Future operator commands
+
+These commands are implemented but have **not** been run against AWS. They require an explicitly authorised scoped role, a dedicated state bucket/lock table and the account guard variables below.
+
+```bash
+export AWS_PROFILE=<operator-profile>
+export EXPECTED_AWS_ACCOUNT_ID=<account-id>
+export AWS_REGION=<region>
+export TF_STATE_BUCKET=<dedicated-state-bucket>
+export TF_LOCK_TABLE=<dedicated-lock-table>
+
+make pilot-guardrails-plan
+make pilot-cloud-plan
+make pilot-cloud-apply        # also requires CONFIRM_APPLY=APPLY_AGENTCONSTRUCT_PILOT
+make pilot-cloud-push-image
+make pilot-cloud-bootstrap-runtime
+make pilot-cloud-smoke
+make pilot-cloud-validate
+make pilot-cloud-destroy      # also requires CONFIRM_DESTROY=DESTROY_AGENTCONSTRUCT_PILOT
+```
+
+The manual **Cloud pilot operator** GitHub Actions workflow uses GitHub OIDC and a supplied scoped role ARN. It has exact-text confirmation, a protected `cloud-pilot` environment and account-ID check. It never needs an AWS access key stored in GitHub.
+
 ## Before a future apply
 
 - Confirm the AWS account, region, budget and project tags.

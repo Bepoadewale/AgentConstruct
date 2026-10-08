@@ -4,7 +4,7 @@ The local V1 is executable. The cloud-pilot design is now concrete and staticall
 
 ## Next: cloud-pilot execution
 
-Run one bounded, customer-account-style AWS pilot using Terraform, a scoped role and GitHub OIDC. Prove create, signed request, policy denial, approval, GitOps reconciliation, observed failure/recovery, private telemetry, cost query, destroy and absence.
+Run one bounded, customer-account-style AWS pilot using Terraform, a scoped role and the prepared GitHub OIDC workflow. Prove create, signed request, policy denial, approval, GitOps reconciliation, observed failure/recovery, private telemetry, cost query, destroy and absence.
 
 ## Later: commercial hardening
 

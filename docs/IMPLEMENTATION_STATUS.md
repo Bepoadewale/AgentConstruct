@@ -26,3 +26,5 @@ Customer AWS role assumption, GitHub App installation/webhooks, real GitOps/Argo
 ## Statically validated cloud contract
 
 Terraform describes separate state/lock/budget guardrails plus a private VPC, EKS, ECR, RDS, Secrets Manager and IRSA foundation. Kubernetes describes hardened API replicas, probes, a PDB, default-deny policy and placeholder-only secret/image references. Argo CD describes reviewed desired-state reconciliation. Terraform format, offline-backend initialisation and validation passed. None of those resources or controllers has run in AWS.
+
+GitHub Actions also validates the Terraform and Kubernetes contracts. A manual GitHub OIDC workflow has exact plan/apply/destroy confirmations and an account check, but it has not been dispatched and no AWS identity has been assumed.
