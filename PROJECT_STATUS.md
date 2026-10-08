@@ -2,7 +2,7 @@
 
 ## Current state
 
-**AgentConstruct V1 foundation — implemented locally; cloud execution not claimed.**
+**AgentConstruct V1 foundation — implemented locally; cloud-pilot contracts statically validated; cloud execution not claimed.**
 
 The GitHub repository has been renamed from `ai-platform-product-strategy` to `AgentConstruct`. It is a private commercial product repository.
 
@@ -16,6 +16,8 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - Tenant-scoped GitHub repository and AWS BYOC role-contract metadata. No credentials are stored or used.
 - Bounded execution fixture with observed READY, FAILED and DESTROYED states.
 - Web UI, Prometheus metrics, OpenTelemetry traces, Tempo and Grafana dashboard provisioning.
+- Terraform contracts for a separate state/lock/budget foundation and private VPC, EKS, ECR, RDS, Secrets Manager and IRSA runtime.
+- Hardened Kubernetes and Argo CD desired-state contracts, plus planned private observability/recovery controls.
 
 ## Boundaries
 
@@ -25,9 +27,12 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 
 ## Next delivery sequence
 
-1. Add cloud-pilot architecture/runtime contracts without AWS creation.
-2. Add future OIDC operator workflow and static cloud validation without AWS creation.
+1. Add GitHub OIDC operator workflow, future cloud commands and final static evidence without AWS creation.
 
 ## Clean-room reproducibility
 
 Status: validated with two clean local-runtime cycles plus one rebuilt-image confirmation, including success, policy-denial, readiness-failure, trace and cleanup evidence. Cached Docker images are not treated as runtime state.
+
+## Cloud contract validation
+
+`terraform fmt`, `init -backend=false` and `validate` passed for both Terraform roots on 2026-10-08. This is static validation only; no authenticated plan or AWS apply occurred.

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">AgentConstruct planned private AWS cloud-pilot topology</title><desc id="desc">Browser to narrow access layer, private EKS control plane, RDS, Secrets Manager, ECR and private observability.</desc>
+  <style>text{font-family:Arial,sans-serif;fill:#1f2937}.h{font-size:22px;font-weight:700}.t{font-size:15px}.s{font-size:12px;fill:#4b5563}.box{stroke:#456a9b;stroke-width:2;rx:12}.aws{fill:#eef5ff}.private{fill:#f4f7fa}.warn{fill:#fff4db}</style>
+  <rect width="1200" height="700" fill="#fff"/><text x="45" y="48" class="h">AgentConstruct — planned AWS cloud-pilot</text><text x="45" y="72" class="s">Static contract only · private runtime · no AWS execution claimed</text>
+  <rect x="40" y="125" width="175" height="100" class="box warn"/><text x="65" y="165" class="h">Customer</text><text x="65" y="193" class="t">Browser / OIDC</text>
+  <path d="M215 175H300" stroke="#456a9b" stroke-width="3" marker-end="url(#a)"/>
+  <rect x="300" y="125" width="200" height="100" class="box aws"/><text x="333" y="165" class="h">Narrow ALB</text><text x="333" y="193" class="t">Console + API only</text>
+  <rect x="545" y="105" width="610" height="535" class="box private"/><text x="575" y="140" class="h">Private AWS VPC</text><text x="575" y="163" class="s">private EKS, state and observability boundaries</text>
+  <path d="M500 175H605" stroke="#456a9b" stroke-width="3" marker-end="url(#a)"/>
+  <rect x="605" y="195" width="230" height="135" class="box aws"/><text x="630" y="233" class="h">Amazon EKS</text><text x="630" y="260" class="t">API ×2 · worker · OPA</text><text x="630" y="284" class="s">IRSA · probes · PDB · NetworkPolicy</text>
+  <rect x="890" y="195" width="220" height="90" class="box aws"/><text x="918" y="232" class="h">RDS PostgreSQL</text><text x="918" y="258" class="t">plans · audit · state</text>
+  <rect x="890" y="310" width="220" height="80" class="box aws"/><text x="918" y="345" class="h">Secrets Manager</text><text x="918" y="370" class="t">references only</text>
+  <rect x="605" y="390" width="230" height="85" class="box aws"/><text x="630" y="425" class="h">Amazon ECR</text><text x="630" y="452" class="t">immutable image digest</text>
+  <rect x="605" y="510" width="505" height="90" class="box aws"/><text x="630" y="545" class="h">Private observability</text><text x="630" y="572" class="t">Prometheus · OpenTelemetry Collector · Tempo · Grafana</text>
+  <path d="M835 260H890M835 435H890M720 330V390M720 475V510" stroke="#456a9b" stroke-width="2" marker-end="url(#a)"/>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#456a9b"/></marker></defs>
+</svg>

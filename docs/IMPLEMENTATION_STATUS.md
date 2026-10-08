@@ -22,3 +22,7 @@
 ## Roadmap only
 
 Customer AWS role assumption, GitHub App installation/webhooks, real GitOps/Argo execution, enterprise identity, live price APIs, subscription billing, model runtime controls and automated remediation.
+
+## Statically validated cloud contract
+
+Terraform describes separate state/lock/budget guardrails plus a private VPC, EKS, ECR, RDS, Secrets Manager and IRSA foundation. Kubernetes describes hardened API replicas, probes, a PDB, default-deny policy and placeholder-only secret/image references. Argo CD describes reviewed desired-state reconciliation. Terraform format, offline-backend initialisation and validation passed. None of those resources or controllers has run in AWS.

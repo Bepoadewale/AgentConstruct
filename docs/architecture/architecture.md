@@ -25,3 +25,5 @@ The product boundary is deliberate: natural language can propose a typed specifi
 The local cloud connection record stores only tenant-scoped connection metadata and the intended `byoc_role_contract` mode. It stores no access key or cloud credential.
 
 See [security](../security/security-model.md) and [product vision](../product/vision.md).
+
+The [cloud-pilot architecture](cloud-pilot.md) shows the separately designed AWS runtime. It is a static contract, not an extension of the local evidence.

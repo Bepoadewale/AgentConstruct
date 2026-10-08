@@ -13,7 +13,7 @@
 
 ### PR 2 — Cloud-pilot architecture and safe runtime contracts
 
-- [ ] Add AWS icon architecture, Terraform foundation, private EKS runtime contracts, IRSA, secrets, GitOps, observability and recovery designs. No apply.
+- [x] Add cloud topology, Terraform foundation, private EKS runtime contracts, IRSA, secrets, GitOps, observability and recovery designs. No apply.
 
 ### PR 3 — Cloud-pilot operator workflow and final evidence
 

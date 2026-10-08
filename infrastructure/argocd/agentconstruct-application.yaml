@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agentconstruct
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: REPLACE_WITH_CUSTOMER_GITHUB_REPOSITORY
+    targetRevision: main
+    path: infrastructure/kubernetes/base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: agentconstruct
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]

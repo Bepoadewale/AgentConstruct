@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentconstruct-api
+  namespace: agentconstruct
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: agentconstruct-api }
+  template:
+    metadata:
+      labels: { app: agentconstruct-api }
+    spec:
+      serviceAccountName: agentconstruct-api
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: api
+          image: REPLACE_WITH_ECR_IMAGE_DIGEST
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8080, name: http }]
+          env:
+            - { name: AGENTCONSTRUCT_DATABASE_SECRET_ARN, value: REPLACE_WITH_RDS_SECRET_ARN }
+            - { name: AGENTCONSTRUCT_OTEL_ENDPOINT, value: http://otel-collector.agentconstruct.svc:4318 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "1", memory: 1Gi }
+          readinessProbe: { httpGet: { path: /healthz, port: http }, initialDelaySeconds: 5, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, initialDelaySeconds: 15, periodSeconds: 20 }
