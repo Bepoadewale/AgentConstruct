@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 import uuid
 
 import httpx
@@ -16,6 +17,16 @@ def token(client: httpx.Client, username: str) -> str:
 
 def auth(value: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {value}"}
+
+
+def wait_for_state(client: httpx.Client, token_value: str, environment_ids: set[str], expected: set[str]) -> list[dict]:
+    for _ in range(60):
+        environments = client.get(f"{BASE}/api/v1/environments", headers=auth(token_value)).json()
+        selected = [item for item in environments if item["id"] in environment_ids]
+        if len(selected) == len(environment_ids) and {item["state"] for item in selected} == expected:
+            return selected
+        time.sleep(0.25)
+    raise AssertionError("worker did not observe the expected environment state")
 
 
 def main() -> None:
@@ -48,7 +59,8 @@ def main() -> None:
         approval.raise_for_status()
         result = client.post(f"{BASE}/api/v1/deployment-plans/{plan['id']}/execute", headers=auth(operator))
         result.raise_for_status()
-        environments = result.json()["environments"]
+        queued = result.json()["environments"]
+        environments = wait_for_state(client, operator, {item["id"] for item in queued}, {"FAILED"} if args.readiness_failure else {"READY"})
         if args.readiness_failure:
             assert {item["state"] for item in environments} == {"FAILED"}, environments
             print("readiness-failure demo passed: the observer recorded FAILED; READY was not assumed")
@@ -62,7 +74,8 @@ def main() -> None:
         approved_destroy.raise_for_status()
         deleted = client.post(f"{BASE}/api/v1/deployment-plans/{destroy_plan['id']}/execute", headers=auth(operator))
         deleted.raise_for_status()
-        assert deleted.json()["environments"][0]["state"] == "DESTROYED", deleted.json()
+        destroyed_id = deleted.json()["environments"][0]["id"]
+        assert wait_for_state(client, operator, {destroyed_id}, {"DESTROYED"})[0]["state"] == "DESTROYED"
         audit = client.get(f"{BASE}/api/v1/audit-events", headers=auth(founder)).json()
         assert any(event["action"] == "environment.destroyed" for event in audit)
         print(json.dumps({"success": "canonical demo passed", "ready_environments": len(environments), "destroyed": production["id"], "audit_events": len(audit)}, indent=2))

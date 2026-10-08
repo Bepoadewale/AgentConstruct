@@ -111,6 +111,7 @@ class ExecutionJob(Base):
     __tablename__ = "execution_jobs"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     deployment_plan_id: Mapped[str] = mapped_column(ForeignKey("deployment_plans.id"), index=True)
+    environment_id: Mapped[str] = mapped_column(ForeignKey("environments.id"), index=True)
     state: Mapped[str] = mapped_column(String(40))
     result: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

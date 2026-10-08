@@ -9,15 +9,16 @@
 | Governance | Live OPA policy, immutable SHA-256 plan hash, independent approval and audit |
 | Durable state | PostgreSQL in Compose; SQLite only in fast unit tests |
 | Cloud connection | Tenant-scoped BYOC role-contract metadata only; no AWS credential is stored or used |
-| Local execution | Fixed fixture executor reports READY, FAILED or DESTROYED; API observes the result |
-| UI and monitoring | Browser UI, `/metrics`, Prometheus, OTel Collector, Tempo and provisioned Grafana datasources/dashboard for request, plan-policy and observed-execution outcomes |
+| Local execution | API persists a `QUEUED` job; a separate trusted worker invokes only the fixed fixture executor and records READY, FAILED or DESTROYED evidence |
+| Identity boundary | Local signed-token fixture plus an unconfigured JWT/JWKS verifier interface for a future trusted issuer |
+| UI and monitoring | Plain JavaScript browser UI with editable region/data/budget constraints; `/metrics`, Prometheus, business OTel spans, Tempo and Grafana datasources/dashboard for request, plan-policy and observed-execution outcomes |
 
 ## Simulated
 
 - Natural-language understanding uses deterministic parsing, not a paid model.
 - The AWS architecture recommendation is a small rule catalogue, not arbitrary design generation.
 - Deployment is a bounded local fixture, not AWS, Terraform, Docker or Kubernetes execution.
-- Local signed JWT is a development fixture, not enterprise OIDC/JWKS validation.
+- Local signed JWT is a development fixture. The JWKS verifier adapter is code, not enterprise OIDC execution evidence.
 
 ## Roadmap only
 

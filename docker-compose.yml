@@ -43,10 +43,27 @@ services:
       fixture-executor: {condition: service_started}
     ports: ["8080:8080"]
 
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["python", "-m", "agentconstruct.worker"]
+    environment:
+      AGENTCONSTRUCT_DATABASE_URL: postgresql+psycopg://agentconstruct:agentconstruct@postgres:5432/agentconstruct
+      AGENTCONSTRUCT_OPA_URL: http://opa:8181/v1/data/agentconstruct/decision
+      AGENTCONSTRUCT_EXECUTOR_URL: http://fixture-executor:8090
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    depends_on:
+      postgres: {condition: service_healthy}
+      opa: {condition: service_started}
+      fixture-executor: {condition: service_started}
+
   prometheus:
     image: prom/prometheus:v3.5.0
     command: ["--config.file=/etc/prometheus/prometheus.yml"]
-    volumes: ["./platform/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    volumes:
+      - "./platform/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+      - "./platform/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro"
     ports: ["9090:9090"]
     depends_on: [api]
 

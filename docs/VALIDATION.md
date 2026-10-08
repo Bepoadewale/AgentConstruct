@@ -37,3 +37,36 @@ This evidence is local only. No AWS resources, customer GitHub installation, cus
 On 2026-10-08, `make terraform-validate` passed for the bootstrap and pilot Terraform roots. `make kubernetes-render` rendered the Kubernetes contract. The render did not contact or apply to a Kubernetes cluster. No AWS authenticated plan, apply, image push, Argo reconciliation or cloud destroy occurred.
 
 PR 3 adds strict CI validation for those contracts and a manual GitHub OIDC operator workflow. Neither was dispatched against AWS during this readiness phase.
+
+## V1 hardening clean-room evidence
+
+Date: 2026-10-08. Environment: macOS, Docker Desktop and Python 3.12.
+
+The first hardening cycle ran from a removed AgentConstruct Compose stack and PostgreSQL volume. It rebuilt the API and new worker image, then ran:
+
+```bash
+make bootstrap-local
+make smoke
+make browser-contract
+make demo
+make demo-failure
+make demo-readiness-failure
+make trace-check
+make verify
+make opa-test
+make terraform-validate
+make kubernetes-render
+```
+
+Results:
+
+- The separate worker started and processed durable queued deployment and destroy jobs.
+- The browser contract found the editable region, data-classification and budget controls in the real served UI.
+- The success flow recorded two `READY` environments, an independently approved production destroy and 12 audit events.
+- Budget denial and readiness failure both behaved as expected; the observer recorded `FAILED` rather than assuming success.
+- Tempo received API and worker business spans.
+- `ruff` passed; `pytest` passed **14 tests**; OPA passed **3/3**; Terraform bootstrap and pilot validation passed; Kubernetes rendering passed.
+
+This is still local/static evidence only. The JWKS adapter, External Secrets, GitHub App delivery, ALB controller, AWS resources and real GitOps reconciliation were not executed.
+
+A second clean cycle repeated the same commands from a removed Compose stack and ended with `make clean-local`. It again passed the browser contract, success, policy-denial, readiness-failure, trace, lint, test and OPA checks; the project Compose containers and local data were absent after cleanup.

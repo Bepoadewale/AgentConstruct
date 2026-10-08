@@ -2,14 +2,14 @@
 
 ## Three-PR delivery plan
 
-### PR 1 — Complete the local commercial V1
+### Completed hardening — local commercial V1
 
 - [x] Add provider-agnostic intent adapter, deterministic fixture, material-question handling, richer typed inputs, and source provenance.
 - [x] Add repository/cloud connection records and local fixtures.
-- [x] Add stale-plan/replay/idempotency/restart-recovery and readiness-failure coverage.
+- [x] Add stale-plan/replay/idempotency/restart-recovery, prompt-injection and readiness-failure coverage.
 - [x] Complete visible UI constraints, environment health, governed destroy and audit views.
-- [x] Add local OTel/Tempo traces and outcome metrics.
-- [x] Repeat clean project-runtime bootstrap, success, failure, trace and cleanup evidence twice.
+- [x] Add durable worker jobs, local OTel/Tempo business spans and outcome metrics.
+- [x] Add Compose-backed API/UI contract CI and repeat clean project-runtime bootstrap, success, failure, trace and cleanup evidence twice.
 
 ### PR 2 — Cloud-pilot architecture and safe runtime contracts
 
@@ -34,6 +34,13 @@
 - [ ] GitHub App installation, repository discovery and scoped desired-state publication.
 - [ ] Real GitOps/Argo observer and customer-cloud workload agent.
 - [ ] Enterprise OIDC/JWKS adapter and organisation lifecycle.
+
+## P1 — First cloud pilot prerequisites
+
+- [ ] Replace the local fixture issuer with a real trusted OIDC issuer and test the existing JWKS adapter.
+- [ ] Configure and test the planned GitHub App desired-state publisher and Argo observer.
+- [ ] Configure and test the planned AWS Load Balancer Controller, External Secrets Operator and exact browser redirect/CORS origins.
+- [ ] Run an explicitly authorised AWS create → validate → destroy pilot, including the failure, recovery, load and cost-evidence drills.
 
 ## P2 — Product depth
 

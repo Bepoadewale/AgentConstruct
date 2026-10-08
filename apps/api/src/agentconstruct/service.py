@@ -4,6 +4,7 @@ import hashlib
 import json
 from typing import Any
 
+from opentelemetry import trace
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -47,6 +48,9 @@ class ProductService:
         self.planner = AwsV1Planner()
         self.policy = policy or PolicyClient()
         self.executor = executor or FixtureExecutor()
+
+    def _trace(self, name: str):
+        return trace.get_tracer("agentconstruct.product").start_as_current_span(name)
 
     def seed_local_identity(self) -> None:
         for org_id, name in (("org-demo", "Demo AI Startup"), ("org-other", "Other Tenant")):
@@ -104,6 +108,14 @@ class ProductService:
         cloud_connection_id: str | None,
         idempotency_key: str,
     ) -> WorkloadIntent:
+        with self._trace("agentconstruct.intent.interpret") as span:
+            span.set_attribute("agentconstruct.organization_id", principal.organization_id)
+            return self._create_intent(principal, project_id, prompt, source_repository, cloud_connection_id, idempotency_key)
+
+    def _create_intent(
+        self, principal: Principal, project_id: str, prompt: str, source_repository: str | None,
+        cloud_connection_id: str | None, idempotency_key: str,
+    ) -> WorkloadIntent:
         project = self._project(principal, project_id)
         if cloud_connection_id:
             connection = self.db.get(CloudConnection, cloud_connection_id)
@@ -132,6 +144,10 @@ class ProductService:
         return intent
 
     def plan_intent(self, principal: Principal, intent_id: str) -> DeploymentPlan:
+        with self._trace("agentconstruct.architecture.plan"):
+            return self._plan_intent(principal, intent_id)
+
+    def _plan_intent(self, principal: Principal, intent_id: str) -> DeploymentPlan:
         intent = self._intent(principal, intent_id)
         spec = WorkloadSpec.model_validate(intent.spec)
         if spec.unknowns:
@@ -141,7 +157,8 @@ class ProductService:
         if not stored:
             stored = StoredArchitecturePlan(organization_id=principal.organization_id, intent_id=intent.id, plan=architecture.model_dump(mode="json"))
             self.db.add(stored)
-        decision = self.policy.evaluate(principal, spec, PlanAction.DEPLOY)
+        with self._trace("agentconstruct.policy.evaluate"):
+            decision = self.policy.evaluate(principal, spec, PlanAction.DEPLOY)
         payload = {
             "action": PlanAction.DEPLOY,
             "intent_id": intent.id,
@@ -170,6 +187,10 @@ class ProductService:
         return plan
 
     def approve(self, principal: Principal, plan_id: str, provided_hash: str) -> DeploymentPlan:
+        with self._trace("agentconstruct.plan.approve"):
+            return self._approve(principal, plan_id, provided_hash)
+
+    def _approve(self, principal: Principal, plan_id: str, provided_hash: str) -> DeploymentPlan:
         plan = self._plan(principal, plan_id)
         if principal.role != "operator":
             raise PermissionError("operator role required for approval")
@@ -186,35 +207,67 @@ class ProductService:
         return plan
 
     def execute(self, principal: Principal, plan_id: str) -> list[Environment]:
+        """Queue bounded work. A separate worker observes the fixture result."""
         plan = self._plan(principal, plan_id)
         if plan.action == PlanAction.DESTROY:
-            return [self._execute_destroy(principal, plan)]
+            return [self._queue_destroy(principal, plan)]
         if plan.state not in {LifecycleState.PLANNED, LifecycleState.APPROVED}:
             raise ValueError("plan is not executable")
         if plan.state == LifecycleState.APPROVED and not self.db.scalar(select(Approval).where(Approval.deployment_plan_id == plan.id, Approval.plan_hash == plan.plan_hash)):
             raise ValueError("approved plan has no matching durable approval")
         spec = WorkloadSpec.model_validate(plan.payload["spec"])
-        environments = []
+        environments: list[Environment] = []
         plan.state = LifecycleState.QUEUED
+        intent = self._intent(principal, plan.intent_id)
         for environment_type in spec.environments:
-            environment = Environment(organization_id=principal.organization_id, project_id=self._intent(principal, plan.intent_id).project_id, name=f"{self._intent(principal, plan.intent_id).id[:8]}-{environment_type}", environment_type=environment_type, state=LifecycleState.QUEUED, desired_state={"profile": plan.payload["architecture"]["profile"], "plan_hash": plan.plan_hash}, observed_state={})
+            environment = Environment(organization_id=principal.organization_id, project_id=intent.project_id, name=f"{intent.id[:8]}-{environment_type}", environment_type=environment_type, state=LifecycleState.QUEUED, desired_state={"profile": plan.payload["architecture"]["profile"], "plan_hash": plan.plan_hash, "should_fail": "force failure" in intent.prompt.lower()}, observed_state={})
             self.db.add(environment)
             self.db.flush()
-            self.db.add(ExecutionJob(deployment_plan_id=plan.id, state=LifecycleState.QUEUED, result={"environment_id": environment.id}))
-            for state in (LifecycleState.PROVISIONING, LifecycleState.DEPLOYING, LifecycleState.VERIFYING):
-                require_transition(LifecycleState(environment.state), state)
-                environment.state = state
-            observation = self.executor.deploy(environment.id, should_fail="force failure" in self._intent(principal, plan.intent_id).prompt.lower())
-            environment.observed_state = observation.detail
-            target = LifecycleState.READY if observation.state == "READY" else LifecycleState.FAILED
-            require_transition(LifecycleState(environment.state), target)
-            environment.state = target
-            self.audit(principal, "environment.observed", "environment", environment.id, {"state": target, "observation": observation.detail})
+            self.db.add(ExecutionJob(deployment_plan_id=plan.id, environment_id=environment.id, state="QUEUED", result={"operation": "DEPLOY"}))
+            self.audit(principal, "execution.queued", "environment", environment.id, {"plan_hash": plan.plan_hash})
             environments.append(environment)
         self.db.commit()
         return environments
 
+    def run_next_job(self) -> bool:
+        """Run one durable fixture job. This is called only by the trusted local worker."""
+        job = self.db.scalar(select(ExecutionJob).where(ExecutionJob.state == "QUEUED").order_by(ExecutionJob.created_at).limit(1))
+        if not job:
+            return False
+        environment = self.db.get(Environment, job.environment_id)
+        plan = self.db.get(DeploymentPlan, job.deployment_plan_id)
+        if not environment or not plan:
+            job.state = "FAILED"
+            job.result = {"reason": "missing durable plan or environment"}
+            self.db.commit()
+            return True
+        with self._trace("agentconstruct.execution.run"):
+            job.state = "RUNNING"
+            if plan.action == PlanAction.DESTROY:
+                environment.state = LifecycleState.DESTROYING
+                observation = self.executor.destroy(environment.id)
+                environment.state = LifecycleState.DESTROYED if observation.state == "DESTROYED" else LifecycleState.FAILED
+                action = "environment.destroyed" if environment.state == LifecycleState.DESTROYED else "environment.destroy_failed"
+            else:
+                for state in (LifecycleState.PROVISIONING, LifecycleState.DEPLOYING, LifecycleState.VERIFYING):
+                    require_transition(LifecycleState(environment.state), state)
+                    environment.state = state
+                observation = self.executor.deploy(environment.id, should_fail=bool(environment.desired_state.get("should_fail")))
+                environment.state = LifecycleState.READY if observation.state == "READY" else LifecycleState.FAILED
+                action = "environment.observed"
+            environment.observed_state = observation.detail
+            job.state = "SUCCEEDED" if observation.state in {"READY", "DESTROYED"} else "FAILED"
+            job.result = {"observation": observation.detail, "state": environment.state}
+            principal = Principal(subject="system-worker", organization_id=environment.organization_id, role="operator")
+            self.audit(principal, action, "environment", environment.id, {"state": environment.state, "observation": observation.detail})
+            self.db.commit()
+        return True
+
     def destroy_plan(self, principal: Principal, environment_id: str) -> DeploymentPlan:
+        with self._trace("agentconstruct.destroy.plan"):
+            return self._destroy_plan(principal, environment_id)
+
+    def _destroy_plan(self, principal: Principal, environment_id: str) -> DeploymentPlan:
         environment = self._environment(principal, environment_id)
         if LifecycleState(environment.state) not in {LifecycleState.READY, LifecycleState.FAILED, LifecycleState.DEGRADED}:
             raise ValueError("environment cannot be destroyed in its current state")
@@ -229,17 +282,15 @@ class ProductService:
         self.db.commit()
         return plan
 
-    def _execute_destroy(self, principal: Principal, plan: DeploymentPlan) -> Environment:
+    def _queue_destroy(self, principal: Principal, plan: DeploymentPlan) -> Environment:
         if plan.state not in {LifecycleState.PLANNED, LifecycleState.APPROVED}:
             raise ValueError("destroy plan is not executable")
         environment = self._environment(principal, plan.environment_id)
-        environment.state = LifecycleState.DESTROYING
-        observation = self.executor.destroy(environment.id)
-        environment.observed_state = observation.detail
-        environment.state = LifecycleState.DESTROYED if observation.state == "DESTROYED" else LifecycleState.FAILED
-        self.audit(principal, "environment.destroyed" if environment.state == LifecycleState.DESTROYED else "environment.destroy_failed", "environment", environment.id, {"observation": observation.detail})
+        self.db.add(ExecutionJob(deployment_plan_id=plan.id, environment_id=environment.id, state="QUEUED", result={"operation": "DESTROY"}))
+        self.audit(principal, "execution.queued", "environment", environment.id, {"plan_hash": plan.plan_hash})
         self.db.commit()
         return environment
+
 
     def _environment(self, principal: Principal, environment_id: str) -> Environment:
         environment = self.db.get(Environment, environment_id)
