@@ -1,5 +1,7 @@
 # Open-core and commercial boundaries
 
+> **Historical strategy note.** Superseded on 2026-10-08 by [current open-core boundary](product/open-core.md). Preserved for history only.
+
 ## Public / open-source candidates
 
 - Local-first reference implementations and demos.

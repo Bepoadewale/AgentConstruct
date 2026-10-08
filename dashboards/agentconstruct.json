@@ -1,0 +1,13 @@
+{
+  "uid": "agentconstruct-local",
+  "title": "AgentConstruct Local Product",
+  "panels": [
+    {
+      "title": "Product API requests",
+      "type": "timeseries",
+      "targets": [{"expr": "sum by (route) (agentconstruct_api_requests_total)", "refId": "A"}]
+    }
+  ],
+  "schemaVersion": 41,
+  "version": 1
+}

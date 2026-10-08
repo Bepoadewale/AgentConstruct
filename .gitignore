@@ -9,3 +9,9 @@
 *.db
 dist/
 build/
+.venv/
+.local/
+__pycache__/
+.pytest_cache/
+sbom.spdx.json
+*.egg-info/

@@ -1,25 +1,13 @@
-## Objective
+## What changed
 
-What private strategy gap or decision does this change address?
+## Evidence
 
-## Changes
+- [ ] Tests/lint pass.
+- [ ] Claims are labelled executed, simulated or planned.
+- [ ] No secret, customer or private strategy data was added.
+- [ ] Runnable changes include clean-room evidence, or the PR explains why the gate is not yet due.
 
-What documents or decision records changed?
+## Security review
 
-## Evidence and assumptions
-
-Which statements are backed by executed public-repository evidence? Which remain
-hypotheses or roadmap?
-
-## Confidentiality review
-
-- [ ] No pricing, buyer, acquisition or commercial material was copied into a public repository.
-- [ ] No customer data, credentials or secrets were added.
-
-## Validation
-
-What consistency/link/document validation was performed?
-
-## Status changes
-
-What changed in `PROJECT_STATUS.md` or `CODEX_BACKLOG.md`?
+- [ ] No raw LLM output gains execution authority.
+- [ ] Tenant, policy, approval and audit effects were considered.
