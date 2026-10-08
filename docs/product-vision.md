@@ -1,5 +1,7 @@
 # Product vision
 
+> **Historical strategy note.** Superseded on 2026-10-08 by [AgentConstruct V1 product vision](product/vision.md). Preserved for decision history only.
+
 ## Positioning
 
 **Governed AI Operations Platform**

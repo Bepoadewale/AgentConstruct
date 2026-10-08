@@ -1,5 +1,7 @@
 # Product wedge and roadmap
 
+> **Historical strategy note.** Superseded on 2026-10-08 by [current roadmap](product/roadmap.md). Preserved for history only.
+
 ## Do not begin as an all-in-one platform
 
 The initial product must solve a painful, bounded workflow better than a customer can assemble themselves.

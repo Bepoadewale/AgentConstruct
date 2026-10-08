@@ -1,5 +1,7 @@
 # Go-to-market plan
 
+> **Historical strategy note.** Superseded on 2026-10-08. Initial adoption is now AI startups and small AI engineering teams. Preserved for history.
+
 ## Initial offer
 
 Do not sell a broad "AI platform" first. Sell a scoped outcome:

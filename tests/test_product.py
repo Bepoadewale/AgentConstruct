@@ -1,0 +1,129 @@
+from __future__ import annotations
+
+from agentconstruct.db import make_engine, run_migrations
+from agentconstruct.domain import EnvironmentName, LifecycleState, PolicyResult, WorkloadSpec
+from agentconstruct.executor import ExecutionObservation
+from agentconstruct.intent import DeterministicIntentProvider
+from agentconstruct.planner import AwsV1Planner
+from agentconstruct.policy import PolicyClient
+from agentconstruct.security import LOCAL_USERS, Principal, issue_local_token, verify_token
+from agentconstruct.service import ProductService
+from agentconstruct.state import require_transition
+from fastapi import HTTPException
+from sqlalchemy.orm import sessionmaker
+
+
+class LocalExecutor:
+    def deploy(self, environment_id: str, should_fail: bool = False) -> ExecutionObservation:
+        return ExecutionObservation("FAILED" if should_fail else "READY", {"environment_id": environment_id, "health_checked": not should_fail})
+
+    def destroy(self, environment_id: str) -> ExecutionObservation:
+        return ExecutionObservation("DESTROYED", {"environment_id": environment_id, "cleanup_verified": True})
+
+
+def make_service():
+    engine = make_engine("sqlite+pysqlite:///:memory:")
+    run_migrations(engine)
+    db = sessionmaker(bind=engine, expire_on_commit=False)()
+    service = ProductService(db, policy=PolicyClient(fixture=True), executor=LocalExecutor())
+    service.seed_local_identity()
+    return service, db
+
+
+def founder() -> Principal:
+    subject, organization_id, role = LOCAL_USERS["founder"]
+    return Principal(subject, organization_id, role)
+
+
+def operator() -> Principal:
+    subject, organization_id, role = LOCAL_USERS["operator"]
+    return Principal(subject, organization_id, role)
+
+
+def complete_prompt(budget: int = 1500) -> str:
+    return f"Deploy this RAG API in AWS. Keep customer data private. Support 20 requests per second and peak at 100 requests per second. Keep monthly infrastructure under ${budget}. Create staging and production. Enable monitoring."
+
+
+def test_intent_fixture_preserves_unknown_material_requirements():
+    spec = DeterministicIntentProvider().interpret("Deploy an AI API in AWS.", None)
+    assert {"source_repository", "average_rps", "peak_rps", "monthly_budget_usd", "environments"} <= set(spec.unknowns)
+    assert spec.cloud == "aws"
+
+
+def test_planner_returns_a_transparent_cost_range_and_private_controls():
+    spec = WorkloadSpec(workload_type="rag_application", source_repository="https://github.com/example/rag", data_classification="restricted", average_rps=20, peak_rps=100, monthly_budget_usd=1500, environments=[EnvironmentName.STAGING, EnvironmentName.PRODUCTION], confidence=1)
+    plan = AwsV1Planner().plan(spec)
+    assert plan.cost_estimate.monthly_low < plan.cost_estimate.monthly_high <= 1500
+    assert "private networking" in plan.security_controls
+    assert plan.profile == "aws-eks-governed"
+
+
+def test_signed_identity_rejects_tampered_token():
+    token = issue_local_token("founder")
+    principal = verify_token(f"Bearer {token}")
+    assert principal.organization_id == "org-demo"
+    try:
+        verify_token(f"Bearer {token}tampered")
+    except HTTPException as error:
+        assert getattr(error, "status_code", None) == 401
+    else:
+        raise AssertionError("tampered signed identity was accepted")
+
+
+def test_production_plan_needs_distinct_operator_and_destroy_is_observed():
+    service, _ = make_service()
+    project = service.create_project(founder(), "support-rag", "https://github.com/example/rag")
+    intent = service.create_intent(founder(), project.id, complete_prompt(), None, "idem-production-001")
+    plan = service.plan_intent(founder(), intent.id)
+    assert plan.state == LifecycleState.APPROVAL_REQUIRED
+    try:
+        service.approve(founder(), plan.id, plan.plan_hash)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("requester self-approval was accepted")
+    service.approve(operator(), plan.id, plan.plan_hash)
+    environments = service.execute(operator(), plan.id)
+    assert {environment.state for environment in environments} == {LifecycleState.READY}
+    production = next(environment for environment in environments if environment.environment_type == "production")
+    destroy = service.destroy_plan(founder(), production.id)
+    assert destroy.state == LifecycleState.DESTROY_APPROVAL_REQUIRED
+    service.approve(operator(), destroy.id, destroy.plan_hash)
+    assert service.execute(operator(), destroy.id)[0].state == LifecycleState.DESTROYED
+    assert any(event.action == "environment.destroyed" for event in service.audits(founder()))
+
+
+def test_over_budget_request_is_denied_before_execution():
+    service, _ = make_service()
+    project = service.create_project(founder(), "over-budget", "https://github.com/example/rag")
+    intent = service.create_intent(founder(), project.id, complete_prompt(2500), None, "idem-budget-deny-01")
+    plan = service.plan_intent(founder(), intent.id)
+    assert plan.policy_result == PolicyResult.DENY
+    assert plan.state == LifecycleState.POLICY_DENIED
+    try:
+        service.execute(founder(), plan.id)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("denied plan was executable")
+
+
+def test_tenant_cannot_read_another_organization_project():
+    service, _ = make_service()
+    project = service.create_project(founder(), "team-one", "https://github.com/example/rag")
+    other_subject, other_org, other_role = LOCAL_USERS["other-tenant"]
+    try:
+        service.create_intent(Principal(other_subject, other_org, other_role), project.id, complete_prompt(), None, "idem-other-tenant")
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("cross-tenant project access was accepted")
+
+
+def test_invalid_state_transition_is_rejected():
+    try:
+        require_transition(LifecycleState.READY, LifecycleState.PROVISIONING)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("invalid lifecycle transition was accepted")

@@ -1,5 +1,7 @@
 # Flagship evolution plan
 
+> **Historical strategy note.** Superseded on 2026-10-08. This repository now contains the first AgentConstruct implementation. Preserved for history.
+
 ## Decision
 
 After the ten public reference implementations are complete, evolve

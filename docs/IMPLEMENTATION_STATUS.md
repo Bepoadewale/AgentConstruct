@@ -1,11 +1,23 @@
 # Implementation Status
 
-| Capability | Status | Evidence |
-| --- | --- | --- |
-| Private product strategy | ✅ EXECUTED | Private repository contains the product thesis and decision records. |
-| Public flagship direction | ✅ EXECUTED | `docs/flagship-evolution-plan.md` identifies the flagship and integration approach. |
-| Product implementation | 📐 ARCHITECTURE / CONTRACT ONLY | Implementation belongs in the public flagship repository. |
-| Customer deployment | 📋 ROADMAP | No customer workload, cloud deployment or commercial operation has been run. |
-| Clean-room runtime validation | 📋 ROADMAP | Not applicable until this repository gains runnable artifacts. |
+## Executed locally
 
-Do not treat this table as evidence that the planned commercial product has been built.
+| Capability | Evidence |
+| --- | --- |
+| Intent to typed specification | Deterministic provider, schema validation and unit tests |
+| Architecture and cost proposal | Constrained AWS V1 planner with assumptions and cost ranges |
+| Governance | Live OPA policy, immutable SHA-256 plan hash, independent approval and audit |
+| Durable state | PostgreSQL in Compose; SQLite only in fast unit tests |
+| Local execution | Fixed fixture executor reports READY, FAILED or DESTROYED; API observes the result |
+| UI and monitoring | Browser UI, `/metrics`, Prometheus and provisioned Grafana dashboard |
+
+## Simulated
+
+- Natural-language understanding uses deterministic parsing, not a paid model.
+- The AWS architecture recommendation is a small rule catalogue, not arbitrary design generation.
+- Deployment is a bounded local fixture, not AWS, Terraform, Docker or Kubernetes execution.
+- Local signed JWT is a development fixture, not enterprise OIDC/JWKS validation.
+
+## Roadmap only
+
+Customer AWS role assumption, GitHub App installation/webhooks, real GitOps/Argo execution, enterprise identity, live price APIs, subscription billing, model runtime controls and automated remediation.

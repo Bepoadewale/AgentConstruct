@@ -2,47 +2,33 @@
 
 ## Mission
 
-Maintain the private product, market and flagship strategy for the Governed AI
-Operations Platform. This repository is intentionally private because it may contain
-commercial positioning, buyer hypotheses, packaging decisions and acquisition strategy.
+Build and maintain **AgentConstruct**, the private commercial product. Use plain English first. Explain technical terms when they matter to a customer, operator or reviewer.
 
-## Current scope
+## Product rules
 
-This is a strategy repository, not a runnable product implementation. Do not present
-it as validation evidence for the public flagship or its component repositories.
+- AI proposes; typed validation, policy and approved deterministic systems authorize and execute.
+- Never give an LLM, customer browser, developer, or agent unrestricted shell, Terraform, Kubernetes, cloud-admin or secret access.
+- Keep customer workloads, cloud accounts and data in the customer cloud where possible.
+- Preserve public repositories as technical evidence; do not copy private strategy, pricing, buyer research or proprietary ranking logic into them.
+- Never commit secrets, private keys, customer data or long-lived cloud credentials.
+- Every privileged change needs an attributable actor, immutable plan hash, policy result and audit event.
+- Claims must say whether they are executed locally, simulated, planned or roadmap-only.
 
-## Engineering and confidentiality rules
+## Development rules
 
-- Never copy commercial strategy, pricing, buyer analysis, acquisition options or
-  confidential notes into a public repository, issue, README, source comment or commit
-  message.
-- Never commit credentials, customer data, private keys or deal-specific material.
-- Preserve a strict boundary: public repositories contain technical evidence; this
-  repository contains private product strategy.
-- Make claims traceable to validated public-repository evidence or label them as a
-  hypothesis, roadmap item or decision.
-- Do not begin flagship implementation here. Its public technical work belongs in
-  `multi-tenant-ai-inference-platform`.
-- Do not push directly to `main`; use a focused branch and PR.
+- Prefer a modular monolith until a real execution need justifies more services.
+- Use deterministic fixtures when credentials are unavailable. Label them clearly.
+- Keep interfaces provider-neutral, but implement AWS first.
+- Use bounded readiness checks, useful failures and project-scoped cleanup.
+- Do not push directly to `main`; use a focused branch and reviewable PR.
 
-## Required reading before work
+## Clean-room gate
 
-Read `PROJECT_STATUS.md`, `CODEX_BACKLOG.md`, `DEFINITION_OF_DONE.md`, and the relevant
-strategy document before editing.
+Before calling a runnable change review-ready, execute and record:
 
-## Completion and reproducibility
+```text
+clean → bootstrap → smoke → success demo → failure demo → verify → clean
+→ second bootstrap → second smoke/demo
+```
 
-Do not mark an implementation repository `PORTFOLIO COMPLETE — LOCAL-FIRST SCOPE`
-unless its own repository-specific completion gate has executed evidence. Interfaces,
-documentation, mocks and static checks alone are insufficient.
-
-If this repository later gains runnable tools, demos or generators, they must have a
-documented, project-scoped clean-room bootstrap, validation and teardown path. Do not
-infer reproducibility from a pre-existing developer environment.
-
-## Before finishing
-
-- Check links and document consistency.
-- Run the relevant lightweight validation if configured.
-- Update `PROJECT_STATUS.md`, `CODEX_BACKLOG.md` and `docs/VALIDATION.md` truthfully.
-- Commit a focused conventional-style change and push it to the current branch.
+Do not infer reproducibility from an existing environment.

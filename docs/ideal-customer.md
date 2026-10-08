@@ -1,5 +1,7 @@
 # Ideal customer and realistic scenarios
 
+> **Historical strategy note.** Superseded on 2026-10-08 by [current ideal customer](product/ideal-customer.md). Preserved for history only.
+
 ## Initial ideal customer profile
 
 A 50–2,000 person B2B software, fintech, health-tech, logistics, or regulated enterprise organisation that has:

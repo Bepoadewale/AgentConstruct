@@ -21,3 +21,10 @@ Use `multi-tenant-ai-inference-platform` as the eventual public flagship and ret
 the other nine completed repositories as independent reference implementations. Integrate
 validated patterns through narrow contracts and vertical slices; do not merge ten codebases
 into a monolith. Commercial strategy remains private to this repository.
+# Decision — 2026-10-08: AgentConstruct becomes the private commercial flagship
+
+**Supersedes, but does not erase, the earlier strategy-only decision below.**
+
+AgentConstruct is now this private repository's product name and commercial flagship. `ai-platform-control-plane` is the primary execution and governance ancestor. `multi-tenant-ai-inference-platform` is an important AI-runtime subsystem, not the root product. The public repositories remain portfolio evidence, laboratories and possible future open-source components.
+
+The product starts with a local, modular-monolith V1 for AI startups and small engineering teams. It turns an outcome into a typed specification, constrained architecture plan, transparent cost estimate, policy result, immutable plan, approval and bounded observed execution. It does not claim customer-cloud execution until that is run.

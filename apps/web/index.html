@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AgentConstruct</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/">AgentConstruct</a>
+      <span class="badge">LOCAL PRODUCT DEMO</span>
+      <nav><a href="#describe">Describe</a><a href="#result">Plan</a><a href="#audit">Audit</a></nav>
+    </header>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">FROM AI CODE TO GOVERNED PRODUCTION INFRASTRUCTURE</p>
+        <h1>Describe the AI system you want to deploy.</h1>
+        <p class="lede">AgentConstruct turns a clear outcome into a reviewed architecture, cost estimate, security controls, and a bounded local deployment plan.</p>
+      </section>
+      <section id="describe" class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">1 · CUSTOMER INTENT</p><h2>What should AgentConstruct build?</h2></div><span id="identity" class="identity">Signing in…</span></div>
+        <label for="repository">GitHub repository</label>
+        <input id="repository" value="https://github.com/example/support-rag-api" aria-label="GitHub repository" />
+        <label for="prompt">Deployment goal</label>
+        <textarea id="prompt" rows="7">Deploy this AI API in AWS. Keep customer data private. Support 20 requests per second and peak at 100 requests per second. Keep monthly infrastructure under $1500. Create staging and production. Enable monitoring and Slack alerts.</textarea>
+        <button id="create">Analyze and create plan</button>
+        <p id="message" class="message" role="status"></p>
+      </section>
+      <section id="result" class="grid hidden">
+        <article class="panel"><p class="eyebrow">2 · INTERPRETED REQUIREMENTS</p><h2>Workload specification</h2><pre id="spec"></pre></article>
+        <article class="panel"><p class="eyebrow">3 · RECOMMENDED ARCHITECTURE</p><h2 id="profile">Awaiting request</h2><div id="architecture"></div></article>
+        <article class="panel"><p class="eyebrow">4 · GOVERNANCE</p><h2 id="policy">Awaiting policy</h2><p id="risk"></p><button id="approve" class="hidden">Approve exact plan as operator</button><button id="execute" class="hidden">Execute bounded local plan</button></article>
+        <article class="panel wide"><p class="eyebrow">5 · OBSERVED RESULT</p><h2>Environment status</h2><div id="environments">No local execution yet.</div></article>
+      </section>
+      <section id="audit" class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">AUDIT</p><h2>What happened</h2></div><button id="refresh-audit" class="secondary">Refresh</button></div>
+        <div id="audit-events">No events loaded.</div>
+      </section>
+      <section class="boundary">
+        <strong>Evidence boundary.</strong> This local demo uses signed fixture identities, PostgreSQL, live OPA policy, and a bounded fixture executor. It does not create AWS resources, grant cloud credentials, or claim a production deployment.
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

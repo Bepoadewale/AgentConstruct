@@ -1,5 +1,7 @@
 # Career and category-leadership plan
 
+> **Historical strategy note.** Superseded on 2026-10-08 by the AgentConstruct commercial-product decision. Preserved for history.
+
 ## Goal
 
 Become the technical leader trusted to define and operate enterprise AI platform capabilities: governance, reliability, delivery, security, observability, cost, and developer experience.

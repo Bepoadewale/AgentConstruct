@@ -1,5 +1,7 @@
 # Portfolio-to-flagship architecture
 
+> **Historical strategy note.** Superseded on 2026-10-08. AgentConstruct is now the private commercial flagship; public repositories remain independent references.
+
 The public portfolio projects are independent reference implementations. The flagship will consume validated concepts, not blindly merge ten codebases.
 
 | Public project | Flagship contribution |
