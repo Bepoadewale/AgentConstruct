@@ -62,6 +62,17 @@ class WorkloadSpec(BaseModel):
     provenance: dict[str, str] = Field(default_factory=dict)
 
 
+class MaterialQuestion(BaseModel):
+    field: str
+    question: str
+    reason: str
+
+
+class IntentInterpretation(BaseModel):
+    spec: WorkloadSpec
+    questions: list[MaterialQuestion] = Field(default_factory=list)
+
+
 class ArchitectureComponent(BaseModel):
     name: str
     purpose: str
@@ -108,10 +119,15 @@ class ProjectRequest(BaseModel):
     repository_url: HttpUrl | None = None
 
 
+class CloudConnectionRequest(BaseModel):
+    display_name: str = Field(min_length=3, max_length=100)
+    provider: str = Field(default="aws", pattern=r"^aws$")
+    connection_mode: str = Field(default="byoc_role_contract", pattern=r"^byoc_role_contract$")
+
+
 class ApprovalRequest(BaseModel):
     plan_hash: str = Field(min_length=64, max_length=64)
 
 
 class LocalLoginRequest(BaseModel):
     username: str = Field(min_length=2, max_length=80)
-

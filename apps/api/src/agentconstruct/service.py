@@ -15,10 +15,11 @@ from agentconstruct.domain import (
     WorkloadSpec,
 )
 from agentconstruct.executor import FixtureExecutor
-from agentconstruct.intent import DeterministicIntentProvider
+from agentconstruct.intent import DeterministicIntentProvider, IntentProvider
 from agentconstruct.models import (
     Approval,
     AuditEvent,
+    CloudConnection,
     DeploymentPlan,
     Environment,
     ExecutionJob,
@@ -39,9 +40,9 @@ def plan_hash(payload: dict[str, Any]) -> str:
 
 
 class ProductService:
-    def __init__(self, db: Session, policy: PolicyClient | None = None, executor: FixtureExecutor | None = None):
+    def __init__(self, db: Session, policy: PolicyClient | None = None, executor: FixtureExecutor | None = None, intent_provider: IntentProvider | None = None):
         self.db = db
-        self.intent_provider = DeterministicIntentProvider()
+        self.intent_provider = intent_provider or DeterministicIntentProvider()
         self.planner = AwsV1Planner()
         self.policy = policy or PolicyClient()
         self.executor = executor or FixtureExecutor()
@@ -67,6 +68,17 @@ class ProductService:
         self.db.commit()
         return project
 
+    def create_cloud_connection(self, principal: Principal, display_name: str, provider: str, connection_mode: str) -> CloudConnection:
+        connection = CloudConnection(organization_id=principal.organization_id, display_name=display_name, provider=provider, connection_mode=connection_mode)
+        self.db.add(connection)
+        self.db.flush()
+        self.audit(principal, "cloud_connection.created", "cloud_connection", connection.id, {"provider": provider, "mode": connection_mode})
+        self.db.commit()
+        return connection
+
+    def cloud_connections(self, principal: Principal) -> list[CloudConnection]:
+        return list(self.db.scalars(select(CloudConnection).where(CloudConnection.organization_id == principal.organization_id).order_by(CloudConnection.created_at)))
+
     def _project(self, principal: Principal, project_id: str) -> Project:
         project = self.db.get(Project, project_id)
         if not project or project.organization_id != principal.organization_id:
@@ -81,9 +93,10 @@ class ProductService:
                 raise ValueError("idempotency key conflicts with a different request")
             return existing
         selected_repository = source_repository or project.repository_url
-        spec = self.intent_provider.interpret(prompt, selected_repository)
+        interpretation = self.intent_provider.interpret(prompt, selected_repository)
+        spec = interpretation.spec
         state = LifecycleState.NEEDS_INPUT if spec.unknowns else LifecycleState.PLANNED
-        intent = WorkloadIntent(organization_id=principal.organization_id, project_id=project.id, requester_subject=principal.subject, prompt=prompt, idempotency_key=idempotency_key, state=state, spec=spec.model_dump(mode="json"))
+        intent = WorkloadIntent(organization_id=principal.organization_id, project_id=project.id, requester_subject=principal.subject, prompt=prompt, idempotency_key=idempotency_key, state=state, spec={**spec.model_dump(mode="json"), "questions": [question.model_dump() for question in interpretation.questions]})
         self.db.add(intent)
         self.db.flush()
         self.audit(principal, "intent.interpreted", "workload_intent", intent.id, {"state": state, "unknowns": spec.unknowns})

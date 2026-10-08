@@ -12,12 +12,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from agentconstruct.db import SessionLocal, run_migrations, session
-from agentconstruct.domain import ApprovalRequest, IntentRequest, LocalLoginRequest, ProjectRequest
+from agentconstruct.domain import (
+    ApprovalRequest,
+    CloudConnectionRequest,
+    IntentRequest,
+    LocalLoginRequest,
+    ProjectRequest,
+)
 from agentconstruct.models import Environment
 from agentconstruct.security import Principal, issue_local_token, verify_token
 from agentconstruct.service import ProductService
 
 REQUESTS = Counter("agentconstruct_api_requests_total", "API requests by route", ["route"])
+PLAN_RESULTS = Counter("agentconstruct_plan_results_total", "Plans by policy outcome", ["outcome"])
+EXECUTION_RESULTS = Counter("agentconstruct_execution_results_total", "Observed execution results", ["state"])
 
 
 @asynccontextmanager
@@ -73,6 +81,19 @@ def create_project(request: ProjectRequest, principal: Principal = Depends(verif
     return {"id": project.id, "name": project.name, "repository_url": project.repository_url}
 
 
+@app.post("/api/v1/cloud-connections", status_code=201)
+def create_cloud_connection(request: CloudConnectionRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    REQUESTS.labels("cloud_connections.create").inc()
+    connection = service.create_cloud_connection(principal, request.display_name, request.provider, request.connection_mode)
+    return {"id": connection.id, "display_name": connection.display_name, "provider": connection.provider, "mode": connection.connection_mode, "executed": False}
+
+
+@app.get("/api/v1/cloud-connections")
+def list_cloud_connections(principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    REQUESTS.labels("cloud_connections.list").inc()
+    return [{"id": item.id, "display_name": item.display_name, "provider": item.provider, "mode": item.connection_mode, "executed": False} for item in service.cloud_connections(principal)]
+
+
 @app.post("/api/v1/intents", status_code=201)
 def create_intent(request: IntentRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
     REQUESTS.labels("intents.create").inc()
@@ -90,6 +111,7 @@ def create_plan(intent_id: str, principal: Principal = Depends(verify_token), se
         plan = service.plan_intent(principal, intent_id)
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
+    PLAN_RESULTS.labels(plan.policy_result).inc()
     return {"id": plan.id, "state": plan.state, "plan_hash": plan.plan_hash, "policy_result": plan.policy_result, "payload": plan.payload}
 
 
@@ -110,6 +132,8 @@ def execute_plan(plan_id: str, principal: Principal = Depends(verify_token), ser
         environments = service.execute(principal, plan_id)
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
+    for environment in environments:
+        EXECUTION_RESULTS.labels(environment.state).inc()
     return {"environments": [{"id": item.id, "state": item.state, "type": item.environment_type, "observed_state": item.observed_state} for item in environments]}
 
 
