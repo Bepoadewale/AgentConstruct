@@ -12,6 +12,8 @@ wait_for() {
 }
 
 wait_for api http://127.0.0.1:8080/healthz
+docker compose ps --status running worker | grep -q worker
+echo "worker ready"
 wait_for executor http://127.0.0.1:8090/healthz
 wait_for prometheus http://127.0.0.1:9090/-/ready
 wait_for grafana http://127.0.0.1:3000/api/health

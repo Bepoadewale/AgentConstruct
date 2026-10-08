@@ -25,8 +25,13 @@
         <label for="cloud-target">AWS target</label>
         <input id="cloud-target" value="Demo AWS account — BYOC role contract" aria-label="AWS target" />
         <p class="message">Local demo only. This stores connection metadata, never AWS credentials.</p>
+        <div class="grid controls">
+          <label for="region">Region<select id="region"><option>us-east-1</option><option>eu-west-1</option></select></label>
+          <label for="data-classification">Data<select id="data-classification"><option value="restricted">Restricted</option><option value="internal">Internal</option></select></label>
+          <label for="budget">Monthly budget (USD)<input id="budget" type="number" min="1" value="1500" /></label>
+        </div>
         <label for="prompt">Deployment goal</label>
-        <textarea id="prompt" rows="7">Deploy this AI API in AWS. Keep customer data private. Support 20 requests per second and peak at 100 requests per second. Keep monthly infrastructure under $1500. Create staging and production. Enable monitoring and Slack alerts.</textarea>
+        <textarea id="prompt" rows="7">Deploy this AI API in AWS. Keep customer data private. Support 20 requests per second and peak at 100 requests per second. Create staging and production. Enable monitoring and Slack alerts.</textarea>
         <button id="create">Analyze and create plan</button>
         <p id="message" class="message" role="status"></p>
       </section>

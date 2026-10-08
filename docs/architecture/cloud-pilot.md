@@ -21,6 +21,7 @@ AgentConstruct will run the product control plane in a private AWS network. A cu
 | Network | VPC, private runtime subnets and a single NAT path | No public workload/database subnet; NAT is a planned cost/security trade-off |
 | Runtime | EKS managed node group | Private API endpoint; workload identity through IRSA |
 | Images | ECR | Immutable tags and scan-on-push |
+| Approved artifacts | S3 | Versioned, encrypted and blocked from public access when the workload needs documents/packages |
 | Product state | RDS PostgreSQL | Encrypted, private, seven-day backup setting |
 | Secrets | Secrets Manager | References only, with future External Secrets delivery |
 | State safety | S3 versioned state bucket and DynamoDB lock | Separate per-repository state namespace |

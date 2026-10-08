@@ -9,20 +9,20 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 ## What is implemented
 
 - Multi-organisation product domain and PostgreSQL persistence.
-- Signed local development identity fixture and tenant checks.
+- Signed local development identity fixture, tenant checks and a production-facing JWT/JWKS verifier interface.
 - Natural-language intent fixture → typed `WorkloadSpec`.
 - Small, auditable AWS V1 architecture catalogue and transparent cost range.
 - OPA policy, immutable plan hashes, independent production approval and durable audit.
 - Tenant-scoped GitHub repository and AWS BYOC role-contract metadata. No credentials are stored or used.
-- Bounded execution fixture with observed READY, FAILED and DESTROYED states.
-- Web UI, Prometheus metrics, OpenTelemetry traces, Tempo and Grafana dashboard provisioning.
+- Durable local execution jobs processed by a separate bounded worker, with observed READY, FAILED and DESTROYED states.
+- Web UI with editable region, data and budget constraints; Prometheus metrics, OpenTelemetry business traces, Tempo and Grafana dashboard provisioning.
 - Terraform contracts for a separate state/lock/budget foundation and private VPC, EKS, ECR, RDS, Secrets Manager and IRSA runtime.
-- Hardened Kubernetes and Argo CD desired-state contracts, plus planned private observability/recovery controls.
+- Hardened Kubernetes and Argo CD desired-state contracts, External Secrets and artifact-storage contracts, plus planned private observability/recovery controls.
 
 ## Boundaries
 
 - This does **not** deploy into AWS or a customer account.
-- The local identity issuer, intent provider and execution target are fixtures.
+- The local identity issuer, intent provider and execution target are fixtures. The JWKS adapter is implemented but not connected to an enterprise issuer.
 - GitHub App, live AWS STS/OIDC execution, GitOps/Argo execution, enterprise IdP and billing are next work, not evidence.
 
 ## Next delivery sequence
@@ -31,7 +31,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 
 ## Clean-room reproducibility
 
-Status: validated with two clean local-runtime cycles plus one rebuilt-image confirmation, including success, policy-denial, readiness-failure, trace and cleanup evidence. Cached Docker images are not treated as runtime state.
+Status: the earlier V1 proof completed two clean local-runtime cycles plus one rebuilt-image confirmation. This hardening change records two additional clean-room cycles with the durable worker and browser contract. Cached Docker images are not treated as runtime state.
 
 ## Cloud contract validation
 

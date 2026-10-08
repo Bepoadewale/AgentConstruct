@@ -29,14 +29,32 @@ async function refreshAudit() {
   document.querySelector("#audit-events").innerHTML = events.length ? events.reverse().map((event) => `<div class="event"><time>${new Date(event.at).toLocaleString()}</time><div><strong>${event.action}</strong><br><span>${event.entity_type} · ${event.detail ? JSON.stringify(event.detail) : ""}</span></div></div>`).join("") : "No events yet.";
 }
 
+function renderEnvironments(environments) {
+  productionEnvironment = environments.find((environment) => environment.type === "production" && environment.state === "READY") || null;
+  document.querySelector("#environments").innerHTML = environments.length ? environments.map((environment) => `<div class="component"><strong>${environment.type}: ${environment.state}</strong><span>${JSON.stringify(environment.observed_state)}</span></div>`).join("") : "No local execution yet.";
+  document.querySelector("#destroy").classList.toggle("hidden", !productionEnvironment);
+}
+
+async function waitForWorker(ids) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const environments = await api("/api/v1/environments");
+    const selected = environments.filter((environment) => ids.includes(environment.id));
+    renderEnvironments(selected);
+    if (selected.length === ids.length && selected.every((environment) => ["READY", "FAILED", "DESTROYED"].includes(environment.state))) return selected;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  throw new Error("The worker did not report a final result within the local demo timeout.");
+}
+
 document.querySelector("#create").addEventListener("click", async () => {
   try {
     show("Interpreting your request and building an auditable plan…");
     const repository = document.querySelector("#repository").value;
     const cloudTarget = document.querySelector("#cloud-target").value;
+    const constraints = ` Use ${document.querySelector("#region").value}. Treat data as ${document.querySelector("#data-classification").value}. Keep monthly infrastructure under $${document.querySelector("#budget").value}.`;
     const cloud = await api("/api/v1/cloud-connections", { method: "POST", body: JSON.stringify({ display_name: cloudTarget }) });
     const project = await api("/api/v1/projects", { method: "POST", body: JSON.stringify({ name: `support-rag-${Date.now().toString().slice(-6)}`, repository_url: repository }) });
-    const intent = await api("/api/v1/intents", { method: "POST", body: JSON.stringify({ project_id: project.id, prompt: document.querySelector("#prompt").value, source_repository: repository, cloud_connection_id: cloud.id, idempotency_key: idempotencyKey() }) });
+    const intent = await api("/api/v1/intents", { method: "POST", body: JSON.stringify({ project_id: project.id, prompt: `${document.querySelector("#prompt").value}${constraints}`, source_repository: repository, cloud_connection_id: cloud.id, idempotency_key: idempotencyKey() }) });
     document.querySelector("#spec").textContent = JSON.stringify(intent.spec, null, 2);
     plan = await api(`/api/v1/intents/${intent.id}/plans`, { method: "POST" });
     const architecture = plan.payload.architecture;
@@ -63,10 +81,10 @@ document.querySelector("#approve").addEventListener("click", async () => {
 document.querySelector("#execute").addEventListener("click", async () => {
   try {
     const result = await api(`/api/v1/deployment-plans/${plan.id}/execute`, { method: "POST" });
-    productionEnvironment = result.environments.find((environment) => environment.type === "production" && environment.state === "READY") || null;
-    document.querySelector("#environments").innerHTML = result.environments.map((environment) => `<div class="component"><strong>${environment.type}: ${environment.state}</strong><span>${JSON.stringify(environment.observed_state)}</span></div>`).join("");
-    document.querySelector("#destroy").classList.toggle("hidden", !productionEnvironment);
-    show("The bounded executor completed and the observer recorded the result."); await refreshAudit();
+    renderEnvironments(result.environments);
+    show("The durable worker is running the bounded local job…");
+    await waitForWorker(result.environments.map((environment) => environment.id));
+    show("The worker completed and the observer recorded the result."); await refreshAudit();
   } catch (error) { show(error.message, true); }
 });
 
@@ -80,9 +98,7 @@ document.querySelector("#destroy").addEventListener("click", async () => {
       destroyPlan = await api(`/api/v1/deployment-plans/${destroyPlan.id}/approve`, { method: "POST", body: JSON.stringify({ plan_hash: destroyPlan.plan_hash }) });
     }
     const result = await api(`/api/v1/deployment-plans/${destroyPlan.id}/execute`, { method: "POST" });
-    productionEnvironment = null;
-    document.querySelector("#destroy").classList.add("hidden");
-    document.querySelector("#environments").innerHTML += result.environments.map((environment) => `<div class="component"><strong>${environment.type}: ${environment.state}</strong><span>${JSON.stringify(environment.observed_state)}</span></div>`).join("");
+    await waitForWorker(result.environments.map((environment) => environment.id));
     show("The protected production environment was destroyed and cleanup was observed.");
     await refreshAudit();
   } catch (error) { show(error.message, true); }

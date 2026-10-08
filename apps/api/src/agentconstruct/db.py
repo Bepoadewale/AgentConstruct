@@ -34,7 +34,11 @@ def run_migrations(target: Engine | None = None) -> None:
         version = connection.execute(text("SELECT COALESCE(MAX(version), 0) FROM schema_migrations")).scalar_one()
         if version < 1:
             Base.metadata.create_all(bind=connection)
-            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (1)"))
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (2)"))
+            return
+        if version < 2:
+            connection.execute(text("ALTER TABLE execution_jobs ADD COLUMN environment_id VARCHAR(36)"))
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (2)"))
 
 
 def session() -> Generator[Session, None, None]:

@@ -33,6 +33,7 @@ The manual **Cloud pilot operator** GitHub Actions workflow uses GitHub OIDC and
 - Review Terraform plan output. Reject unexpected public access, broad IAM, unencrypted state or untagged resources.
 - Use short-lived role credentials. Never use a long-lived access key in GitHub, a script or a repository file.
 - Confirm that database, observability, Kubernetes and secret endpoints remain private.
+- Pin and review the AWS Load Balancer Controller version/policy before enabling the internal ALB Ingress.
 
 ## Runtime checks
 

@@ -30,20 +30,23 @@ make demo
 make demo-failure
 make demo-readiness-failure
 make trace-check
+make browser-contract
 make verify
 make clean-local
 ```
 
 Open http://localhost:8080. Grafana is at http://localhost:3000 and Prometheus is at http://localhost:9090. The local login is a documented signed fixture, not production identity.
 
+The V1 browser is deliberately plain HTML/CSS/JavaScript; see [ADR-009](docs/decisions/ADR-009-plain-web-ui.md). It keeps the first product flow small and does not move privileged logic into the browser.
+
 ## What is real, simulated and next
 
-- **Executed locally:** natural-language fixture interpretation, typed validation, constrained AWS architecture planning, transparent estimated cost range, live OPA policy, PostgreSQL lifecycle/audit state, tenant-scoped GitHub/AWS connection metadata, exact-plan approval, bounded local deployment and destruction, observed status, metrics, traces and dashboards.
+- **Executed locally:** natural-language fixture interpretation, typed validation, constrained AWS architecture planning, transparent estimated cost range, live OPA policy, PostgreSQL lifecycle/audit state, tenant-scoped GitHub/AWS connection metadata, exact-plan approval, durable queued fixture work, observed status, metrics, traces and dashboards.
 - **Simulated locally:** the AI intent provider and the deployment target. The executor can call only fixed fixture endpoints; it has no Docker, Kubernetes, Terraform or AWS authority.
 - **Roadmap:** customer AWS role assumption with short-lived credentials, GitHub App installation/webhooks, real GitOps/Argo execution, enterprise OIDC, customer billing and production support.
 
 ## Architecture
 
-See [V1 architecture](docs/architecture/architecture.md), [planned cloud-pilot architecture](docs/architecture/cloud-pilot.md), [security model](docs/security/security-model.md), [cloud operations](docs/cloud-operations.md), [product vision](docs/product/vision.md), and [validation evidence](docs/VALIDATION.md).
+See the [documentation map](docs/README.md), [V1 architecture](docs/architecture/architecture.md), [planned cloud-pilot architecture](docs/architecture/cloud-pilot.md), [security model](docs/security/security-model.md), [cloud operations](docs/cloud-operations.md), [product vision](docs/product/vision.md), and [validation evidence](docs/VALIDATION.md).
 
 AgentConstruct is private commercial product work. The public portfolio repositories remain independent technical evidence and are not copied wholesale into this product.

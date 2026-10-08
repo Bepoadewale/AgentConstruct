@@ -14,6 +14,11 @@ module "ecr" {
   name   = "${var.project}-api"
   tags   = local.tags
 }
+module "artifacts" {
+  source = "../modules/artifacts"
+  name   = "${var.project}-${var.environment}-artifacts"
+  tags   = local.tags
+}
 module "eks" {
   source     = "../modules/eks"
   name       = "${var.project}-${var.environment}"

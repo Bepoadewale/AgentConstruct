@@ -1,0 +1,15 @@
+groups:
+  - name: agentconstruct-planned-pilot
+    rules:
+      - alert: AgentConstructApiUnavailable
+        expr: up{job="agentconstruct-api"} == 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: AgentConstruct API is unavailable
+      - alert: AgentConstructExecutionFailure
+        expr: increase(agentconstruct_execution_results_total{state="FAILED"}[10m]) > 0
+        for: 1m
+        labels: { severity: ticket }
+        annotations:
+          summary: A bounded execution was observed failed
