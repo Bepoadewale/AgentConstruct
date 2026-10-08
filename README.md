@@ -2,7 +2,7 @@
 
 AgentConstruct turns an AI workload request into a governed infrastructure plan. A customer describes the outcome, reviews the design, cost and risks, approves the exact plan, and sees a safe local deployment result.
 
-**Delivery state: executable local V1 foundation.** The local workflow is real: FastAPI, PostgreSQL, OPA, a bounded execution fixture, Prometheus and Grafana run in Docker Compose. AWS, customer GitHub Apps, customer-cloud roles and real infrastructure deployment are designed interfaces, not executed claims.
+**Delivery state: executable local V1 foundation; cloud-pilot contracts validated statically.** The local workflow is real: FastAPI, PostgreSQL, OPA, a bounded execution fixture, Prometheus, Tempo and Grafana run in Docker Compose. The AWS/EKS/GitOps design has Terraform and Kubernetes contracts, but no AWS resource, customer GitHub App, customer-cloud role or real deployment has been executed.
 
 ## What it does
 
@@ -44,6 +44,6 @@ Open http://localhost:8080. Grafana is at http://localhost:3000 and Prometheus i
 
 ## Architecture
 
-See [V1 architecture](docs/architecture/architecture.md), [security model](docs/security/security-model.md), [product vision](docs/product/vision.md), and [validation evidence](docs/VALIDATION.md).
+See [V1 architecture](docs/architecture/architecture.md), [planned cloud-pilot architecture](docs/architecture/cloud-pilot.md), [security model](docs/security/security-model.md), [cloud operations](docs/cloud-operations.md), [product vision](docs/product/vision.md), and [validation evidence](docs/VALIDATION.md).
 
 AgentConstruct is private commercial product work. The public portfolio repositories remain independent technical evidence and are not copied wholesale into this product.

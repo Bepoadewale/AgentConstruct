@@ -1,0 +1,6 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: agentconstruct-api, namespace: agentconstruct }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: agentconstruct-api } }

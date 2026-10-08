@@ -3,7 +3,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export PYTHONPATH := apps/api/src
 
-.PHONY: install lint test bootstrap-local smoke demo demo-failure demo-readiness-failure trace-check verify clean-local compose-logs opa-test terraform-validate
+.PHONY: install lint test bootstrap-local smoke demo demo-failure demo-readiness-failure trace-check verify clean-local compose-logs opa-test terraform-validate kubernetes-render
 
 install:
 	command -v $(PYTHON) >/dev/null || { echo "Python 3.12 is required"; exit 1; }
@@ -41,7 +41,15 @@ opa-test:
 	docker compose exec -T opa opa test /policies
 
 terraform-validate:
-	@echo "AWS Terraform is a roadmap interface for this V1 foundation; no cloud root exists yet."
+	terraform fmt -check -recursive infrastructure/terraform
+	terraform -chdir=infrastructure/terraform/bootstrap init -backend=false -input=false
+	terraform -chdir=infrastructure/terraform/bootstrap validate
+	terraform -chdir=infrastructure/terraform/pilot init -backend=false -input=false
+	terraform -chdir=infrastructure/terraform/pilot validate
+
+kubernetes-render:
+	kubectl kustomize infrastructure/kubernetes/base >/dev/null
+	@echo "Kubernetes contract rendered successfully. It was not applied to a cluster."
 
 verify:
 	$(MAKE) lint

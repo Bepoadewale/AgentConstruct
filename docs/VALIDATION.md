@@ -31,3 +31,7 @@ Results from every cycle:
 - Each cleanup confirmed that project containers and `.local` data were absent. No broad Docker cleanup command was used.
 
 This evidence is local only. No AWS resources, customer GitHub installation, customer credentials or enterprise identity provider were used.
+
+## Static cloud-contract evidence
+
+On 2026-10-08, `make terraform-validate` passed for the bootstrap and pilot Terraform roots. `make kubernetes-render` rendered the Kubernetes contract. The render did not contact or apply to a Kubernetes cluster. No AWS authenticated plan, apply, image push, Argo reconciliation or cloud destroy occurred.

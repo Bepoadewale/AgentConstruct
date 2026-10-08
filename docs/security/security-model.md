@@ -16,4 +16,8 @@ The browser holds only a short-lived local fixture token in this demo. It does n
 | Cross-tenant project access | Service checks organisation ownership |
 | Executor becomes a cloud backdoor | Local executor has no shell or cloud capability and only fixed endpoints |
 
-Production adapters remain roadmap work: trusted OIDC/JWKS identity, customer-cloud STS roles, secrets storage and network boundaries.
+## Planned cloud boundary
+
+The static AWS contract uses private EKS and RDS, ECR immutable images, Secrets Manager references, IRSA, non-root/read-only containers, probes, a PDB and a default-deny NetworkPolicy. An optional future browser route exposes only Console/API/identity paths; Grafana, Tempo, Prometheus, Argo, Kubernetes, databases and secrets remain private.
+
+Trusted OIDC/JWKS identity, customer-cloud STS role assumption, External Secrets delivery and network enforcement are roadmap execution work. The contracts do not prove those controls in AWS.
