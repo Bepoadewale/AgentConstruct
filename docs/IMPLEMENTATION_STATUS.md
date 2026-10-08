@@ -10,7 +10,7 @@
 | Durable state | PostgreSQL in Compose; SQLite only in fast unit tests |
 | Cloud connection | Tenant-scoped BYOC role-contract metadata only; no AWS credential is stored or used |
 | Local execution | Fixed fixture executor reports READY, FAILED or DESTROYED; API observes the result |
-| UI and monitoring | Browser UI, `/metrics`, Prometheus and provisioned Grafana dashboard for request, plan-policy and observed-execution outcomes |
+| UI and monitoring | Browser UI, `/metrics`, Prometheus, OTel Collector, Tempo and provisioned Grafana datasources/dashboard for request, plan-policy and observed-execution outcomes |
 
 ## Simulated
 

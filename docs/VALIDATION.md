@@ -1,26 +1,33 @@
 # Validation
 
-## Local V1 evidence template
+## Local V1 clean-room evidence
 
-Record only commands actually executed.
+Date: 2026-10-08. Environment: macOS, Docker Desktop and Python 3.12.
 
-| Field | Result |
-| --- | --- |
-| Date / commit | 2026-10-08, working tree before first implementation PR |
-| Environment | macOS, Docker Desktop, Python 3.12 |
-| Starting state | Project-specific containers, volume and `.local` data were absent before each cycle |
-| Commands | Cycle 1: `make bootstrap-local`, `make smoke`, `make demo`, `make demo-failure`, `make verify`, `make opa-test`, `make clean-local`. Cycle 2: `make install`, `docker compose up -d --no-build`, then the same smoke/demo/verify/policy/cleanup commands. |
-| Success demo | Intent → plan → approval → observed READY → audit → governed destroy |
-| Failure demo | Over-budget request is denied by policy before execution |
-| Cleanup | `make clean-local` removes only AgentConstruct Compose resources and `.local` data |
-| Second run | Passed. The second run used already-built local images; image rebuilding is part of `make bootstrap-local` and was also exercised earlier in this validation session. |
+Two clean project-runtime cycles were completed, followed by a third confirmation that rebuilt the Docker images. Before each cycle, `make clean-local` removed only AgentConstruct containers, network, PostgreSQL volume, virtual environment and `.local` data. The first two cycles retained Docker images; the third used `docker compose up -d --build`. No prior runtime state, database data or local files were needed.
 
-### Results
+Each cycle ran:
 
-- Both smoke checks found API, fixture executor, Prometheus, Grafana and OPA ready.
-- Both success demos created staging and production fixture environments, observed two READY results, performed protected production approval, destroyed the production environment, and recorded audit events.
-- Both failure demos were denied by policy before execution.
-- `ruff`: passed; `pytest`: **7 passed**; `opa test`: **3 passed**; Compose configuration validation passed.
-- Both cleanups removed the AgentConstruct Compose network, project volume, containers and `.local` state. No broad Docker cleanup command was used.
+```bash
+make bootstrap-local
+make smoke
+make demo
+make demo-failure
+make demo-readiness-failure
+make trace-check
+make verify
+make opa-test
+make clean-local
+```
 
-No AWS, customer GitHub, or enterprise identity execution is claimed in this document.
+Results from every cycle:
+
+- Smoke checks found the API, fixture executor, PostgreSQL, OPA, Prometheus, Grafana, Tempo and OpenTelemetry Collector ready.
+- The success demo created staging and production environments, observed two `READY` results, required a different operator to approve production, destroyed production through the governed path and wrote audit events.
+- The budget failure demo was denied by live OPA before execution.
+- The readiness failure demo made the bounded executor report failure. The observer recorded `FAILED`; it did not assume `READY` because a command returned.
+- Tempo returned traces for `agentconstruct-api` after the demo.
+- `ruff` passed; `pytest` passed **12 tests**; `opa test` passed **3/3**; `docker compose config --quiet` passed.
+- Each cleanup confirmed that project containers and `.local` data were absent. No broad Docker cleanup command was used.
+
+This evidence is local only. No AWS resources, customer GitHub installation, customer credentials or enterprise identity provider were used.

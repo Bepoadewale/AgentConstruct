@@ -15,5 +15,6 @@ wait_for api http://127.0.0.1:8080/healthz
 wait_for executor http://127.0.0.1:8090/healthz
 wait_for prometheus http://127.0.0.1:9090/-/ready
 wait_for grafana http://127.0.0.1:3000/api/health
+wait_for tempo http://127.0.0.1:3200/ready
 curl -fsS http://127.0.0.1:8181/health >/dev/null
 echo "OPA ready"

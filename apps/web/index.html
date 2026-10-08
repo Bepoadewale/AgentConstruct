@@ -22,6 +22,9 @@
         <div class="panel-heading"><div><p class="eyebrow">1 · CUSTOMER INTENT</p><h2>What should AgentConstruct build?</h2></div><span id="identity" class="identity">Signing in…</span></div>
         <label for="repository">GitHub repository</label>
         <input id="repository" value="https://github.com/example/support-rag-api" aria-label="GitHub repository" />
+        <label for="cloud-target">AWS target</label>
+        <input id="cloud-target" value="Demo AWS account — BYOC role contract" aria-label="AWS target" />
+        <p class="message">Local demo only. This stores connection metadata, never AWS credentials.</p>
         <label for="prompt">Deployment goal</label>
         <textarea id="prompt" rows="7">Deploy this AI API in AWS. Keep customer data private. Support 20 requests per second and peak at 100 requests per second. Keep monthly infrastructure under $1500. Create staging and production. Enable monitoring and Slack alerts.</textarea>
         <button id="create">Analyze and create plan</button>
@@ -31,7 +34,7 @@
         <article class="panel"><p class="eyebrow">2 · INTERPRETED REQUIREMENTS</p><h2>Workload specification</h2><pre id="spec"></pre></article>
         <article class="panel"><p class="eyebrow">3 · RECOMMENDED ARCHITECTURE</p><h2 id="profile">Awaiting request</h2><div id="architecture"></div></article>
         <article class="panel"><p class="eyebrow">4 · GOVERNANCE</p><h2 id="policy">Awaiting policy</h2><p id="risk"></p><button id="approve" class="hidden">Approve exact plan as operator</button><button id="execute" class="hidden">Execute bounded local plan</button></article>
-        <article class="panel wide"><p class="eyebrow">5 · OBSERVED RESULT</p><h2>Environment status</h2><div id="environments">No local execution yet.</div></article>
+        <article class="panel wide"><p class="eyebrow">5 · OBSERVED RESULT</p><h2>Environment status</h2><div id="environments">No local execution yet.</div><button id="destroy" class="secondary hidden">Request governed production destroy</button></article>
       </section>
       <section id="audit" class="panel">
         <div class="panel-heading"><div><p class="eyebrow">AUDIT</p><h2>What happened</h2></div><button id="refresh-audit" class="secondary">Refresh</button></div>

@@ -26,6 +26,7 @@ from agentconstruct.models import (
     Organization,
     ProductUser,
     Project,
+    RepositoryConnection,
     StoredArchitecturePlan,
     WorkloadIntent,
 )
@@ -64,6 +65,15 @@ class ProductService:
         project = Project(organization_id=principal.organization_id, name=name, repository_url=repository_url)
         self.db.add(project)
         self.db.flush()
+        if repository_url:
+            self.db.add(
+                RepositoryConnection(
+                    organization_id=principal.organization_id,
+                    project_id=project.id,
+                    provider="github",
+                    repository_url=repository_url,
+                )
+            )
         self.audit(principal, "project.created", "project", project.id, {"name": name})
         self.db.commit()
         return project
@@ -85,8 +95,20 @@ class ProductService:
             raise PermissionError("project not found in this organization")
         return project
 
-    def create_intent(self, principal: Principal, project_id: str, prompt: str, source_repository: str | None, idempotency_key: str) -> WorkloadIntent:
+    def create_intent(
+        self,
+        principal: Principal,
+        project_id: str,
+        prompt: str,
+        source_repository: str | None,
+        cloud_connection_id: str | None,
+        idempotency_key: str,
+    ) -> WorkloadIntent:
         project = self._project(principal, project_id)
+        if cloud_connection_id:
+            connection = self.db.get(CloudConnection, cloud_connection_id)
+            if not connection or connection.organization_id != principal.organization_id:
+                raise PermissionError("cloud connection not found in this organization")
         existing = self.db.scalar(select(WorkloadIntent).where(WorkloadIntent.organization_id == principal.organization_id, WorkloadIntent.idempotency_key == idempotency_key))
         if existing:
             if existing.prompt != prompt or existing.project_id != project_id:
@@ -96,7 +118,7 @@ class ProductService:
         interpretation = self.intent_provider.interpret(prompt, selected_repository)
         spec = interpretation.spec
         state = LifecycleState.NEEDS_INPUT if spec.unknowns else LifecycleState.PLANNED
-        intent = WorkloadIntent(organization_id=principal.organization_id, project_id=project.id, requester_subject=principal.subject, prompt=prompt, idempotency_key=idempotency_key, state=state, spec={**spec.model_dump(mode="json"), "questions": [question.model_dump() for question in interpretation.questions]})
+        intent = WorkloadIntent(organization_id=principal.organization_id, project_id=project.id, requester_subject=principal.subject, prompt=prompt, idempotency_key=idempotency_key, state=state, spec={**spec.model_dump(mode="json"), "cloud_connection_id": cloud_connection_id, "questions": [question.model_dump() for question in interpretation.questions]})
         self.db.add(intent)
         self.db.flush()
         self.audit(principal, "intent.interpreted", "workload_intent", intent.id, {"state": state, "unknowns": spec.unknowns})
@@ -120,7 +142,14 @@ class ProductService:
             stored = StoredArchitecturePlan(organization_id=principal.organization_id, intent_id=intent.id, plan=architecture.model_dump(mode="json"))
             self.db.add(stored)
         decision = self.policy.evaluate(principal, spec, PlanAction.DEPLOY)
-        payload = {"action": PlanAction.DEPLOY, "intent_id": intent.id, "spec": spec.model_dump(mode="json"), "architecture": architecture.model_dump(mode="json"), "policy": {"result": decision.result, "reason": decision.reason}}
+        payload = {
+            "action": PlanAction.DEPLOY,
+            "intent_id": intent.id,
+            "cloud_connection_id": intent.spec.get("cloud_connection_id"),
+            "spec": spec.model_dump(mode="json"),
+            "architecture": architecture.model_dump(mode="json"),
+            "policy": {"result": decision.result, "reason": decision.reason},
+        }
         digest = plan_hash(payload)
         existing = self.db.scalar(select(DeploymentPlan).where(DeploymentPlan.plan_hash == digest))
         if existing:

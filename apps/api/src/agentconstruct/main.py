@@ -22,6 +22,7 @@ from agentconstruct.domain import (
 from agentconstruct.models import Environment
 from agentconstruct.security import Principal, issue_local_token, verify_token
 from agentconstruct.service import ProductService
+from agentconstruct.telemetry import configure_tracing
 
 REQUESTS = Counter("agentconstruct_api_requests_total", "API requests by route", ["route"])
 PLAN_RESULTS = Counter("agentconstruct_plan_results_total", "Plans by policy outcome", ["outcome"])
@@ -40,6 +41,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="AgentConstruct", version="0.1.0", lifespan=lifespan)
+configure_tracing()
 FastAPIInstrumentor.instrument_app(app)
 
 
@@ -98,7 +100,14 @@ def list_cloud_connections(principal: Principal = Depends(verify_token), service
 def create_intent(request: IntentRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
     REQUESTS.labels("intents.create").inc()
     try:
-        intent = service.create_intent(principal, request.project_id, request.prompt, request.source_repository, request.idempotency_key)
+        intent = service.create_intent(
+            principal,
+            request.project_id,
+            request.prompt,
+            request.source_repository,
+            request.cloud_connection_id,
+            request.idempotency_key,
+        )
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
     return {"id": intent.id, "state": intent.state, "spec": intent.spec}

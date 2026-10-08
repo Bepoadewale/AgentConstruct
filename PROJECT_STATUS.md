@@ -13,8 +13,9 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - Natural-language intent fixture → typed `WorkloadSpec`.
 - Small, auditable AWS V1 architecture catalogue and transparent cost range.
 - OPA policy, immutable plan hashes, independent production approval and durable audit.
+- Tenant-scoped GitHub repository and AWS BYOC role-contract metadata. No credentials are stored or used.
 - Bounded execution fixture with observed READY, FAILED and DESTROYED states.
-- Web UI, Prometheus metrics and Grafana dashboard provisioning.
+- Web UI, Prometheus metrics, OpenTelemetry traces, Tempo and Grafana dashboard provisioning.
 
 ## Boundaries
 
@@ -24,10 +25,9 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 
 ## Next delivery sequence
 
-1. Complete local V1 product depth, traces and cold-bootstrap evidence.
-2. Add cloud-pilot architecture/runtime contracts without AWS creation.
-3. Add future OIDC operator workflow and static cloud validation without AWS creation.
+1. Add cloud-pilot architecture/runtime contracts without AWS creation.
+2. Add future OIDC operator workflow and static cloud validation without AWS creation.
 
 ## Clean-room reproducibility
 
-Status: validated with two local cycles. The second cycle used already-built images after `make install`; `make bootstrap-local` remains the documented cold-bootstrap command and includes image build.
+Status: validated with two clean local-runtime cycles plus one rebuilt-image confirmation, including success, policy-denial, readiness-failure, trace and cleanup evidence. Cached Docker images are not treated as runtime state.
