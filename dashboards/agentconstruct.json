@@ -6,6 +6,16 @@
       "title": "Product API requests",
       "type": "timeseries",
       "targets": [{"expr": "sum by (route) (agentconstruct_api_requests_total)", "refId": "A"}]
+    },
+    {
+      "title": "Plan policy outcomes",
+      "type": "timeseries",
+      "targets": [{"expr": "sum by (outcome) (agentconstruct_plan_results_total)", "refId": "B"}]
+    },
+    {
+      "title": "Observed execution results",
+      "type": "timeseries",
+      "targets": [{"expr": "sum by (state) (agentconstruct_execution_results_total)", "refId": "C"}]
     }
   ],
   "schemaVersion": 41,

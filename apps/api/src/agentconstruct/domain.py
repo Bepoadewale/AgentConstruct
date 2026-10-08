@@ -62,6 +62,17 @@ class WorkloadSpec(BaseModel):
     provenance: dict[str, str] = Field(default_factory=dict)
 
 
+class MaterialQuestion(BaseModel):
+    field: str
+    question: str
+    reason: str
+
+
+class IntentInterpretation(BaseModel):
+    spec: WorkloadSpec
+    questions: list[MaterialQuestion] = Field(default_factory=list)
+
+
 class ArchitectureComponent(BaseModel):
     name: str
     purpose: str
@@ -114,4 +125,3 @@ class ApprovalRequest(BaseModel):
 
 class LocalLoginRequest(BaseModel):
     username: str = Field(min_length=2, max_length=80)
-

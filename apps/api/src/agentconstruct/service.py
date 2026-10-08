@@ -15,7 +15,7 @@ from agentconstruct.domain import (
     WorkloadSpec,
 )
 from agentconstruct.executor import FixtureExecutor
-from agentconstruct.intent import DeterministicIntentProvider
+from agentconstruct.intent import DeterministicIntentProvider, IntentProvider
 from agentconstruct.models import (
     Approval,
     AuditEvent,
@@ -39,9 +39,9 @@ def plan_hash(payload: dict[str, Any]) -> str:
 
 
 class ProductService:
-    def __init__(self, db: Session, policy: PolicyClient | None = None, executor: FixtureExecutor | None = None):
+    def __init__(self, db: Session, policy: PolicyClient | None = None, executor: FixtureExecutor | None = None, intent_provider: IntentProvider | None = None):
         self.db = db
-        self.intent_provider = DeterministicIntentProvider()
+        self.intent_provider = intent_provider or DeterministicIntentProvider()
         self.planner = AwsV1Planner()
         self.policy = policy or PolicyClient()
         self.executor = executor or FixtureExecutor()
@@ -81,9 +81,10 @@ class ProductService:
                 raise ValueError("idempotency key conflicts with a different request")
             return existing
         selected_repository = source_repository or project.repository_url
-        spec = self.intent_provider.interpret(prompt, selected_repository)
+        interpretation = self.intent_provider.interpret(prompt, selected_repository)
+        spec = interpretation.spec
         state = LifecycleState.NEEDS_INPUT if spec.unknowns else LifecycleState.PLANNED
-        intent = WorkloadIntent(organization_id=principal.organization_id, project_id=project.id, requester_subject=principal.subject, prompt=prompt, idempotency_key=idempotency_key, state=state, spec=spec.model_dump(mode="json"))
+        intent = WorkloadIntent(organization_id=principal.organization_id, project_id=project.id, requester_subject=principal.subject, prompt=prompt, idempotency_key=idempotency_key, state=state, spec={**spec.model_dump(mode="json"), "questions": [question.model_dump() for question in interpretation.questions]})
         self.db.add(intent)
         self.db.flush()
         self.audit(principal, "intent.interpreted", "workload_intent", intent.id, {"state": state, "unknowns": spec.unknowns})

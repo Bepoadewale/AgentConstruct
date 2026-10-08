@@ -45,9 +45,11 @@ def complete_prompt(budget: int = 1500) -> str:
 
 
 def test_intent_fixture_preserves_unknown_material_requirements():
-    spec = DeterministicIntentProvider().interpret("Deploy an AI API in AWS.", None)
+    interpretation = DeterministicIntentProvider().interpret("Deploy an AI API in AWS.", None)
+    spec = interpretation.spec
     assert {"source_repository", "average_rps", "peak_rps", "monthly_budget_usd", "environments"} <= set(spec.unknowns)
     assert spec.cloud == "aws"
+    assert {question.field for question in interpretation.questions} >= {"source_repository", "monthly_budget_usd"}
 
 
 def test_planner_returns_a_transparent_cost_range_and_private_controls():
@@ -127,3 +129,31 @@ def test_invalid_state_transition_is_rejected():
         pass
     else:
         raise AssertionError("invalid lifecycle transition was accepted")
+
+
+def test_stale_and_replayed_approval_are_rejected():
+    service, _ = make_service()
+    project = service.create_project(founder(), "approval-safety", "https://github.com/example/rag")
+    intent = service.create_intent(founder(), project.id, complete_prompt(), None, "idem-approval-safety")
+    plan = service.plan_intent(founder(), intent.id)
+    try:
+        service.approve(operator(), plan.id, "0" * 64)
+    except ValueError as error:
+        assert "stale approval" in str(error)
+    else:
+        raise AssertionError("stale approval was accepted")
+    service.approve(operator(), plan.id, plan.plan_hash)
+    try:
+        service.approve(operator(), plan.id, plan.plan_hash)
+    except ValueError as error:
+        assert "does not need approval" in str(error)
+    else:
+        raise AssertionError("replayed approval was accepted")
+
+
+def test_durable_audit_survives_a_new_service_instance():
+    service, db = make_service()
+    project = service.create_project(founder(), "restart-safe", "https://github.com/example/rag")
+    service.create_intent(founder(), project.id, complete_prompt(), None, "idem-restart-safe")
+    restarted = ProductService(db, policy=PolicyClient(fixture=True), executor=LocalExecutor())
+    assert any(event.action == "intent.interpreted" for event in restarted.audits(founder()))

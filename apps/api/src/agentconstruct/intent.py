@@ -3,17 +3,22 @@ from __future__ import annotations
 import re
 from typing import Protocol
 
-from agentconstruct.domain import EnvironmentName, WorkloadSpec
+from agentconstruct.domain import (
+    EnvironmentName,
+    IntentInterpretation,
+    MaterialQuestion,
+    WorkloadSpec,
+)
 
 
 class IntentProvider(Protocol):
-    def interpret(self, prompt: str, source_repository: str | None) -> WorkloadSpec: ...
+    def interpret(self, prompt: str, source_repository: str | None) -> IntentInterpretation: ...
 
 
 class DeterministicIntentProvider:
     """Local fixture parser. It is deliberately predictable and never silently fills critical gaps."""
 
-    def interpret(self, prompt: str, source_repository: str | None) -> WorkloadSpec:
+    def interpret(self, prompt: str, source_repository: str | None) -> IntentInterpretation:
         lower = prompt.lower()
         average = self._number_before(lower, r"(\d+)\s*(?:requests?|rps)\s*(?:/|per)\s*(?:second|sec)")
         peak = self._number_after_word(lower, "peak")
@@ -37,7 +42,7 @@ class DeterministicIntentProvider:
             "workload_type": "prompt" if workload_type != "unknown" else "unknown",
             "data_classification": "prompt" if data_classification != "unknown" else "unknown",
         }
-        return WorkloadSpec(
+        spec = WorkloadSpec(
             workload_type=workload_type,
             source_repository=source_repository,
             cloud="aws",
@@ -54,6 +59,20 @@ class DeterministicIntentProvider:
             confidence=0.92 if not unknowns else 0.64,
             provenance=provenance,
         )
+        return IntentInterpretation(
+            spec=spec,
+            questions=[MaterialQuestion(field=field, question=self._question_for(field), reason="AgentConstruct must not guess a value that changes architecture, security, or cost.") for field in unknowns],
+        )
+
+    @staticmethod
+    def _question_for(field: str) -> str:
+        return {
+            "source_repository": "Which GitHub repository contains this workload?",
+            "average_rps": "What average request rate should the system support?",
+            "peak_rps": "What peak request rate should the system support?",
+            "monthly_budget_usd": "What monthly infrastructure budget should the recommendation respect?",
+            "environments": "Which environments are required, for example staging and production?",
+        }[field]
 
     @staticmethod
     def _number_before(value: str, expression: str) -> int | None:

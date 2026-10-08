@@ -18,6 +18,8 @@ from agentconstruct.security import Principal, issue_local_token, verify_token
 from agentconstruct.service import ProductService
 
 REQUESTS = Counter("agentconstruct_api_requests_total", "API requests by route", ["route"])
+PLAN_RESULTS = Counter("agentconstruct_plan_results_total", "Plans by policy outcome", ["outcome"])
+EXECUTION_RESULTS = Counter("agentconstruct_execution_results_total", "Observed execution results", ["state"])
 
 
 @asynccontextmanager
@@ -90,6 +92,7 @@ def create_plan(intent_id: str, principal: Principal = Depends(verify_token), se
         plan = service.plan_intent(principal, intent_id)
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
+    PLAN_RESULTS.labels(plan.policy_result).inc()
     return {"id": plan.id, "state": plan.state, "plan_hash": plan.plan_hash, "policy_result": plan.policy_result, "payload": plan.payload}
 
 
@@ -110,6 +113,8 @@ def execute_plan(plan_id: str, principal: Principal = Depends(verify_token), ser
         environments = service.execute(principal, plan_id)
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
+    for environment in environments:
+        EXECUTION_RESULTS.labels(environment.state).inc()
     return {"environments": [{"id": item.id, "state": item.state, "type": item.environment_type, "observed_state": item.observed_state} for item in environments]}
 
 
