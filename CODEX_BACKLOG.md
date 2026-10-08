@@ -17,7 +17,7 @@
 
 ### PR 3 — Cloud-pilot operator workflow and final evidence
 
-- [ ] Add GitHub OIDC plan/apply/destroy workflows, cloud operator commands, static contract CI and final plain-English evidence review. No apply.
+- [x] Add GitHub OIDC plan/apply/destroy workflows, cloud operator commands, static contract CI and final plain-English evidence review. No apply.
 
 ## Existing product roadmap
 

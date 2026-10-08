@@ -35,3 +35,5 @@ This evidence is local only. No AWS resources, customer GitHub installation, cus
 ## Static cloud-contract evidence
 
 On 2026-10-08, `make terraform-validate` passed for the bootstrap and pilot Terraform roots. `make kubernetes-render` rendered the Kubernetes contract. The render did not contact or apply to a Kubernetes cluster. No AWS authenticated plan, apply, image push, Argo reconciliation or cloud destroy occurred.
+
+PR 3 adds strict CI validation for those contracts and a manual GitHub OIDC operator workflow. Neither was dispatched against AWS during this readiness phase.
