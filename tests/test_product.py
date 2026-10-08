@@ -4,12 +4,14 @@ from agentconstruct.db import make_engine, run_migrations
 from agentconstruct.domain import EnvironmentName, LifecycleState, PolicyResult, WorkloadSpec
 from agentconstruct.executor import ExecutionObservation
 from agentconstruct.intent import DeterministicIntentProvider
+from agentconstruct.models import RepositoryConnection
 from agentconstruct.planner import AwsV1Planner
 from agentconstruct.policy import PolicyClient
 from agentconstruct.security import LOCAL_USERS, Principal, issue_local_token, verify_token
 from agentconstruct.service import ProductService
 from agentconstruct.state import require_transition
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
 
@@ -75,7 +77,7 @@ def test_signed_identity_rejects_tampered_token():
 def test_production_plan_needs_distinct_operator_and_destroy_is_observed():
     service, _ = make_service()
     project = service.create_project(founder(), "support-rag", "https://github.com/example/rag")
-    intent = service.create_intent(founder(), project.id, complete_prompt(), None, "idem-production-001")
+    intent = service.create_intent(founder(), project.id, complete_prompt(), None, None, "idem-production-001")
     plan = service.plan_intent(founder(), intent.id)
     assert plan.state == LifecycleState.APPROVAL_REQUIRED
     try:
@@ -98,7 +100,7 @@ def test_production_plan_needs_distinct_operator_and_destroy_is_observed():
 def test_over_budget_request_is_denied_before_execution():
     service, _ = make_service()
     project = service.create_project(founder(), "over-budget", "https://github.com/example/rag")
-    intent = service.create_intent(founder(), project.id, complete_prompt(2500), None, "idem-budget-deny-01")
+    intent = service.create_intent(founder(), project.id, complete_prompt(2500), None, None, "idem-budget-deny-01")
     plan = service.plan_intent(founder(), intent.id)
     assert plan.policy_result == PolicyResult.DENY
     assert plan.state == LifecycleState.POLICY_DENIED
@@ -115,7 +117,7 @@ def test_tenant_cannot_read_another_organization_project():
     project = service.create_project(founder(), "team-one", "https://github.com/example/rag")
     other_subject, other_org, other_role = LOCAL_USERS["other-tenant"]
     try:
-        service.create_intent(Principal(other_subject, other_org, other_role), project.id, complete_prompt(), None, "idem-other-tenant")
+        service.create_intent(Principal(other_subject, other_org, other_role), project.id, complete_prompt(), None, None, "idem-other-tenant")
     except PermissionError:
         pass
     else:
@@ -134,7 +136,7 @@ def test_invalid_state_transition_is_rejected():
 def test_stale_and_replayed_approval_are_rejected():
     service, _ = make_service()
     project = service.create_project(founder(), "approval-safety", "https://github.com/example/rag")
-    intent = service.create_intent(founder(), project.id, complete_prompt(), None, "idem-approval-safety")
+    intent = service.create_intent(founder(), project.id, complete_prompt(), None, None, "idem-approval-safety")
     plan = service.plan_intent(founder(), intent.id)
     try:
         service.approve(operator(), plan.id, "0" * 64)
@@ -154,7 +156,7 @@ def test_stale_and_replayed_approval_are_rejected():
 def test_durable_audit_survives_a_new_service_instance():
     service, db = make_service()
     project = service.create_project(founder(), "restart-safe", "https://github.com/example/rag")
-    service.create_intent(founder(), project.id, complete_prompt(), None, "idem-restart-safe")
+    service.create_intent(founder(), project.id, complete_prompt(), None, None, "idem-restart-safe")
     restarted = ProductService(db, policy=PolicyClient(fixture=True), executor=LocalExecutor())
     assert any(event.action == "intent.interpreted" for event in restarted.audits(founder()))
 
@@ -166,3 +168,28 @@ def test_cloud_connection_is_tenant_scoped_metadata_not_credentials():
     assert connection.connection_mode == "byoc_role_contract"
     other_subject, other_org, other_role = LOCAL_USERS["other-tenant"]
     assert service.cloud_connections(Principal(other_subject, other_org, other_role)) == []
+
+
+def test_intent_rejects_another_tenants_cloud_connection_and_plan_binds_its_target():
+    service, _ = make_service()
+    project = service.create_project(founder(), "cloud-bound", "https://github.com/example/rag")
+    connection = service.create_cloud_connection(founder(), "Demo AWS", "aws", "byoc_role_contract")
+    intent = service.create_intent(founder(), project.id, complete_prompt(), None, connection.id, "idem-cloud-bound")
+    plan = service.plan_intent(founder(), intent.id)
+    assert plan.payload["cloud_connection_id"] == connection.id
+    other_subject, other_org, other_role = LOCAL_USERS["other-tenant"]
+    other_project = service.create_project(Principal(other_subject, other_org, other_role), "other-cloud", "https://github.com/example/other")
+    try:
+        service.create_intent(Principal(other_subject, other_org, other_role), other_project.id, complete_prompt(), None, connection.id, "idem-cross-cloud")
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("cross-tenant cloud connection access was accepted")
+
+
+def test_project_repository_url_creates_a_tenant_scoped_github_connection():
+    service, db = make_service()
+    project = service.create_project(founder(), "repository-fixture", "https://github.com/example/rag")
+    connection = db.scalar(select(RepositoryConnection).where(RepositoryConnection.project_id == project.id))
+    assert connection is not None
+    assert connection.organization_id == founder().organization_id

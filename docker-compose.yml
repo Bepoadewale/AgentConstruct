@@ -35,7 +35,8 @@ services:
       AGENTCONSTRUCT_DATABASE_URL: postgresql+psycopg://agentconstruct:agentconstruct@postgres:5432/agentconstruct
       AGENTCONSTRUCT_OPA_URL: http://opa:8181/v1/data/agentconstruct/decision
       AGENTCONSTRUCT_EXECUTOR_URL: http://fixture-executor:8090
-      AGENTCONSTRUCT_LOCAL_SIGNING_KEY: local-compose-fixture-key
+      AGENTCONSTRUCT_LOCAL_SIGNING_KEY: local-compose-fixture-signing-key-at-least-32-bytes
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       postgres: {condition: service_healthy}
       opa: {condition: service_started}
@@ -49,13 +50,25 @@ services:
     ports: ["9090:9090"]
     depends_on: [api]
 
+  tempo:
+    image: grafana/tempo:2.7.2
+    command: ["-config.file=/etc/tempo.yml"]
+    volumes: ["./platform/tempo/tempo.yml:/etc/tempo.yml:ro"]
+    ports: ["3200:3200"]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.120.0
+    command: ["--config=/etc/otelcol-contrib/config.yml"]
+    volumes: ["./platform/otel-collector/config.yml:/etc/otelcol-contrib/config.yml:ro"]
+    depends_on: [tempo]
+
   grafana:
     image: grafana/grafana:12.1.0
     ports: ["3000:3000"]
     volumes:
       - "./platform/grafana/provisioning:/etc/grafana/provisioning:ro"
       - "./dashboards:/var/lib/grafana/dashboards:ro"
-    depends_on: [prometheus]
+    depends_on: [prometheus, tempo]
 
 volumes:
   agentconstruct-postgres:

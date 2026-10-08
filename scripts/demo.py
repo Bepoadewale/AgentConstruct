@@ -21,6 +21,7 @@ def auth(value: str) -> dict[str, str]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--failure", action="store_true")
+    parser.add_argument("--readiness-failure", action="store_true")
     args = parser.parse_args()
     with httpx.Client(timeout=15) as client:
         founder = token(client, "founder")
@@ -29,6 +30,8 @@ def main() -> None:
         prompt = "Deploy this AI API in AWS. Keep customer data private. Support 20 requests per second and peak at 100 requests per second. Keep monthly infrastructure under $1500. Create staging and production. Enable monitoring and Slack alerts."
         if args.failure:
             prompt = prompt.replace("under $1500", "under $2500")
+        if args.readiness_failure:
+            prompt = f"{prompt} Force failure so the bounded fixture reports a readiness failure."
         intent_response = client.post(f"{BASE}/api/v1/intents", headers=auth(founder), json={"project_id": project["id"], "prompt": prompt, "source_repository": repository, "idempotency_key": uuid.uuid4().hex})
         intent_response.raise_for_status()
         intent = intent_response.json()
@@ -46,6 +49,10 @@ def main() -> None:
         result = client.post(f"{BASE}/api/v1/deployment-plans/{plan['id']}/execute", headers=auth(operator))
         result.raise_for_status()
         environments = result.json()["environments"]
+        if args.readiness_failure:
+            assert {item["state"] for item in environments} == {"FAILED"}, environments
+            print("readiness-failure demo passed: the observer recorded FAILED; READY was not assumed")
+            return
         assert {item["state"] for item in environments} == {"READY"}, environments
         production = next(item for item in environments if item["type"] == "production")
         destroy = client.post(f"{BASE}/api/v1/environments/{production['id']}/destroy-plan", headers=auth(founder))

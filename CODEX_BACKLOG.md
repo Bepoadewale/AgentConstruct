@@ -4,12 +4,12 @@
 
 ### PR 1 — Complete the local commercial V1
 
-- [ ] Add provider-agnostic intent adapter, deterministic fixture, material-question handling, richer typed inputs, and source provenance.
-- [ ] Add repository/cloud connection records and local fixtures.
-- [ ] Add stale-plan/replay/idempotency/restart-recovery and readiness-failure coverage.
-- [ ] Complete visible UI constraints, environment health and audit views.
-- [ ] Add local OTel/Tempo traces and outcome metrics.
-- [ ] Repeat a fully cold `make bootstrap-local` clean-room run twice.
+- [x] Add provider-agnostic intent adapter, deterministic fixture, material-question handling, richer typed inputs, and source provenance.
+- [x] Add repository/cloud connection records and local fixtures.
+- [x] Add stale-plan/replay/idempotency/restart-recovery and readiness-failure coverage.
+- [x] Complete visible UI constraints, environment health, governed destroy and audit views.
+- [x] Add local OTel/Tempo traces and outcome metrics.
+- [x] Repeat clean project-runtime bootstrap, success, failure, trace and cleanup evidence twice.
 
 ### PR 2 — Cloud-pilot architecture and safe runtime contracts
 

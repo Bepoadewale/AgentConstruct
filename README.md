@@ -28,6 +28,8 @@ make bootstrap-local
 make smoke
 make demo
 make demo-failure
+make demo-readiness-failure
+make trace-check
 make verify
 make clean-local
 ```
@@ -36,7 +38,7 @@ Open http://localhost:8080. Grafana is at http://localhost:3000 and Prometheus i
 
 ## What is real, simulated and next
 
-- **Executed locally:** natural-language fixture interpretation, typed validation, constrained AWS architecture planning, transparent estimated cost range, live OPA policy, PostgreSQL lifecycle/audit state, exact-plan approval, bounded local deployment and destruction, observed status, metrics and dashboards.
+- **Executed locally:** natural-language fixture interpretation, typed validation, constrained AWS architecture planning, transparent estimated cost range, live OPA policy, PostgreSQL lifecycle/audit state, tenant-scoped GitHub/AWS connection metadata, exact-plan approval, bounded local deployment and destruction, observed status, metrics, traces and dashboards.
 - **Simulated locally:** the AI intent provider and the deployment target. The executor can call only fixed fixture endpoints; it has no Docker, Kubernetes, Terraform or AWS authority.
 - **Roadmap:** customer AWS role assumption with short-lived credentials, GitHub App installation/webhooks, real GitOps/Argo execution, enterprise OIDC, customer billing and production support.
 
