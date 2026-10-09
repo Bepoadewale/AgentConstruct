@@ -3,7 +3,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export PYTHONPATH := apps/api/src
 
-.PHONY: install lint test bootstrap-local smoke demo demo-failure demo-readiness-failure trace-check browser-contract verify clean-local compose-logs opa-test terraform-validate kubernetes-render pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
+.PHONY: install lint test bootstrap-local smoke demo demo-failure demo-readiness-failure trace-check browser-contract verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
 
 install:
 	command -v $(PYTHON) >/dev/null || { echo "Python 3.12 is required"; exit 1; }
@@ -53,6 +53,10 @@ terraform-validate:
 kubernetes-render:
 	kubectl kustomize infrastructure/kubernetes/base >/dev/null
 	@echo "Kubernetes contract rendered successfully. It was not applied to a cluster."
+
+mcp-local:
+	@test -n "$$AGENTCONSTRUCT_TOKEN" || { echo "Set AGENTCONSTRUCT_TOKEN first; MCP never obtains cloud credentials."; exit 1; }
+	$(VENV)/bin/agentconstruct-mcp
 
 pilot-guardrails-plan:
 	./scripts/pilot-cloud.sh guardrails-plan

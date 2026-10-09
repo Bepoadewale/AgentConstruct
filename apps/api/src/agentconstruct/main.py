@@ -188,6 +188,27 @@ def approve_plan(
     return {"id": plan.id, "state": plan.state, "plan_hash": plan.plan_hash}
 
 
+@app.get("/api/v1/deployment-plans/{plan_id}")
+def get_plan(
+    plan_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("plans.get").inc()
+    try:
+        plan = service.get_plan(principal, plan_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+    return {
+        "id": plan.id,
+        "state": plan.state,
+        "plan_hash": plan.plan_hash,
+        "policy_result": plan.policy_result,
+        "action": plan.action,
+        "payload": plan.payload,
+    }
+
+
 @app.post("/api/v1/deployment-plans/{plan_id}/execute")
 def execute_plan(
     plan_id: str,
@@ -232,6 +253,27 @@ def list_environments(principal: Principal = Depends(verify_token), db: Session 
     ]
 
 
+@app.get("/api/v1/environments/{environment_id}")
+def get_environment(
+    environment_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("environments.get").inc()
+    try:
+        item = service.get_environment(principal, environment_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+    return {
+        "id": item.id,
+        "name": item.name,
+        "type": item.environment_type,
+        "state": item.state,
+        "desired_state": item.desired_state,
+        "observed_state": item.observed_state,
+    }
+
+
 @app.post("/api/v1/environments/{environment_id}/destroy-plan", status_code=201)
 def create_destroy_plan(
     environment_id: str,
@@ -253,7 +295,9 @@ def create_destroy_plan(
 
 @app.get("/api/v1/audit-events")
 def audit_events(
-    principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)
+    environment_id: str | None = None,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
 ):
     REQUESTS.labels("audit.list").inc()
     return [
@@ -264,7 +308,7 @@ def audit_events(
             "detail": item.detail,
             "at": item.created_at,
         }
-        for item in service.audits(principal)
+        for item in service.audits(principal, environment_id)
     ]
 
 

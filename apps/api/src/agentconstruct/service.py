@@ -300,6 +300,9 @@ class ProductService:
             raise PermissionError("deployment plan not found in this organization")
         return plan
 
+    def get_plan(self, principal: Principal, plan_id: str) -> DeploymentPlan:
+        return self._plan(principal, plan_id)
+
     def approve(self, principal: Principal, plan_id: str, provided_hash: str) -> DeploymentPlan:
         with self._trace("agentconstruct.plan.approve"):
             return self._approve(principal, plan_id, provided_hash)
@@ -526,11 +529,16 @@ class ProductService:
             raise PermissionError("environment not found in this organization")
         return environment
 
-    def audits(self, principal: Principal) -> list[AuditEvent]:
-        return list(
-            self.db.scalars(
-                select(AuditEvent)
-                .where(AuditEvent.organization_id == principal.organization_id)
-                .order_by(AuditEvent.created_at)
-            )
+    def get_environment(self, principal: Principal, environment_id: str) -> Environment:
+        return self._environment(principal, environment_id)
+
+    def audits(self, principal: Principal, environment_id: str | None = None) -> list[AuditEvent]:
+        statement = select(AuditEvent).where(
+            AuditEvent.organization_id == principal.organization_id
         )
+        if environment_id:
+            self._environment(principal, environment_id)
+            statement = statement.where(
+                AuditEvent.entity_type == "environment", AuditEvent.entity_id == environment_id
+            )
+        return list(self.db.scalars(statement.order_by(AuditEvent.created_at)))

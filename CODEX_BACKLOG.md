@@ -27,6 +27,7 @@
 - [x] Build typed intent, architecture, cost, policy, plan, approval, audit and bounded execution paths.
 - [x] Build the local UI and Docker Compose stack.
 - [x] Record two local validation cycles; repeat fully cold bootstrap in PR 1.
+- [x] Expose the governed product API through a thin CLI and a stdio MCP server without granting agents approval, cloud, shell, Terraform, Kubernetes or secret authority.
 
 ## P1 — Customer-cloud execution
 

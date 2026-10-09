@@ -16,6 +16,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - Tenant-scoped GitHub repository and AWS BYOC role-contract metadata. No credentials are stored or used.
 - Durable local execution jobs processed by a separate bounded worker, with observed READY, FAILED and DESTROYED states.
 - Web UI with editable region, data and budget constraints; Prometheus metrics, OpenTelemetry business traces, Tempo and Grafana dashboard provisioning.
+- One governed REST API shared by the browser, a thin CLI, and a stdio MCP server. Agent clients can analyse, plan, compare, estimate, inspect, request eligible execution, and create a destroy plan; they cannot self-approve or receive cloud, shell, Terraform, Kubernetes, or secret access.
 - Terraform contracts for a separate state/lock/budget foundation and private VPC, EKS, ECR, RDS, Secrets Manager and IRSA runtime.
 - Hardened Kubernetes and Argo CD desired-state contracts, External Secrets and artifact-storage contracts, plus planned private observability/recovery controls.
 
@@ -23,7 +24,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 
 - This does **not** deploy into AWS or a customer account. AWS discovery and pricing are deterministic fixtures, not live account or billing evidence.
 - The local identity issuer, intent provider and execution target are fixtures. The JWKS adapter is implemented but not connected to an enterprise issuer.
-- GitHub App, live AWS STS/OIDC execution, GitOps/Argo execution, enterprise IdP and billing are next work, not evidence.
+- GitHub App, live AWS STS/OIDC execution, GitOps/Argo execution, enterprise IdP, external agent-client installation and billing are next work, not evidence.
 
 ## Next delivery sequence
 
