@@ -44,6 +44,29 @@ class PolicyResult(StrEnum):
     APPROVAL_REQUIRED = "APPROVAL_REQUIRED"
 
 
+class CandidateClass(StrEnum):
+    STATIC = "static"
+    SERVERLESS = "serverless"
+    MANAGED_APPLICATION = "managed_application"
+    MANAGED_CONTAINERS = "managed_containers"
+    VIRTUAL_MACHINE = "virtual_machine"
+    KUBERNETES = "kubernetes"
+    MANAGED_AI = "managed_ai"
+    CPU_INFERENCE = "cpu_inference"
+    GPU_INFERENCE = "gpu_inference"
+
+
+class CloudInventorySnapshot(BaseModel):
+    """Approved customer context supplied by discovery; fixture-only in local V1."""
+
+    provider: str = "aws"
+    region: str = "us-east-1"
+    approved_resources: list[str] = Field(default_factory=list)
+    approved_regions: list[str] = Field(default_factory=lambda: ["us-east-1", "eu-west-1"])
+    discovered_at: datetime
+    provenance: str = "fixture"
+
+
 class WorkloadSpec(BaseModel):
     workload_type: str
     source_repository: str | None = None
@@ -57,6 +80,17 @@ class WorkloadSpec(BaseModel):
     region_constraints: list[str] = Field(default_factory=list)
     model_requirements: dict[str, Any] = Field(default_factory=dict)
     integration_requirements: list[str] = Field(default_factory=list)
+    runtime: str | None = None
+    containerized: bool | None = None
+    event_driven: bool = False
+    stateful: bool = False
+    requires_private_connectivity: bool = False
+    requires_kubernetes: bool = False
+    requires_gpu: bool = False
+    multi_service: bool = False
+    execution_duration_minutes: int | None = Field(default=None, ge=1)
+    existing_approved_resources: list[str] = Field(default_factory=list)
+    field_status: dict[str, str] = Field(default_factory=dict)
     unknowns: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0, le=1)
     provenance: dict[str, str] = Field(default_factory=dict)
@@ -89,6 +123,33 @@ class CostRange(BaseModel):
     estimated_at: datetime
 
 
+class CostComponent(BaseModel):
+    category: str
+    monthly_low: int
+    monthly_high: int
+    reason: str
+
+
+class ArchitectureCandidate(BaseModel):
+    candidate_id: str
+    candidate_class: CandidateClass
+    display_name: str
+    provider: str = "aws"
+    region: str
+    components: list[ArchitectureComponent]
+    cost_estimate: CostRange
+    cost_components: list[CostComponent]
+    operational_complexity: int = Field(ge=1, le=5)
+    complexity_reasons: list[str]
+    satisfies: list[str]
+    rejected_reasons: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    existing_resources_reused: list[str] = Field(default_factory=list)
+    new_resources_required: list[str] = Field(default_factory=list)
+    valid: bool = True
+    upgrade_triggers: list[str] = Field(default_factory=list)
+
+
 class ArchitecturePlan(BaseModel):
     profile: str
     cloud: str = "aws"
@@ -104,6 +165,13 @@ class ArchitecturePlan(BaseModel):
     operational_characteristics: list[str]
     rollback_strategy: str
     execution_steps: list[str]
+    selected_candidate_id: str | None = None
+    candidates: list[ArchitectureCandidate] = Field(default_factory=list)
+    complexity_score: int | None = Field(default=None, ge=1, le=5)
+    recommendation_reason: str | None = None
+    simplest_viable_explanation: str | None = None
+    existing_resources_reused: list[str] = Field(default_factory=list)
+    new_resources_required: list[str] = Field(default_factory=list)
 
 
 class IntentRequest(BaseModel):

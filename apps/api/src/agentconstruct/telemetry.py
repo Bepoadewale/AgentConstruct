@@ -15,5 +15,7 @@ def configure_tracing() -> None:
     if not endpoint or isinstance(trace.get_tracer_provider(), TracerProvider):
         return
     provider = TracerProvider(resource=Resource.create({SERVICE_NAME: "agentconstruct-api"}))
-    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=f"{endpoint.rstrip('/')}/v1/traces")))
+    provider.add_span_processor(
+        BatchSpanProcessor(OTLPSpanExporter(endpoint=f"{endpoint.rstrip('/')}/v1/traces"))
+    )
     trace.set_tracer_provider(provider)

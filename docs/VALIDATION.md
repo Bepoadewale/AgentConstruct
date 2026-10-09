@@ -70,3 +70,38 @@ Results:
 This is still local/static evidence only. The JWKS adapter, External Secrets, GitHub App delivery, ALB controller, AWS resources and real GitOps reconciliation were not executed.
 
 A second clean cycle repeated the same commands from a removed Compose stack and ended with `make clean-local`. It again passed the browser contract, success, policy-denial, readiness-failure, trace, lint, test and OPA checks; the project Compose containers and local data were absent after cleanup.
+
+## Minimum-necessary planner clean-room evidence
+
+Date: 2026-10-09. Environment: macOS, Docker Desktop, Python 3.12, Terraform and kubectl.
+
+Two clean cycles were completed after the planner change. Both began with `make clean-local`, rebuilt the local stack through `make bootstrap-local`, and ended with `make clean-local`.
+
+Each cycle ran:
+
+```bash
+make bootstrap-local
+make smoke
+make browser-contract
+make demo
+make demo-failure
+make demo-readiness-failure
+make trace-check
+make verify
+make opa-test
+make terraform-validate
+make kubernetes-render
+make clean-local
+```
+
+Results from both cycles:
+
+- API, worker, fixture executor, PostgreSQL, OPA, Prometheus, Grafana and Tempo became ready.
+- The browser contract passed.
+- The canonical governed deployment completed with two observed `READY` environments and a governed destroy. The policy and readiness failure demos remained denied/failed as designed.
+- Tempo received traces. Ruff passed. Pytest passed **28 tests**. OPA passed **3/3**. Both Terraform roots formatted and validated with `init -backend=false`. Kubernetes rendered without applying.
+- Cleanup removed the project Compose containers, network, PostgreSQL volume, virtual environment and `.local` data.
+
+The first fresh bootstrap exposed a PostgreSQL race between the API and worker creating the migration table. The code now takes a PostgreSQL transaction-scoped advisory lock before migrations. Both recorded cycles passed with that fix.
+
+This evidence proves local planner and runtime behavior only. AWS inventory/pricing remain deterministic fixtures; no AWS account, billable resource, GitHub App, or customer role was contacted.

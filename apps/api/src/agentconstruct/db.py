@@ -30,14 +30,24 @@ def run_migrations(target: Engine | None = None) -> None:
     if str(selected.url).startswith("sqlite"):
         Path(".local").mkdir(exist_ok=True)
     with selected.begin() as connection:
-        connection.execute(text("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)"))
-        version = connection.execute(text("SELECT COALESCE(MAX(version), 0) FROM schema_migrations")).scalar_one()
+        # API and worker can start together in Compose. PostgreSQL needs one
+        # transaction-scoped lock before either process creates the migration table.
+        if selected.dialect.name == "postgresql":
+            connection.execute(text("SELECT pg_advisory_xact_lock(84202601)"))
+        connection.execute(
+            text("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)")
+        )
+        version = connection.execute(
+            text("SELECT COALESCE(MAX(version), 0) FROM schema_migrations")
+        ).scalar_one()
         if version < 1:
             Base.metadata.create_all(bind=connection)
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (2)"))
             return
         if version < 2:
-            connection.execute(text("ALTER TABLE execution_jobs ADD COLUMN environment_id VARCHAR(36)"))
+            connection.execute(
+                text("ALTER TABLE execution_jobs ADD COLUMN environment_id VARCHAR(36)")
+            )
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (2)"))
 
 

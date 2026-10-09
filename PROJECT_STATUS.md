@@ -11,7 +11,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - Multi-organisation product domain and PostgreSQL persistence.
 - Signed local development identity fixture, tenant checks and a production-facing JWT/JWKS verifier interface.
 - Natural-language intent fixture → typed `WorkloadSpec`.
-- Small, auditable AWS V1 architecture catalogue and transparent cost range.
+- Small, auditable AWS V1 catalogue that considers static, serverless, managed application, managed containers, VM, Kubernetes, managed-AI, CPU and GPU options. It rejects hard-constraint failures, reuses fixture-approved resources, and selects the lowest-complexity option in the configurable cheapest viable cost band.
 - OPA policy, immutable plan hashes, independent production approval and durable audit.
 - Tenant-scoped GitHub repository and AWS BYOC role-contract metadata. No credentials are stored or used.
 - Durable local execution jobs processed by a separate bounded worker, with observed READY, FAILED and DESTROYED states.
@@ -21,7 +21,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 
 ## Boundaries
 
-- This does **not** deploy into AWS or a customer account.
+- This does **not** deploy into AWS or a customer account. AWS discovery and pricing are deterministic fixtures, not live account or billing evidence.
 - The local identity issuer, intent provider and execution target are fixtures. The JWKS adapter is implemented but not connected to an enterprise issuer.
 - GitHub App, live AWS STS/OIDC execution, GitOps/Argo execution, enterprise IdP and billing are next work, not evidence.
 

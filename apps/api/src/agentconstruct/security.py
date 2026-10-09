@@ -8,7 +8,9 @@ from typing import Protocol
 import jwt
 from fastapi import Header, HTTPException
 
-LOCAL_SIGNING_KEY = os.getenv("AGENTCONSTRUCT_LOCAL_SIGNING_KEY", "local-development-only-change-me")
+LOCAL_SIGNING_KEY = os.getenv(
+    "AGENTCONSTRUCT_LOCAL_SIGNING_KEY", "local-development-only-change-me"
+)
 LOCAL_ISSUER = "agentconstruct-local"
 LOCAL_AUDIENCE = "agentconstruct-api"
 
@@ -63,7 +65,14 @@ def principal_from_claims(payload: dict) -> Principal:
 class LocalIdentityVerifier:
     def verify(self, token: str) -> Principal:
         try:
-            payload = jwt.decode(token, LOCAL_SIGNING_KEY, algorithms=["HS256"], issuer=LOCAL_ISSUER, audience=LOCAL_AUDIENCE, options={"require": ["sub", "org", "role", "exp"]})
+            payload = jwt.decode(
+                token,
+                LOCAL_SIGNING_KEY,
+                algorithms=["HS256"],
+                issuer=LOCAL_ISSUER,
+                audience=LOCAL_AUDIENCE,
+                options={"require": ["sub", "org", "role", "exp"]},
+            )
         except jwt.PyJWTError as error:
             raise HTTPException(401, "invalid signed identity") from error
         return principal_from_claims(payload)
@@ -80,7 +89,14 @@ class JwksIdentityVerifier:
     def verify(self, token: str) -> Principal:
         try:
             key = self.client.get_signing_key_from_jwt(token)
-            payload = jwt.decode(token, key.key, algorithms=["RS256", "ES256"], issuer=self.issuer, audience=self.audience, options={"require": ["sub", "org", "role", "exp"]})
+            payload = jwt.decode(
+                token,
+                key.key,
+                algorithms=["RS256", "ES256"],
+                issuer=self.issuer,
+                audience=self.audience,
+                options={"require": ["sub", "org", "role", "exp"]},
+            )
         except jwt.PyJWTError as error:
             raise HTTPException(401, "invalid trusted identity") from error
         return principal_from_claims(payload)

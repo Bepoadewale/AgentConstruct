@@ -59,7 +59,7 @@ def test_planner_returns_a_transparent_cost_range_and_private_controls():
     plan = AwsV1Planner().plan(spec)
     assert plan.cost_estimate.monthly_low < plan.cost_estimate.monthly_high <= 1500
     assert "private networking" in plan.security_controls
-    assert plan.profile == "aws-eks-governed"
+    assert plan.profile == "aws-ecs-fargate"
 
 
 def test_signed_identity_rejects_tampered_token():

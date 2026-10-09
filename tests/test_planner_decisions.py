@@ -1,0 +1,133 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+import pytest
+from agentconstruct.domain import CloudInventorySnapshot, EnvironmentName, WorkloadSpec
+from agentconstruct.planner import AwsV1Planner
+
+
+def spec(**overrides) -> WorkloadSpec:
+    baseline = {
+        "workload_type": "ai_api",
+        "source_repository": "https://github.com/example/workload",
+        "data_classification": "internal",
+        "average_rps": 2,
+        "peak_rps": 10,
+        "monthly_budget_usd": 1000,
+        "environments": [EnvironmentName.STAGING],
+        "confidence": 1,
+        "containerized": True,
+    }
+    baseline.update(overrides)
+    return WorkloadSpec(**baseline)
+
+
+def plan(**overrides):
+    return AwsV1Planner().plan(spec(**overrides))
+
+
+def selected(**overrides):
+    return plan(**overrides).selected_candidate_id
+
+
+def test_tiny_stateless_api_is_not_eks():
+    assert selected() == "aws-app-runner"
+
+
+def test_small_container_api_prefers_managed_application():
+    assert selected(peak_rps=20) == "aws-app-runner"
+
+
+def test_event_driven_processor_prefers_serverless():
+    assert (
+        selected(workload_type="document_processor", event_driven=True, containerized=False)
+        == "aws-lambda-api"
+    )
+
+
+def test_kubernetes_requirement_justifies_eks():
+    assert (
+        selected(
+            requires_kubernetes=True,
+            multi_service=True,
+            peak_rps=500,
+            monthly_budget_usd=1500,
+        )
+        == "aws-eks-governed"
+    )
+
+
+def test_gpu_requirement_selects_accelerator_profile():
+    assert (
+        selected(
+            requires_gpu=True,
+            model_requirements={"allow_managed_model": False},
+            peak_rps=100,
+            monthly_budget_usd=2000,
+        )
+        == "aws-gpu-inference"
+    )
+
+
+def test_no_gpu_requirement_does_not_select_gpu_profile():
+    assert selected(requires_gpu=False) != "aws-gpu-inference"
+
+
+def test_existing_approved_resource_is_reused_before_duplicate_creation():
+    inventory = CloudInventorySnapshot(
+        approved_resources=["app_runner"], discovered_at=datetime.now(UTC)
+    )
+    result = AwsV1Planner().plan(spec(), inventory)
+    assert result.profile == "aws-app-runner"
+    assert result.existing_resources_reused == ["App Runner"]
+
+
+def test_hard_budget_rejects_all_profiles_when_no_candidate_fits():
+    with pytest.raises(ValueError, match="hard monthly budget"):
+        plan(monthly_budget_usd=10)
+
+
+def test_unapproved_region_is_rejected():
+    with pytest.raises(ValueError, match="region is not approved"):
+        plan(region_constraints=["ap-south-1"])
+
+
+def test_cheapest_viable_band_prefers_simpler_candidate():
+    result = plan(model_requirements={"allow_managed_model": True}, peak_rps=10)
+    assert result.profile == "aws-app-runner"
+    assert result.complexity_score == 1
+
+
+def test_reliability_constraint_rejects_low_complexity_profiles():
+    assert (
+        selected(
+            availability_target="99.99%",
+            requires_kubernetes=True,
+            multi_service=True,
+            peak_rps=500,
+            monthly_budget_usd=1500,
+        )
+        == "aws-eks-governed"
+    )
+
+
+def test_single_cloud_beats_unnecessary_multicloud_complexity():
+    result = plan()
+    assert result.cloud == "aws"
+    assert all(candidate.provider == "aws" for candidate in result.candidates)
+
+
+def test_kubernetes_requested_for_status_is_not_selected_without_need():
+    result = plan()
+    assert result.profile != "aws-eks-governed"
+    eks = next(
+        candidate for candidate in result.candidates if candidate.candidate_id == "aws-eks-governed"
+    )
+    assert "Kubernetes-specific capability is not required" in eks.rejected_reasons
+
+
+def test_plan_explains_why_it_selected_the_simplest_viable_option():
+    result = plan()
+    assert "lowest-complexity" in (result.recommendation_reason or "")
+    assert result.candidates
