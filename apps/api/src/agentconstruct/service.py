@@ -16,8 +16,9 @@ from agentconstruct.domain import (
     PolicyResult,
     WorkloadSpec,
 )
+from agentconstruct.execution_profiles import execution_profile
 from agentconstruct.executor import FixtureExecutor
-from agentconstruct.integrations import FixtureAwsDiscovery
+from agentconstruct.integrations import FixtureAwsDiscovery, FixtureGitHubConnection
 from agentconstruct.intent import DeterministicIntentProvider, IntentProvider
 from agentconstruct.models import (
     Approval,
@@ -59,6 +60,7 @@ class ProductService:
         self.intent_provider = intent_provider or DeterministicIntentProvider()
         self.planner = AwsV1Planner()
         self.cloud_discovery = FixtureAwsDiscovery()
+        self.github = FixtureGitHubConnection()
         self.day2_advisor = FixtureDay2Advisor()
         self.policy = policy or PolicyClient()
         self.executor = executor or FixtureExecutor()
@@ -146,6 +148,49 @@ class ProductService:
                 .order_by(CloudConnection.created_at)
             )
         )
+
+    def repository_discovery(self, principal: Principal, project_id: str) -> dict[str, str]:
+        project = self._project(principal, project_id)
+        if not project.repository_url:
+            raise ValueError("project has no repository connection")
+        metadata = self.github.inspect_repository("fixture-installation", project.repository_url)
+        return metadata.__dict__ | {"execution": "SIMULATED"}
+
+    def desired_state_publication(
+        self, principal: Principal, project_id: str, plan_id: str
+    ) -> dict[str, object]:
+        """Shape a reviewed desired-state PR without contacting GitHub."""
+        project = self._project(principal, project_id)
+        plan = self._plan(principal, plan_id)
+        if plan.action != PlanAction.DEPLOY or plan.state != LifecycleState.APPROVED:
+            raise ValueError("only an approved deployment plan can publish desired state")
+        intent = self._intent(principal, plan.intent_id)
+        if intent.project_id != project.id or not project.repository_url:
+            raise PermissionError("plan does not belong to a repository-connected project")
+        publication = self.github.publish_reviewed_desired_state(
+            "fixture-installation",
+            project.repository_url,
+            f"agentconstruct/{plan.id}.json",
+            json.dumps(plan.payload, sort_keys=True),
+        )
+        self.audit(
+            principal,
+            "gitops.desired_state_contract_created",
+            "deployment_plan",
+            plan.id,
+            {"profile": plan.payload["architecture"]["profile"]},
+        )
+        self.db.commit()
+        return publication.__dict__ | {
+            "execution": "SIMULATED",
+            "profile": plan.payload["architecture"]["profile"],
+        }
+
+    def cloud_role_contract(self, principal: Principal, connection_id: str) -> dict[str, str | int]:
+        connection = self.db.get(CloudConnection, connection_id)
+        if not connection or connection.organization_id != principal.organization_id:
+            raise PermissionError("cloud connection not found in this organization")
+        return self.cloud_discovery.role_contract(connection.id).__dict__ | {"execution": "SIMULATED"}
 
     def _project(self, principal: Principal, project_id: str) -> Project:
         project = self.db.get(Project, project_id)
@@ -370,6 +415,9 @@ class ProductService:
                 state=LifecycleState.QUEUED,
                 desired_state={
                     "profile": plan.payload["architecture"]["profile"],
+                    "execution_profile": execution_profile(
+                        plan.payload["architecture"]["profile"]
+                    ).__dict__,
                     "plan_hash": plan.plan_hash,
                     "should_fail": "force failure" in intent.prompt.lower(),
                     "should_degrade": "force degraded" in intent.prompt.lower(),
@@ -461,6 +509,7 @@ class ProductService:
                     environment.state = state
                 observation = self.executor.deploy(
                     environment.id,
+                    profile=environment.desired_state["profile"],
                     should_fail=bool(environment.desired_state.get("should_fail")),
                     should_degrade=bool(environment.desired_state.get("should_degrade")),
                 )

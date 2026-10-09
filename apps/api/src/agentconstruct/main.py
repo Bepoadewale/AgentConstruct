@@ -131,6 +131,46 @@ def list_cloud_connections(
     ]
 
 
+@app.get("/api/v1/cloud-connections/{connection_id}/role-contract")
+def get_cloud_role_contract(
+    connection_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("cloud_connections.role_contract").inc()
+    try:
+        return service.cloud_role_contract(principal, connection_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.get("/api/v1/projects/{project_id}/repository-discovery")
+def get_repository_discovery(
+    project_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("repositories.discovery").inc()
+    try:
+        return service.repository_discovery(principal, project_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post("/api/v1/projects/{project_id}/desired-state-publications/{plan_id}")
+def create_desired_state_publication(
+    project_id: str,
+    plan_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("gitops.desired_state_contract").inc()
+    try:
+        return service.desired_state_publication(principal, project_id, plan_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
 @app.post("/api/v1/intents", status_code=201)
 def create_intent(
     request: IntentRequest,

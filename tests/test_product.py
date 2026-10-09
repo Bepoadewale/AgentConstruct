@@ -17,13 +17,18 @@ from sqlalchemy.orm import sessionmaker
 
 class LocalExecutor:
     def deploy(
-        self, environment_id: str, should_fail: bool = False, should_degrade: bool = False
+        self,
+        environment_id: str,
+        profile: str,
+        should_fail: bool = False,
+        should_degrade: bool = False,
     ) -> ExecutionObservation:
         state = "FAILED" if should_fail else "DEGRADED" if should_degrade else "READY"
         return ExecutionObservation(
             state,
             {
                 "environment_id": environment_id,
+                "profile": profile,
                 "health_checked": not should_fail,
                 "degradation_detected": should_degrade,
             },
@@ -199,6 +204,39 @@ def test_cloud_connection_is_tenant_scoped_metadata_not_credentials():
     assert service.cloud_connections(Principal(other_subject, other_org, other_role)) == []
 
 
+def test_repository_discovery_and_byoc_role_contract_are_fixture_only_and_tenant_scoped():
+    service, _ = make_service()
+    project = service.create_project(founder(), "integration-contract", "https://github.com/example/rag")
+    connection = service.create_cloud_connection(founder(), "Demo AWS", "aws", "byoc_role_contract")
+    repository = service.repository_discovery(founder(), project.id)
+    contract = service.cloud_role_contract(founder(), connection.id)
+    assert repository["provider"] == "fixture"
+    assert repository["execution"] == "SIMULATED"
+    assert contract["audience"] == "agentconstruct-byoc"
+    assert "no AWS credentials" in contract["credential_boundary"]
+    other_subject, other_org, other_role = LOCAL_USERS["other-tenant"]
+    other = Principal(other_subject, other_org, other_role)
+    try:
+        service.cloud_role_contract(other, connection.id)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("cross-tenant cloud role contract was accepted")
+
+
+def test_approved_plan_can_only_shape_a_simulated_reviewed_desired_state_pull_request():
+    service, _ = make_service()
+    project = service.create_project(founder(), "desired-state", "https://github.com/example/rag")
+    intent = service.create_intent(founder(), project.id, complete_prompt(), None, None, "idem-desired-state")
+    plan = service.plan_intent(founder(), intent.id)
+    service.approve(operator(), plan.id, plan.plan_hash)
+    publication = service.desired_state_publication(founder(), project.id, plan.id)
+    assert publication["execution"] == "SIMULATED"
+    assert publication["pull_request_url"].startswith("fixture-pr://")
+    assert publication["required_checks"] == ("agentconstruct-plan", "agentconstruct-policy")
+    assert any(event.action == "gitops.desired_state_contract_created" for event in service.audits(founder()))
+
+
 def test_intent_rejects_another_tenants_cloud_connection_and_plan_binds_its_target():
     service, _ = make_service()
     project = service.create_project(founder(), "cloud-bound", "https://github.com/example/rag")
@@ -338,3 +376,15 @@ def test_degraded_environment_opens_durable_incident_and_can_use_the_same_change
     assert service.run_next_job()
     assert service.get_environment(founder(), production.id).state == LifecycleState.READY
     assert service.incidents(founder(), production.id)[0].state == "RESOLVED"
+
+
+def test_execution_profile_is_selected_from_the_approved_architecture_not_eks_by_default():
+    service, _ = make_service()
+    project = service.create_project(founder(), "profile-selection", "https://github.com/example/rag")
+    prompt = "Deploy this small containerized AI API in AWS. Support 2 requests per second and peak at 10 requests per second. Keep monthly infrastructure under $300. Create staging."
+    intent = service.create_intent(founder(), project.id, prompt, None, None, "idem-profile-selection")
+    plan = service.plan_intent(founder(), intent.id)
+    assert plan.payload["architecture"]["profile"] == "aws-app-runner"
+    environment = service.execute(founder(), plan.id)[0]
+    assert environment.desired_state["execution_profile"]["delivery_kind"] == "managed-application"
+    assert environment.desired_state["execution_profile"]["kubernetes_boundary"] == "not used"

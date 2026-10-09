@@ -46,6 +46,25 @@ def _parser() -> argparse.ArgumentParser:
 
     destroy = subparsers.add_parser("destroy-environment")
     destroy.add_argument("--environment-id", required=True)
+
+    estimate = subparsers.add_parser("get-cost-estimate")
+    estimate.add_argument("--plan-id", required=True)
+
+    approval = subparsers.add_parser("get-approval-status")
+    approval.add_argument("--plan-id", required=True)
+
+    approve = subparsers.add_parser("approve-plan")
+    approve.add_argument("--plan-id", required=True)
+    approve.add_argument("--plan-hash", required=True)
+
+    recommend = subparsers.add_parser("recommend-optimization")
+    recommend.add_argument("--environment-id", required=True)
+
+    change = subparsers.add_parser("create-change-plan")
+    change.add_argument("--environment-id", required=True)
+
+    incidents = subparsers.add_parser("get-incidents")
+    incidents.add_argument("--environment-id", required=True)
     return parser
 
 
@@ -71,6 +90,18 @@ def run(
     if args.command == "compare-architectures":
         plan = client.request("GET", f"/api/v1/deployment-plans/{args.plan_id}")
         return plan["payload"]["architecture"]["candidates"]
+    if args.command == "get-cost-estimate":
+        plan = client.request("GET", f"/api/v1/deployment-plans/{args.plan_id}")
+        return plan["payload"]["architecture"]["cost_estimate"]
+    if args.command == "get-approval-status":
+        plan = client.request("GET", f"/api/v1/deployment-plans/{args.plan_id}")
+        return {key: plan[key] for key in ("id", "state", "plan_hash", "policy_result")}
+    if args.command == "approve-plan":
+        return client.request(
+            "POST",
+            f"/api/v1/deployment-plans/{args.plan_id}/approve",
+            {"plan_hash": args.plan_hash},
+        )
     if args.command == "execute-approved-plan":
         return client.request("POST", f"/api/v1/deployment-plans/{args.plan_id}/execute")
     if args.command == "get-environment-status":
@@ -80,6 +111,12 @@ def run(
         return client.request("GET", f"/api/v1/audit-events{suffix}")
     if args.command == "destroy-environment":
         return client.request("POST", f"/api/v1/environments/{args.environment_id}/destroy-plan")
+    if args.command == "recommend-optimization":
+        return client.request("GET", f"/api/v1/environments/{args.environment_id}/recommendation")
+    if args.command == "create-change-plan":
+        return client.request("POST", f"/api/v1/environments/{args.environment_id}/change-plan")
+    if args.command == "get-incidents":
+        return client.request("GET", f"/api/v1/environments/{args.environment_id}/incidents")
     raise ValueError(f"unknown command: {args.command}")
 
 
