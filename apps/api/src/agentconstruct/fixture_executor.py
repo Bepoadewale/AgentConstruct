@@ -10,6 +10,7 @@ deployments: dict[str, dict] = {}
 class DeployRequest(BaseModel):
     environment_id: str
     should_fail: bool = False
+    should_degrade: bool = False
 
 
 class ChangeRequest(BaseModel):
@@ -24,12 +25,13 @@ def healthz():
 
 @app.post("/deployments")
 def deploy(request: DeployRequest):
-    state = "FAILED" if request.should_fail else "READY"
+    state = "FAILED" if request.should_fail else "DEGRADED" if request.should_degrade else "READY"
     deployments[request.environment_id] = {
         "environment_id": request.environment_id,
         "state": state,
         "fixture": "bounded-local-executor",
         "health_checked": not request.should_fail,
+        "degradation_detected": request.should_degrade,
     }
     return deployments[request.environment_id]
 

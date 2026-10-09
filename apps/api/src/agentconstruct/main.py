@@ -287,6 +287,28 @@ def get_recommendation(
         translate(error)
 
 
+@app.get("/api/v1/environments/{environment_id}/incidents")
+def get_incidents(
+    environment_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("incidents.list").inc()
+    try:
+        return [
+            {
+                "id": incident.id,
+                "state": incident.state,
+                "summary": incident.summary,
+                "evidence": incident.evidence,
+                "at": incident.created_at,
+            }
+            for incident in service.incidents(principal, environment_id)
+        ]
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
 @app.post("/api/v1/environments/{environment_id}/change-plan", status_code=201)
 def create_change_plan(
     environment_id: str,

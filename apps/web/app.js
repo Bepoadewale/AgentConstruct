@@ -25,6 +25,22 @@ function show(message, failure = false) {
   const node = document.querySelector("#message"); node.textContent = message; node.className = `message ${failure ? "failure" : "success"}`;
 }
 
+function optionLabel(candidate, selectedId, index) {
+  if (candidate.candidate_id === selectedId) return "Recommended";
+  if (candidate.candidate_class === "kubernetes" || candidate.candidate_class === "gpu_inference") return "Kubernetes / specialised";
+  return index === 0 ? "Leanest" : "Scale-ready";
+}
+
+function renderAlternatives(architecture) {
+  const ordered = architecture.candidates.filter((candidate) => candidate.valid).sort((left, right) => left.cost_estimate.monthly_low - right.cost_estimate.monthly_low);
+  const rejected = architecture.candidates.filter((candidate) => !candidate.valid);
+  document.querySelector("#recommendation-reason").textContent = architecture.recommendation_reason;
+  document.querySelector("#alternatives").innerHTML = ordered.map((candidate, index) => `<div class="option ${candidate.candidate_id === architecture.selected_candidate_id ? "selected" : ""}"><span class="option-label">${optionLabel(candidate, architecture.selected_candidate_id, index)}</span><strong>${candidate.display_name}</strong><span>$${candidate.cost_estimate.monthly_low}–$${candidate.cost_estimate.monthly_high}/month · complexity ${candidate.operational_complexity}/5</span><p>${candidate.candidate_id === architecture.selected_candidate_id ? "Selected because it meets the requirements with the lowest necessary complexity." : candidate.upgrade_triggers.join(" ")}</p></div>`).join("") + (rejected.length ? `<p class="message"><strong>Not selected:</strong> ${rejected.map((candidate) => `${candidate.display_name} — ${candidate.rejected_reasons.join(", ")}`).join("; ")}</p>` : "");
+  const selected = architecture.candidates.find((candidate) => candidate.candidate_id === architecture.selected_candidate_id);
+  document.querySelector("#assumptions").textContent = `Assumptions: ${architecture.assumptions.join(" ")}`;
+  document.querySelector("#upgrade-triggers").textContent = selected ? `Upgrade when: ${selected.upgrade_triggers.join(" ")}` : "";
+}
+
 async function refreshAudit() {
   const events = await api("/api/v1/audit-events");
   document.querySelector("#audit-events").innerHTML = events.length ? events.reverse().map((event) => `<div class="event"><time>${new Date(event.at).toLocaleString()}</time><div><strong>${event.action}</strong><br><span>${event.entity_type} · ${event.detail ? JSON.stringify(event.detail) : ""}</span></div></div>`).join("") : "No events yet.";
@@ -43,7 +59,7 @@ async function waitForWorker(ids) {
     const environments = await api("/api/v1/environments");
     const selected = environments.filter((environment) => ids.includes(environment.id));
     renderEnvironments(selected);
-    if (selected.length === ids.length && selected.every((environment) => ["READY", "FAILED", "DESTROYED"].includes(environment.state))) return selected;
+    if (selected.length === ids.length && selected.every((environment) => ["READY", "DEGRADED", "FAILED", "DESTROYED"].includes(environment.state))) return selected;
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
   throw new Error("The worker did not report a final result within the local demo timeout.");
@@ -63,6 +79,7 @@ document.querySelector("#create").addEventListener("click", async () => {
     const architecture = plan.payload.architecture;
     document.querySelector("#profile").textContent = `${architecture.profile} · ${architecture.region}`;
     document.querySelector("#architecture").innerHTML = architecture.components.map((item) => `<div class="component"><strong>${item.name}</strong><span>${item.service} · ${item.purpose}</span></div>`).join("") + `<p><strong>Estimated infrastructure:</strong> $${architecture.cost_estimate.monthly_low}–$${architecture.cost_estimate.monthly_high}/month</p>`;
+    renderAlternatives(architecture);
     document.querySelector("#policy").textContent = `${plan.policy_result.replaceAll("_", " ")} · immutable plan`;
     document.querySelector("#risk").textContent = architecture.risks.join(" ") || "No additional V1 planner risk was found. Review all assumptions before approval.";
     document.querySelector("#result").classList.remove("hidden");
