@@ -231,3 +231,11 @@ make clean-local
 Both cycles passed. The browser contract and all three planning stories passed: a small request selected App Runner, a complex GPU/Kubernetes request selected EKS, and degraded Day-2 evidence created a governed change with an independent approval. Policy denial and observed readiness failure passed. Tempo received traces; the MCP catalogue exposed governed tools with no approval tool. Ruff passed, pytest passed **44 tests**, OPA passed **3/3**, both Terraform roots formatted and validated offline, and Kubernetes rendered without an apply. Final cleanup left no project containers, volume, virtual environment or local state.
 
 This is local and static evidence. It is not AWS execution, customer-cloud access, external identity, GitHub App delivery, live agent-client integration, actual cloud billing, or a cloud-pilot claim.
+
+## Customer AWS connection contract validation
+
+Date: 2026-10-09. `make lint`, `make test`, and `make terraform-validate` passed. Pytest passed **46 tests**. Terraform formatted, initialised with `-backend=false`, and validated the bootstrap, customer-connection and pilot roots.
+
+The new customer-connection root is an identity-only contract: a read-only discovery role and an empty future-execution role. Static tests verify that the discovery policy contains no create, update, delete, secret-read or execution permission and that apply/destroy require a separate confirmation string.
+
+No authenticated plan was run. An eventual plan requires a real AgentConstruct control-plane IAM role ARN, unique external ID, dedicated encrypted state backend, and explicit customer approval. No IAM role, credential, workload, network or other AWS resource was created.
