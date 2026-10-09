@@ -172,3 +172,32 @@ make clean-local
 Both cycles passed. `demo-simple` selected `aws-app-runner` for the low-traffic container API; `demo-complex` selected `aws-eks-governed` only for the explicit multi-service GPU/Kubernetes request. `demo-degraded` recorded `DEGRADED` state and an open PostgreSQL incident. `demo-day2` persisted a recommendation, required the separate operator to approve the production `CHANGE` plan, observed the fixed local outcome, then resolved the incident. Browser, policy, readiness-failure, traces, Ruff, pytest (**38 tests**), OPA (**3/3**), Terraform offline validation and Kubernetes rendering also passed.
 
 This remains local fixture/static evidence. Neither App Runner, EKS, GPU capacity, Terraform apply nor an AWS account was executed.
+
+## Governed integration-contract clean-room evidence
+
+Date: 2026-10-09. Environment: macOS, Docker Desktop, Python 3.12, Terraform and kubectl.
+
+Two clean Compose cycles began and ended with `make clean-local`. Each cycle ran:
+
+```bash
+make bootstrap-local
+make smoke
+make browser-contract
+make demo-simple
+make demo-complex
+make demo-degraded
+make demo-day2
+make demo
+make demo-failure
+make demo-readiness-failure
+make trace-check
+make verify
+make opa-test
+make terraform-validate
+make kubernetes-render
+make clean-local
+```
+
+Both cycles passed. The simple workload used `aws-app-runner`; the complex workload used `aws-eks-governed`; each local execution carried the selected profile into the bounded executor. Browser, policy and readiness-failure paths passed. Tempo received traces. Ruff passed, pytest passed **44 tests**, OPA passed **3/3**, both Terraform roots formatted and validated with `init -backend=false`, and Kubernetes rendered without being applied. The final cleanup confirmed that no project Compose container, volume, virtual environment or local state remained.
+
+The GitHub desired-state pull-request/check contract, GitHub webhook contract and customer AWS OIDC/STS role contract are tested as deterministic fixtures only. No GitHub App installation, webhook, repository write, AWS credentials, AWS role assumption, Terraform apply, Argo reconciliation or Kubernetes cluster was contacted.

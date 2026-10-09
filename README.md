@@ -19,7 +19,7 @@ The browser also compares the viable choices in plain language: the leanest opti
 
 Customers do not have to choose subnets, Helm values or Kubernetes internals to use the demo. They can inspect those decisions and set important constraints.
 
-Developers and AI clients can use the same governed product surface through the REST API, `agentconstruct` CLI, or `agentconstruct-mcp` stdio server. See [agent client strategy](docs/product/agent-client-strategy.md).
+Developers and AI clients can use the same governed product surface through the REST API, `agentconstruct` CLI, or `agentconstruct-mcp` stdio server. See [agent client strategy](docs/product/agent-client-strategy.md). The approved architecture profile chooses a matching delivery contract: EKS/GitOps is used only when EKS is the selected profile.
 
 | Role | Can do | Cannot do |
 | --- | --- | --- |
@@ -53,11 +53,11 @@ The V1 browser is deliberately plain HTML/CSS/JavaScript; see [ADR-009](docs/dec
 ## What is real, simulated and next
 
 - **Executed locally:** natural-language fixture interpretation, typed validation, AWS candidate comparison, fixture-inventory reuse, transparent estimated cost ranges and complexity scores, live OPA policy, PostgreSQL lifecycle/audit state, tenant-scoped GitHub/AWS connection metadata, exact-plan approval, durable queued fixture work, observed status, persisted incident/recommendation records, bounded Day-2 recommendation/change evidence, metrics, traces and dashboards.
-- **Simulated locally:** the AI intent provider, AWS inventory, AWS pricing and the deployment target. The executor can call only fixed fixture endpoints; it has no Docker, Kubernetes, Terraform or AWS authority.
+- **Simulated locally:** the AI intent provider, AWS inventory, AWS pricing, GitHub App/desired-state publication, BYOC role contract, and deployment target. The executor can call only fixed fixture endpoints; it has no Docker, Kubernetes, Terraform, GitHub or AWS authority.
 - **Roadmap:** customer AWS role assumption with short-lived credentials, live discovery/pricing, profile-specific Terraform rendering, GitHub App installation/webhooks, real GitOps/Argo execution, enterprise OIDC, customer billing and production support.
 
 ## Architecture
 
-See the [documentation map](docs/README.md), [minimum-necessary infrastructure](docs/product/minimum-necessary-infrastructure.md), [planner](docs/architecture/planner.md), [Day-2 operations](docs/architecture/day2.md), [agent interfaces](docs/architecture/agent-interfaces.md), [AWS V1 families](docs/architecture/aws-v1.md), [provider model](docs/architecture/provider-model.md), [planned cloud-pilot architecture](docs/architecture/cloud-pilot.md), [security model](docs/security/security-model.md), and [validation evidence](docs/VALIDATION.md).
+See the [documentation map](docs/README.md), [minimum-necessary infrastructure](docs/product/minimum-necessary-infrastructure.md), [planner](docs/architecture/planner.md), [Day-2 operations](docs/architecture/day2.md), [agent interfaces](docs/architecture/agent-interfaces.md), [profile-aware execution](docs/architecture/profile-execution.md), [governed integrations](docs/architecture/governed-integrations.md), [AWS V1 families](docs/architecture/aws-v1.md), [provider model](docs/architecture/provider-model.md), [planned cloud-pilot architecture](docs/architecture/cloud-pilot.md), [security model](docs/security/security-model.md), and [validation evidence](docs/VALIDATION.md).
 
 AgentConstruct is private commercial product work. The public portfolio repositories remain independent technical evidence and are not copied wholesale into this product.

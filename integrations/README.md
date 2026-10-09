@@ -1,9 +1,9 @@
 # Integration Boundaries
 
-Production integrations live behind narrow contracts in `agentconstruct.integrations`.
+Production integrations live behind narrow contracts in `agentconstruct.integrations`. See [governed integrations](../docs/architecture/governed-integrations.md) for the evidence boundary.
 
-- **GitHub:** a GitHub App installation, not a personal access token, will inspect repositories and publish reviewed desired state.
-- **AWS:** a customer-scoped role will be assumed through short-lived STS credentials. Local V1 has no AWS credentials or AWS calls.
+- **GitHub:** a GitHub App installation, not a personal access token, will inspect repositories, validate signed webhooks, and publish a reviewed desired-state pull request with required checks.
+- **AWS:** a customer-scoped IAM role will be assumed through short-lived OIDC/STS credentials. The browser, CLI, and MCP server do not receive them.
 - **Slack:** a future scoped notifier can deliver approved alerts.
 
-The local GitHub fixture is deterministic and cannot write to GitHub.
+The local GitHub and AWS fixtures are deterministic. They cannot write to GitHub, call AWS, or return cloud credentials.

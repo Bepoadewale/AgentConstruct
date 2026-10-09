@@ -116,6 +116,15 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "get_incidents",
+        "description": "Read tenant-scoped Day-2 incident evidence for one environment.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["environment_id"],
+            "properties": {"environment_id": {"type": "string"}},
+        },
+    },
+    {
         "name": "get_audit_events",
         "description": "Read tenant-scoped audit events, optionally for one environment.",
         "inputSchema": {"type": "object", "properties": {"environment_id": {"type": "string"}}},
@@ -172,6 +181,8 @@ class AgentConstructMcp:
             return self.client.request(
                 "POST", f"/api/v1/environments/{arguments['environment_id']}/change-plan"
             )
+        if name == "get_incidents":
+            return self.client.request("GET", f"/api/v1/environments/{arguments['environment_id']}/incidents")
         if name == "get_audit_events":
             suffix = (
                 f"?environment_id={arguments['environment_id']}"
