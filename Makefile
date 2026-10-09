@@ -3,7 +3,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export PYTHONPATH := apps/api/src
 
-.PHONY: install lint test bootstrap-local smoke demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check browser-contract verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
+.PHONY: install lint test bootstrap-local smoke demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check browser-contract verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
 
 install:
 	command -v $(PYTHON) >/dev/null || { echo "Python 3.12 is required"; exit 1; }
@@ -59,8 +59,19 @@ terraform-validate:
 	terraform fmt -check -recursive infrastructure/terraform
 	terraform -chdir=infrastructure/terraform/bootstrap init -backend=false -input=false
 	terraform -chdir=infrastructure/terraform/bootstrap validate
+	terraform -chdir=infrastructure/terraform/customer-connection init -backend=false -input=false
+	terraform -chdir=infrastructure/terraform/customer-connection validate
 	terraform -chdir=infrastructure/terraform/pilot init -backend=false -input=false
 	terraform -chdir=infrastructure/terraform/pilot validate
+
+customer-aws-connection-plan:
+	./scripts/customer-aws-connection.sh plan
+
+customer-aws-connection-apply:
+	./scripts/customer-aws-connection.sh apply
+
+customer-aws-connection-destroy:
+	./scripts/customer-aws-connection.sh destroy
 
 kubernetes-render:
 	kubectl kustomize infrastructure/kubernetes/base >/dev/null

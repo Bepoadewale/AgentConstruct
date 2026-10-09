@@ -34,7 +34,8 @@
 
 ## P1 — Customer-cloud execution
 
-- [ ] AWS STS/OIDC role-assumption adapter with least privilege.
+- [ ] Create the AgentConstruct management/control-plane workload identity in its own AWS account, then run the reviewed customer AWS connection Terraform plan. Apply only with explicit approval; validate short-lived discovery-role assumption without creating a workload.
+- [ ] Implement the live AWS STS role-assumption adapter with least privilege after the discovery-role pilot.
 - [ ] GitHub App installation, repository discovery and scoped desired-state publication.
 - [ ] Real GitOps/Argo observer and customer-cloud workload agent.
 - [ ] Enterprise OIDC/JWKS adapter and organisation lifecycle.
