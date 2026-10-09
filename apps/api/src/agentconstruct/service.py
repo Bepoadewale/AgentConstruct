@@ -18,7 +18,7 @@ from agentconstruct.domain import (
 )
 from agentconstruct.execution_profiles import execution_profile
 from agentconstruct.executor import FixtureExecutor
-from agentconstruct.integrations import FixtureAwsDiscovery, FixtureGitHubConnection
+from agentconstruct.integrations import FixtureAwsDiscovery, configured_github_connection
 from agentconstruct.intent import DeterministicIntentProvider, IntentProvider
 from agentconstruct.models import (
     Approval,
@@ -61,7 +61,7 @@ class ProductService:
         self.intent_provider = intent_provider or DeterministicIntentProvider()
         self.planner = AwsV1Planner()
         self.cloud_discovery = FixtureAwsDiscovery()
-        self.github = FixtureGitHubConnection()
+        self.github = configured_github_connection()
         self.day2_advisor = FixtureDay2Advisor()
         self.policy = policy or PolicyClient()
         self.executor = executor or FixtureExecutor()
@@ -204,8 +204,18 @@ class ProductService:
         project = self._project(principal, project_id)
         if not project.repository_url:
             raise ValueError("project has no repository connection")
-        metadata = self.github.inspect_repository("fixture-installation", project.repository_url)
-        return metadata.__dict__ | {"execution": "SIMULATED"}
+        installation_id = getattr(self.github, "installation_id", "fixture-installation")
+        metadata = self.github.inspect_repository(installation_id, project.repository_url)
+        execution = getattr(self.github, "execution", "SIMULATED")
+        self.audit(
+            principal,
+            "repository.discovered",
+            "project",
+            project.id,
+            {"provider": metadata.provider, "repository": metadata.repository, "execution": execution},
+        )
+        self.db.commit()
+        return metadata.__dict__ | {"execution": execution}
 
     def desired_state_publication(
         self, principal: Principal, project_id: str, plan_id: str

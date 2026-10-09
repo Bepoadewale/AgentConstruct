@@ -254,4 +254,10 @@ The verified STS path was: temporary owner verification identity → AgentConstr
 
 The live result was stored through the running AgentConstruct API as a tenant-scoped, credential-free inventory snapshot with `live-read-only-sts-discovery` provenance and an audit event. No access key was created or stored. No application, VPC, compute, database, EKS, ECS, App Runner, GitOps, or other customer workload resource was deployed.
 
+## Executed GitHub App read-only discovery
+
+Date: 2026-10-09. The existing GitHub App `ai-platform-control-plane-pilot` was installed on the selected customer repository `Bepoadewale/ai-platform-control-plane`. AgentConstruct used the App private key only from the owner-protected local file, minted a short-lived installation token for installation `167128937`, and read the repository metadata: `main` is its default branch.
+
+The local AgentConstruct API then created a tenant-scoped project connection, ran repository discovery through the live App adapter, and recorded an audit event. The adapter explicitly rejected a desired-state write. No token, private key, webhook secret, pull request, commit, repository setting, or customer code was written or stored. Webhooks and reviewed desired-state PR publication remain unexecuted.
+
 No authenticated plan was run. An eventual plan requires a real AgentConstruct control-plane IAM role ARN, unique external ID, dedicated encrypted state backend, and explicit customer approval. No IAM role, credential, workload, network or other AWS resource was created.
