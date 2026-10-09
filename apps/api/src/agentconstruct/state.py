@@ -25,8 +25,22 @@ LEGAL_TRANSITIONS: dict[LifecycleState, set[LifecycleState]] = {
         LifecycleState.DEGRADED,
         LifecycleState.FAILED,
     },
-    LifecycleState.READY: {LifecycleState.DESTROY_REQUESTED},
-    LifecycleState.DEGRADED: {LifecycleState.DESTROY_REQUESTED},
+    LifecycleState.READY: {
+        LifecycleState.CHANGE_PROPOSED,
+        LifecycleState.QUEUED,
+        LifecycleState.DESTROY_REQUESTED,
+    },
+    LifecycleState.DEGRADED: {
+        LifecycleState.CHANGE_PROPOSED,
+        LifecycleState.QUEUED,
+        LifecycleState.DESTROY_REQUESTED,
+    },
+    LifecycleState.CHANGE_PROPOSED: {
+        LifecycleState.APPROVAL_REQUIRED,
+        LifecycleState.APPROVED,
+        LifecycleState.QUEUED,
+        LifecycleState.FAILED,
+    },
     LifecycleState.FAILED: {LifecycleState.DESTROY_REQUESTED, LifecycleState.DESTROYED},
     LifecycleState.DESTROY_REQUESTED: {
         LifecycleState.DESTROY_APPROVAL_REQUIRED,

@@ -10,6 +10,7 @@
 | Durable state | PostgreSQL in Compose; SQLite only in fast unit tests |
 | Cloud connection | Tenant-scoped BYOC role-contract metadata only; no AWS credential is stored or used |
 | Local execution | API persists a `QUEUED` job; a separate trusted worker invokes only the fixed fixture executor and records READY, FAILED or DESTROYED evidence |
+| Day-2 change loop | Deterministic latency evidence → explanation → immutable `CHANGE` plan → production approval → durable worker → observed recovery and audit |
 | Identity boundary | Local signed-token fixture plus an unconfigured JWT/JWKS verifier interface for a future trusted issuer |
 | UI and monitoring | Plain JavaScript browser UI with editable region/data/budget constraints; `/metrics`, Prometheus, business OTel spans, Tempo and Grafana datasources/dashboard for request, plan-policy and observed-execution outcomes |
 | Agent clients | Authenticated REST API, thin CLI, and stdio MCP server. They use the same API and do not expose approval, cloud credentials, shell, Terraform, Kubernetes, or secrets. |
@@ -18,7 +19,7 @@
 
 - Natural-language understanding uses deterministic parsing, not a paid model.
 - AWS inventory and pricing are local fixtures. The AWS architecture recommendation is a small rule catalogue, not arbitrary design generation.
-- Deployment is a bounded local fixture, not AWS, Terraform, Docker or Kubernetes execution.
+- Deployment and Day-2 change application are bounded local fixtures, not AWS, Terraform, Docker or Kubernetes execution.
 - Local signed JWT is a development fixture. The JWKS verifier adapter is code, not enterprise OIDC execution evidence.
 
 ## Roadmap only

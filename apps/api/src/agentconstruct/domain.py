@@ -26,6 +26,7 @@ class LifecycleState(StrEnum):
     VERIFYING = "VERIFYING"
     READY = "READY"
     DEGRADED = "DEGRADED"
+    CHANGE_PROPOSED = "CHANGE_PROPOSED"
     FAILED = "FAILED"
     DESTROY_REQUESTED = "DESTROY_REQUESTED"
     DESTROY_APPROVAL_REQUIRED = "DESTROY_APPROVAL_REQUIRED"
@@ -35,6 +36,7 @@ class LifecycleState(StrEnum):
 
 class PlanAction(StrEnum):
     DEPLOY = "DEPLOY"
+    CHANGE = "CHANGE"
     DESTROY = "DESTROY"
 
 
@@ -172,6 +174,30 @@ class ArchitecturePlan(BaseModel):
     simplest_viable_explanation: str | None = None
     existing_resources_reused: list[str] = Field(default_factory=list)
     new_resources_required: list[str] = Field(default_factory=list)
+
+
+class TelemetryEvidence(BaseModel):
+    """A bounded, explainable telemetry snapshot for the local Day-2 fixture."""
+
+    source: str
+    captured_at: datetime
+    p95_latency_ms: int = Field(ge=0)
+    queue_time_ms: int = Field(ge=0)
+    utilization_percent: int = Field(ge=0, le=100)
+    current_min_replicas: int = Field(ge=1)
+
+
+class OptimizationRecommendation(BaseModel):
+    recommendation_id: str
+    diagnosis: str
+    evidence: TelemetryEvidence
+    proposed_change: dict[str, Any]
+    estimated_monthly_cost_delta: CostRange
+    risk: str
+    rollback: str
+    assumptions: list[str]
+    requires_approval: bool
+    execution_boundary: str
 
 
 class IntentRequest(BaseModel):

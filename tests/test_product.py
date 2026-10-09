@@ -22,6 +22,18 @@ class LocalExecutor:
     def destroy(self, environment_id: str) -> ExecutionObservation:
         return ExecutionObservation("DESTROYED", {"environment_id": environment_id, "cleanup_verified": True})
 
+    def change(self, environment_id: str, minimum_replicas: int) -> ExecutionObservation:
+        return ExecutionObservation(
+            "READY",
+            {
+                "environment_id": environment_id,
+                "minimum_replicas": minimum_replicas,
+                "p95_latency_ms": 1500,
+                "queue_time_ms": 300,
+                "health_checked": True,
+            },
+        )
+
 
 def make_service():
     engine = make_engine("sqlite+pysqlite:///:memory:")
@@ -224,3 +236,63 @@ def test_prompt_injection_does_not_bypass_policy_or_become_executor_authority():
     plan = service.plan_intent(founder(), intent.id)
     assert plan.state == LifecycleState.POLICY_DENIED
     assert "terraform" not in plan.payload["architecture"]["execution_steps"]
+
+
+def test_day2_recommendation_becomes_a_protected_exact_change_plan_and_observed_result():
+    service, _ = make_service()
+    project = service.create_project(founder(), "day2-loop", "https://github.com/example/rag")
+    intent = service.create_intent(founder(), project.id, complete_prompt(), None, None, "idem-day2-loop")
+    deployment = service.plan_intent(founder(), intent.id)
+    service.approve(operator(), deployment.id, deployment.plan_hash)
+    environments = service.execute(operator(), deployment.id)
+    while service.run_next_job():
+        pass
+    production = next(
+        environment
+        for environment in environments
+        if environment.environment_type == EnvironmentName.PRODUCTION
+    )
+    recommendation = service.recommendation(founder(), production.id)
+    assert recommendation["evidence"]["queue_time_ms"] == 1200
+    assert recommendation["proposed_change"]["to"] == 2
+    change = service.change_plan(founder(), production.id)
+    assert change.action == "CHANGE"
+    assert change.state == LifecycleState.APPROVAL_REQUIRED
+    assert service.change_plan(founder(), production.id).id == change.id
+    try:
+        service.execute(founder(), change.id)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("protected change executed without independent approval")
+    service.approve(operator(), change.id, change.plan_hash)
+    queued = service.execute(operator(), change.id)[0]
+    assert queued.state == LifecycleState.QUEUED
+    assert service.run_next_job()
+    observed = service.get_environment(founder(), production.id)
+    assert observed.state == LifecycleState.READY
+    assert observed.desired_state["min_replicas"] == 2
+    assert observed.observed_state["p95_latency_ms"] == 1500
+    assert any(event.action == "environment.change_observed" for event in service.audits(founder()))
+
+
+def test_day2_recommendation_is_tenant_scoped_and_non_mutating():
+    service, _ = make_service()
+    project = service.create_project(founder(), "day2-tenant", "https://github.com/example/rag")
+    intent = service.create_intent(founder(), project.id, complete_prompt(), None, None, "idem-day2-tenant")
+    deployment = service.plan_intent(founder(), intent.id)
+    service.approve(operator(), deployment.id, deployment.plan_hash)
+    environments = service.execute(operator(), deployment.id)
+    while service.run_next_job():
+        pass
+    environment = environments[0]
+    before = service.get_environment(founder(), environment.id).desired_state.copy()
+    assert service.recommendation(founder(), environment.id)["execution_boundary"].startswith("The local")
+    assert service.get_environment(founder(), environment.id).desired_state == before
+    other_subject, other_org, other_role = LOCAL_USERS["other-tenant"]
+    try:
+        service.recommendation(Principal(other_subject, other_org, other_role), environment.id)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("cross-tenant Day-2 diagnosis was accepted")

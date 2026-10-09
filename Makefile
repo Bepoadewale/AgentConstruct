@@ -3,7 +3,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export PYTHONPATH := apps/api/src
 
-.PHONY: install lint test bootstrap-local smoke demo demo-failure demo-readiness-failure trace-check browser-contract verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
+.PHONY: install lint test bootstrap-local smoke demo demo-day2 demo-failure demo-readiness-failure trace-check browser-contract verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
 
 install:
 	command -v $(PYTHON) >/dev/null || { echo "Python 3.12 is required"; exit 1; }
@@ -25,6 +25,9 @@ smoke:
 
 demo:
 	$(PY) scripts/demo.py
+
+demo-day2:
+	$(PY) scripts/demo.py --day2
 
 demo-failure:
 	$(PY) scripts/demo.py --failure

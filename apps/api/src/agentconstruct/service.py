@@ -8,6 +8,7 @@ from opentelemetry import trace
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from agentconstruct.day2 import FixtureDay2Advisor
 from agentconstruct.domain import (
     EnvironmentName,
     LifecycleState,
@@ -56,6 +57,7 @@ class ProductService:
         self.intent_provider = intent_provider or DeterministicIntentProvider()
         self.planner = AwsV1Planner()
         self.cloud_discovery = FixtureAwsDiscovery()
+        self.day2_advisor = FixtureDay2Advisor()
         self.policy = policy or PolicyClient()
         self.executor = executor or FixtureExecutor()
 
@@ -343,6 +345,8 @@ class ProductService:
         plan = self._plan(principal, plan_id)
         if plan.action == PlanAction.DESTROY:
             return [self._queue_destroy(principal, plan)]
+        if plan.action == PlanAction.CHANGE:
+            return [self._queue_change(principal, plan)]
         if plan.state not in {LifecycleState.PLANNED, LifecycleState.APPROVED}:
             raise ValueError("plan is not executable")
         if plan.state == LifecycleState.APPROVED and not self.db.scalar(
@@ -366,6 +370,8 @@ class ProductService:
                     "profile": plan.payload["architecture"]["profile"],
                     "plan_hash": plan.plan_hash,
                     "should_fail": "force failure" in intent.prompt.lower(),
+                    "spec": plan.payload["spec"],
+                    "min_replicas": 1,
                 },
                 observed_state={},
             )
@@ -422,6 +428,25 @@ class ProductService:
                     if environment.state == LifecycleState.DESTROYED
                     else "environment.destroy_failed"
                 )
+            elif plan.action == PlanAction.CHANGE:
+                for state in (
+                    LifecycleState.PROVISIONING,
+                    LifecycleState.DEPLOYING,
+                    LifecycleState.VERIFYING,
+                ):
+                    require_transition(LifecycleState(environment.state), state)
+                    environment.state = state
+                change = plan.payload["recommendation"]["proposed_change"]
+                observation = self.executor.change(environment.id, int(change["to"]))
+                environment.desired_state = {
+                    **environment.desired_state,
+                    "min_replicas": int(change["to"]),
+                    "last_change_plan_hash": plan.plan_hash,
+                }
+                environment.state = (
+                    LifecycleState.READY if observation.state == "READY" else LifecycleState.FAILED
+                )
+                action = "environment.change_observed"
             else:
                 for state in (
                     LifecycleState.PROVISIONING,
@@ -501,6 +526,67 @@ class ProductService:
         self.db.commit()
         return plan
 
+    def recommendation(self, principal: Principal, environment_id: str) -> dict[str, Any]:
+        """Explain a bounded local Day-2 change; this does not mutate the environment."""
+        with self._trace("agentconstruct.day2.diagnose"):
+            environment = self._environment(principal, environment_id)
+            if LifecycleState(environment.state) not in {LifecycleState.READY, LifecycleState.DEGRADED}:
+                raise ValueError("environment must be ready or degraded before it can be diagnosed")
+            recommendation = self.day2_advisor.recommend(environment)
+            return recommendation.model_dump(mode="json")
+
+    def change_plan(self, principal: Principal, environment_id: str) -> DeploymentPlan:
+        with self._trace("agentconstruct.day2.change_plan"):
+            environment = self._environment(principal, environment_id)
+            if LifecycleState(environment.state) not in {LifecycleState.READY, LifecycleState.DEGRADED}:
+                raise ValueError("environment cannot receive a change plan in its current state")
+            recommendation = self.day2_advisor.recommend(environment)
+            spec = WorkloadSpec.model_validate(environment.desired_state["spec"])
+            with self._trace("agentconstruct.policy.evaluate"):
+                decision = self.policy.evaluate(
+                    principal,
+                    spec,
+                    PlanAction.CHANGE,
+                    target_environment_type=environment.environment_type,
+                )
+            payload = {
+                "action": PlanAction.CHANGE,
+                "environment_id": environment.id,
+                "spec": spec.model_dump(mode="json"),
+                "recommendation": recommendation.model_dump(mode="json"),
+                "policy": {"result": decision.result, "reason": decision.reason},
+            }
+            digest = plan_hash(payload)
+            existing = self.db.scalar(select(DeploymentPlan).where(DeploymentPlan.plan_hash == digest))
+            if existing:
+                return existing
+            state = {
+                PolicyResult.ALLOW: LifecycleState.PLANNED,
+                PolicyResult.DENY: LifecycleState.POLICY_DENIED,
+                PolicyResult.APPROVAL_REQUIRED: LifecycleState.APPROVAL_REQUIRED,
+            }[decision.result]
+            plan = DeploymentPlan(
+                organization_id=principal.organization_id,
+                environment_id=environment.id,
+                requester_subject=principal.subject,
+                action=PlanAction.CHANGE,
+                state=state,
+                plan_hash=digest,
+                policy_result=decision.result,
+                payload=payload,
+            )
+            self.db.add(plan)
+            self.db.flush()
+            self.audit(
+                principal,
+                "change_plan.created",
+                "deployment_plan",
+                plan.id,
+                {"hash": digest, "policy": decision.result, "recommendation": recommendation.diagnosis},
+            )
+            self.db.commit()
+            return plan
+
     def _queue_destroy(self, principal: Principal, plan: DeploymentPlan) -> Environment:
         if plan.state not in {LifecycleState.PLANNED, LifecycleState.APPROVED}:
             raise ValueError("destroy plan is not executable")
@@ -516,6 +602,38 @@ class ProductService:
         self.audit(
             principal,
             "execution.queued",
+            "environment",
+            environment.id,
+            {"plan_hash": plan.plan_hash},
+        )
+        self.db.commit()
+        return environment
+
+    def _queue_change(self, principal: Principal, plan: DeploymentPlan) -> Environment:
+        if plan.state not in {LifecycleState.PLANNED, LifecycleState.APPROVED}:
+            raise ValueError("change plan is not executable")
+        environment = self._environment(principal, plan.environment_id)
+        if LifecycleState(environment.state) not in {LifecycleState.READY, LifecycleState.DEGRADED}:
+            raise ValueError("environment cannot receive a change in its current state")
+        if plan.state == LifecycleState.APPROVED and not self.db.scalar(
+            select(Approval).where(
+                Approval.deployment_plan_id == plan.id, Approval.plan_hash == plan.plan_hash
+            )
+        ):
+            raise ValueError("approved plan has no matching durable approval")
+        require_transition(LifecycleState(environment.state), LifecycleState.QUEUED)
+        environment.state = LifecycleState.QUEUED
+        self.db.add(
+            ExecutionJob(
+                deployment_plan_id=plan.id,
+                environment_id=environment.id,
+                state="QUEUED",
+                result={"operation": "CHANGE"},
+            )
+        )
+        self.audit(
+            principal,
+            "change.execution_queued",
             "environment",
             environment.id,
             {"plan_hash": plan.plan_hash},

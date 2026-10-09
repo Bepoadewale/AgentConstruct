@@ -28,6 +28,7 @@
 - [x] Build the local UI and Docker Compose stack.
 - [x] Record two local validation cycles; repeat fully cold bootstrap in PR 1.
 - [x] Expose the governed product API through a thin CLI and a stdio MCP server without granting agents approval, cloud, shell, Terraform, Kubernetes or secret authority.
+- [x] Demonstrate a bounded Day-2 loop: evidence, recommendation, exact change plan, independent approval, observed local change and audit.
 
 ## P1 — Customer-cloud execution
 
@@ -36,6 +37,7 @@
 - [ ] Real GitOps/Argo observer and customer-cloud workload agent.
 - [ ] Enterprise OIDC/JWKS adapter and organisation lifecycle.
 - [ ] Replace the fixture inventory and pricing catalogue with customer-approved AWS discovery and timestamped pricing sources.
+- [ ] Replace deterministic Day-2 telemetry and the fixed change endpoint with tenant-authorised telemetry, policy-bounded execution and independently observed customer-cloud changes.
 - [ ] Render Terraform only for the selected architecture family; do not send every plan to the EKS reference stack.
 
 ## P1 — First cloud pilot prerequisites

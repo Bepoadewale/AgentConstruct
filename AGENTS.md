@@ -29,8 +29,8 @@ Build and maintain **AgentConstruct**, the private commercial product. Use plain
 Before calling a runnable change review-ready, execute and record:
 
 ```text
-clean → bootstrap → smoke → success demo → policy failure → readiness failure → trace check → verify → clean
-→ second bootstrap → second smoke → second success demo → second policy and readiness failures → trace check → verify → clean
+clean → bootstrap → smoke → success demo → Day-2 demo → policy failure → readiness failure → trace check → verify → clean
+→ second bootstrap → second smoke → second success and Day-2 demos → second policy and readiness failures → trace check → verify → clean
 ```
 
 Do not infer reproducibility from an existing environment.
