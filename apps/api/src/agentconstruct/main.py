@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from agentconstruct.db import SessionLocal, run_migrations, session
 from agentconstruct.domain import (
     ApprovalRequest,
+    AwsQuickCreateRequest,
     CloudConnectionRequest,
     CloudInventorySnapshotRequest,
     IntentRequest,
@@ -142,6 +143,20 @@ def get_cloud_role_contract(
     try:
         return service.cloud_role_contract(principal, connection_id)
     except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post("/api/v1/cloud-connections/{connection_id}/aws-quick-create")
+def create_aws_quick_create_setup(
+    connection_id: str,
+    request: AwsQuickCreateRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("cloud_connections.aws_quick_create").inc()
+    try:
+        return service.aws_quick_create_setup(principal, connection_id, request.account_id)
+    except (PermissionError, ValueError, KeyError, RuntimeError) as error:
         translate(error)
 
 

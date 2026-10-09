@@ -9,6 +9,7 @@
 | Governance | Live OPA policy, immutable SHA-256 plan hash, independent approval and audit |
 | Durable state | PostgreSQL in Compose; SQLite only in fast unit tests |
 | Customer AWS discovery | Executed: Terraform-created read-only discovery role, permissionless future-execution role, GitHub OIDC control-plane identity, STS chain, live inventory and Cost Explorer query. AgentConstruct stores only connection metadata and a credential-free inventory snapshot. |
+| Customer AWS Quick Create | Implemented and AWS template validated: API generates a per-connection CloudFormation setup contract. Customer stack creation and automated return verification remain unexecuted. |
 | GitHub repository discovery | Executed: the selected GitHub App installation issued a short-lived token to read `Bepoadewale/ai-platform-control-plane` metadata. The live adapter refuses write, PR publication and webhook processing. |
 | Local execution | API persists a `QUEUED` job; a separate trusted worker invokes only the fixed fixture executor and records READY, FAILED or DESTROYED evidence |
 | Day-2 change loop | Deterministic latency evidence → explanation → immutable `CHANGE` plan → production approval → durable worker → observed recovery and audit |

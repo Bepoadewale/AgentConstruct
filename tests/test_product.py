@@ -206,6 +206,20 @@ def test_cloud_connection_is_tenant_scoped_metadata_not_credentials():
     assert service.cloud_connections(Principal(other_subject, other_org, other_role)) == []
 
 
+def test_aws_quick_create_setup_is_tenant_scoped_and_never_applies(monkeypatch):
+    monkeypatch.setenv(
+        "AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN",
+        "arn:aws:iam::654654474502:role/agentconstruct-control-plane-github",
+    )
+    monkeypatch.setenv("AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL", "https://example.test/template.yaml")
+    service, _ = make_service()
+    connection = service.create_cloud_connection(founder(), "Customer AWS", "aws", "byoc_role_contract")
+    setup = service.aws_quick_create_setup(founder(), connection.id, "654654474502")
+    assert setup["quick_create_url"].startswith("https://console.aws.amazon.com/")
+    assert setup["parameters"]["ConnectionId"] == connection.id
+    assert "does not create customer AWS resources" in setup["boundary"]
+
+
 def test_live_inventory_snapshot_is_durable_and_tenant_scoped():
     service, _ = make_service()
     connection = service.create_cloud_connection(founder(), "Customer AWS", "aws", "byoc_role_contract")

@@ -219,6 +219,10 @@ class CloudConnectionRequest(BaseModel):
     connection_mode: str = Field(default="byoc_role_contract", pattern=r"^byoc_role_contract$")
 
 
+class AwsQuickCreateRequest(BaseModel):
+    account_id: str = Field(pattern=r"^[0-9]{12}$")
+
+
 class CloudInventorySnapshotRequest(BaseModel):
     """Credential-free discovery result received from the trusted discovery worker."""
 

@@ -260,4 +260,8 @@ Date: 2026-10-09. The existing GitHub App `ai-platform-control-plane-pilot` was 
 
 The local AgentConstruct API then created a tenant-scoped project connection, ran repository discovery through the live App adapter, and recorded an audit event. The adapter explicitly rejected a desired-state write. No token, private key, webhook secret, pull request, commit, repository setting, or customer code was written or stored. Webhooks and reviewed desired-state PR publication remain unexecuted.
 
+## AWS Quick Create onboarding contract
+
+Date: 2026-10-09. `aws cloudformation validate-template` authenticated successfully against the AWS account for `infrastructure/cloudformation/customer-discovery-role.yaml`. Validation created no stack, role, workload, or other AWS resource. The template defines one customer-side discovery role with an AgentConstruct control-plane trust principal, per-connection external ID, short sessions, and metadata-only policy. Unit tests also verify that it has no secret-value, S3-object, IAM pass-role, or create permission.
+
 No authenticated plan was run. An eventual plan requires a real AgentConstruct control-plane IAM role ARN, unique external ID, dedicated encrypted state backend, and explicit customer approval. No IAM role, credential, workload, network or other AWS resource was created.

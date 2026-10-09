@@ -48,6 +48,8 @@ make clean-local
 
 Open http://localhost:8080. Grafana is at http://localhost:3000 and Prometheus is at http://localhost:9090. The local login is a documented signed fixture, not production identity.
 
+For customer AWS onboarding, see [Connect an AWS account](docs/customer-aws-connection.md). Customers use one AWS CloudFormation Quick Create stack for read-only discovery; they do not provide access keys or administrator access.
+
 The V1 browser is deliberately plain HTML/CSS/JavaScript; see [ADR-009](docs/decisions/ADR-009-plain-web-ui.md). It keeps the first product flow small and does not move privileged logic into the browser.
 
 ## What is real, simulated and next

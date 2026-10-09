@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import secrets
 from typing import Any
+from urllib.parse import urlencode
 
 from opentelemetry import trace
 from sqlalchemy import select
@@ -149,6 +152,55 @@ class ProductService:
                 .order_by(CloudConnection.created_at)
             )
         )
+
+    def aws_quick_create_setup(
+        self, principal: Principal, connection_id: str, account_id: str
+    ) -> dict[str, object]:
+        """Generate a one-click AWS Console setup; it does not create AWS resources itself."""
+        connection = self.db.get(CloudConnection, connection_id)
+        if not connection or connection.organization_id != principal.organization_id:
+            raise PermissionError("cloud connection not found in this organization")
+        control_plane_role_arn = os.getenv("AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN")
+        template_url = os.getenv("AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL")
+        if not control_plane_role_arn:
+            raise RuntimeError("AWS customer connection setup is not configured")
+        external_id = secrets.token_urlsafe(32)
+        stack_name = f"AgentConstruct-Discovery-{connection.id[:8]}"
+        parameters = {
+            "AgentConstructControlPlaneRoleArn": control_plane_role_arn,
+            "ExternalId": external_id,
+            "ConnectionId": connection.id,
+        }
+        quick_create_url = None
+        if template_url:
+            quick_create_url = (
+                "https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?"
+                + urlencode({"templateURL": template_url, "stackName": stack_name})
+                + "&"
+                + urlencode({f"param_{key}": value for key, value in parameters.items()})
+            )
+        self.audit(
+            principal,
+            "cloud_connection.aws_quick_create_generated",
+            "cloud_connection",
+            connection.id,
+            {"account_id": account_id, "stack_name": stack_name, "template_published": bool(template_url)},
+        )
+        self.db.commit()
+        return {
+            "connection_id": connection.id,
+            "account_id": account_id,
+            "stack_name": stack_name,
+            "template_path": "infrastructure/cloudformation/customer-discovery-role.yaml",
+            "quick_create_url": quick_create_url,
+            "parameters": parameters,
+            "customer_steps": [
+                "Open the AWS Quick Create link.",
+                "Review the one read-only IAM role and acknowledge IAM resource creation.",
+                "Create the stack, then return to AgentConstruct to verify the connection.",
+            ],
+            "boundary": "This action only creates a setup link. AgentConstruct does not create customer AWS resources until the customer creates the stack in their own account.",
+        }
 
     def record_cloud_inventory_snapshot(
         self,
