@@ -33,3 +33,13 @@ class FixtureExecutor:
         response.raise_for_status()
         body = response.json()
         return ExecutionObservation(body["state"], body)
+
+    def change(self, environment_id: str, minimum_replicas: int) -> ExecutionObservation:
+        response = httpx.post(
+            f"{self.url}/changes",
+            json={"environment_id": environment_id, "minimum_replicas": minimum_replicas},
+            timeout=5,
+        )
+        response.raise_for_status()
+        body = response.json()
+        return ExecutionObservation(body["state"], body)

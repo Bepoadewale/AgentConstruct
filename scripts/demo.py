@@ -33,6 +33,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--failure", action="store_true")
     parser.add_argument("--readiness-failure", action="store_true")
+    parser.add_argument("--day2", action="store_true")
     args = parser.parse_args()
     with httpx.Client(timeout=15) as client:
         founder = token(client, "founder")
@@ -67,6 +68,34 @@ def main() -> None:
             return
         assert {item["state"] for item in environments} == {"READY"}, environments
         production = next(item for item in environments if item["type"] == "production")
+        if args.day2:
+            recommendation_response = client.get(
+                f"{BASE}/api/v1/environments/{production['id']}/recommendation",
+                headers=auth(founder),
+            )
+            recommendation_response.raise_for_status()
+            recommendation = recommendation_response.json()
+            assert recommendation["evidence"]["queue_time_ms"] == 1200, recommendation
+            change_response = client.post(
+                f"{BASE}/api/v1/environments/{production['id']}/change-plan",
+                headers=auth(founder),
+            )
+            change_response.raise_for_status()
+            change = change_response.json()
+            assert change["state"] == "APPROVAL_REQUIRED", change
+            approved_change = client.post(
+                f"{BASE}/api/v1/deployment-plans/{change['id']}/approve",
+                headers=auth(operator),
+                json={"plan_hash": change["plan_hash"]},
+            )
+            approved_change.raise_for_status()
+            changed = client.post(
+                f"{BASE}/api/v1/deployment-plans/{change['id']}/execute",
+                headers=auth(operator),
+            )
+            changed.raise_for_status()
+            updated = wait_for_state(client, operator, {production["id"]}, {"READY"})[0]
+            assert updated["observed_state"]["p95_latency_ms"] == 1500, updated
         destroy = client.post(f"{BASE}/api/v1/environments/{production['id']}/destroy-plan", headers=auth(founder))
         destroy.raise_for_status()
         destroy_plan = destroy.json()
@@ -78,7 +107,7 @@ def main() -> None:
         assert wait_for_state(client, operator, {destroyed_id}, {"DESTROYED"})[0]["state"] == "DESTROYED"
         audit = client.get(f"{BASE}/api/v1/audit-events", headers=auth(founder)).json()
         assert any(event["action"] == "environment.destroyed" for event in audit)
-        print(json.dumps({"success": "canonical demo passed", "ready_environments": len(environments), "destroyed": production["id"], "audit_events": len(audit)}, indent=2))
+        print(json.dumps({"success": "canonical demo passed", "day2_change": args.day2, "ready_environments": len(environments), "destroyed": production["id"], "audit_events": len(audit)}, indent=2))
 
 
 if __name__ == "__main__":

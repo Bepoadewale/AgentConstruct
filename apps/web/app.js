@@ -1,6 +1,7 @@
 let token = null;
 let plan = null;
 let productionEnvironment = null;
+let day2Environment = null;
 
 function idempotencyKey() {
   return globalThis.crypto?.randomUUID?.() || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -31,8 +32,10 @@ async function refreshAudit() {
 
 function renderEnvironments(environments) {
   productionEnvironment = environments.find((environment) => environment.type === "production" && environment.state === "READY") || null;
+  day2Environment = productionEnvironment;
   document.querySelector("#environments").innerHTML = environments.length ? environments.map((environment) => `<div class="component"><strong>${environment.type}: ${environment.state}</strong><span>${JSON.stringify(environment.observed_state)}</span></div>`).join("") : "No local execution yet.";
   document.querySelector("#destroy").classList.toggle("hidden", !productionEnvironment);
+  document.querySelector("#day2").classList.toggle("hidden", !day2Environment);
 }
 
 async function waitForWorker(ids) {
@@ -101,6 +104,22 @@ document.querySelector("#destroy").addEventListener("click", async () => {
     await waitForWorker(result.environments.map((environment) => environment.id));
     show("The protected production environment was destroyed and cleanup was observed.");
     await refreshAudit();
+  } catch (error) { show(error.message, true); }
+});
+document.querySelector("#optimize").addEventListener("click", async () => {
+  try {
+    if (!day2Environment) throw new Error("No ready production environment is available to diagnose.");
+    const recommendation = await api(`/api/v1/environments/${day2Environment.id}/recommendation`);
+    document.querySelector("#recommendation-summary").textContent = `${recommendation.diagnosis} Proposed change: minimum replicas ${recommendation.proposed_change.from} → ${recommendation.proposed_change.to}; estimated change: $${recommendation.estimated_monthly_cost_delta.monthly_low}–$${recommendation.estimated_monthly_cost_delta.monthly_high}/month. This is deterministic local telemetry, not AWS billing.`;
+    let changePlan = await api(`/api/v1/environments/${day2Environment.id}/change-plan`, { method: "POST" });
+    if (changePlan.state === "APPROVAL_REQUIRED") {
+      await login("operator");
+      changePlan = await api(`/api/v1/deployment-plans/${changePlan.id}/approve`, { method: "POST", body: JSON.stringify({ plan_hash: changePlan.plan_hash }) });
+    }
+    const result = await api(`/api/v1/deployment-plans/${changePlan.id}/execute`, { method: "POST" });
+    show("The approved bounded change is running through the durable local worker…");
+    await waitForWorker(result.environments.map((environment) => environment.id));
+    show("The change completed and the observer recorded its result."); await refreshAudit();
   } catch (error) { show(error.message, true); }
 });
 document.querySelector("#refresh-audit").addEventListener("click", () => refreshAudit().catch((error) => show(error.message, true)));

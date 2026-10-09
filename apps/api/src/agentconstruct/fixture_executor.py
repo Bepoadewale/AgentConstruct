@@ -12,6 +12,11 @@ class DeployRequest(BaseModel):
     should_fail: bool = False
 
 
+class ChangeRequest(BaseModel):
+    environment_id: str
+    minimum_replicas: int
+
+
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
@@ -40,3 +45,20 @@ def destroy(environment_id: str):
         "fixture": "bounded-local-executor",
         "cleanup_verified": True,
     }
+
+
+@app.post("/changes")
+def change(request: ChangeRequest):
+    if request.environment_id not in deployments:
+        raise HTTPException(404, "fixture deployment missing")
+    deployments[request.environment_id].update(
+        {
+            "state": "READY",
+            "fixture": "bounded-local-executor",
+            "minimum_replicas": request.minimum_replicas,
+            "health_checked": True,
+            "p95_latency_ms": 1500,
+            "queue_time_ms": 300,
+        }
+    )
+    return deployments[request.environment_id]

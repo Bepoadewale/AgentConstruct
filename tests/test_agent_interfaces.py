@@ -36,7 +36,14 @@ class RecordingClient:
 
 def test_mcp_catalogue_exposes_governed_operations_but_no_approval_or_credentials():
     names = {tool["name"] for tool in TOOL_DEFINITIONS}
-    assert {"analyze_workload", "plan_infrastructure", "get_plan", "destroy_environment"} <= names
+    assert {
+        "analyze_workload",
+        "plan_infrastructure",
+        "get_plan",
+        "recommend_optimization",
+        "create_change_plan",
+        "destroy_environment",
+    } <= names
     assert "approve_plan" not in names
     assert all("credential" not in name for name in names)
 
@@ -46,6 +53,17 @@ def test_mcp_compares_candidates_and_preserves_api_authority():
     result = AgentConstructMcp(client).call_tool("compare_architectures", {"plan_id": "plan-1"})
     assert result["selected"] == "aws-app-runner"
     assert client.calls == [("GET", "/api/v1/deployment-plans/plan-1", None)]
+
+
+def test_mcp_day2_tools_only_request_governed_api_operations():
+    client = RecordingClient()
+    server = AgentConstructMcp(client)
+    assert server.call_tool("recommend_optimization", {"environment_id": "env-1"}) == {"ok": True}
+    assert server.call_tool("create_change_plan", {"environment_id": "env-1"}) == {"ok": True}
+    assert client.calls == [
+        ("GET", "/api/v1/environments/env-1/recommendation", None),
+        ("POST", "/api/v1/environments/env-1/change-plan", None),
+    ]
 
 
 def test_mcp_json_rpc_tools_list_and_error_shape_are_deterministic():

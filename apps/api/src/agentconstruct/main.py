@@ -274,6 +274,41 @@ def get_environment(
     }
 
 
+@app.get("/api/v1/environments/{environment_id}/recommendation")
+def get_recommendation(
+    environment_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("day2.recommendation").inc()
+    try:
+        return service.recommendation(principal, environment_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post("/api/v1/environments/{environment_id}/change-plan", status_code=201)
+def create_change_plan(
+    environment_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("day2.change_plan").inc()
+    try:
+        plan = service.change_plan(principal, environment_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+    PLAN_RESULTS.labels(plan.policy_result).inc()
+    return {
+        "id": plan.id,
+        "state": plan.state,
+        "plan_hash": plan.plan_hash,
+        "policy_result": plan.policy_result,
+        "action": plan.action,
+        "payload": plan.payload,
+    }
+
+
 @app.post("/api/v1/environments/{environment_id}/destroy-plan", status_code=201)
 def create_destroy_plan(
     environment_id: str,

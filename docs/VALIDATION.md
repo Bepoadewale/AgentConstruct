@@ -116,3 +116,30 @@ Date: 2026-10-09. The CLI and stdio MCP server were tested as thin API clients, 
 - Unit validation passed with **33 tests**.
 
 Two clean Compose cycles then passed with the installed `agentconstruct-mcp` entry point included in each cycle. Each cycle passed smoke, browser contract, canonical demo, policy failure, readiness failure, Tempo trace check, Ruff, all then-current 32 tests, OPA 3/3, Terraform `fmt`/offline-backend `init`/`validate`, Kubernetes render, MCP `tools/list`, and scoped cleanup. The final 33-test run added a tenant-scoped agent-read test. The MCP contract confirmed the tools were available without an approval tool.
+
+## Governed Day-2 loop clean-room evidence
+
+Date: 2026-10-09. Environment: macOS, Docker Desktop, Python 3.12, Terraform and kubectl.
+
+Two clean cycles began and ended with `make clean-local`. Each rebuilt Compose from scratch and ran:
+
+```bash
+make bootstrap-local
+make smoke
+make browser-contract
+make demo
+make demo-day2
+make demo-failure
+make demo-readiness-failure
+make trace-check
+make verify
+make opa-test
+make terraform-validate
+make kubernetes-render
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | AGENTCONSTRUCT_TOKEN=fixture-token .venv/bin/agentconstruct-mcp
+make clean-local
+```
+
+Both cycles passed. The Day-2 demo created a production environment, read deterministic high-latency evidence, created a `CHANGE` plan, required a separate operator to approve the exact plan, observed the fixed local change result, and then used the existing governed destroy path. Ruff passed, pytest passed **36 tests**, OPA passed **3/3**, both Terraform roots formatted and validated with `init -backend=false`, Kubernetes rendered without applying, and the MCP catalogue included the non-mutating recommendation and governed change-plan tools.
+
+This is local fixture evidence only. The telemetry, cost delta and fixed change endpoint do not represent a cloud metric source, actual AWS cost, customer workload, or autonomous remediation.

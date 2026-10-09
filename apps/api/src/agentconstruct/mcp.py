@@ -89,6 +89,33 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "explain_environment",
+        "description": "Read the tenant-scoped desired and independently observed state for an environment.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["environment_id"],
+            "properties": {"environment_id": {"type": "string"}},
+        },
+    },
+    {
+        "name": "recommend_optimization",
+        "description": "Return a non-mutating Day-2 recommendation from bounded local telemetry evidence.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["environment_id"],
+            "properties": {"environment_id": {"type": "string"}},
+        },
+    },
+    {
+        "name": "create_change_plan",
+        "description": "Create a governed immutable change plan. It does not approve or autonomously apply a protected change.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["environment_id"],
+            "properties": {"environment_id": {"type": "string"}},
+        },
+    },
+    {
         "name": "get_audit_events",
         "description": "Read tenant-scoped audit events, optionally for one environment.",
         "inputSchema": {"type": "object", "properties": {"environment_id": {"type": "string"}}},
@@ -135,8 +162,16 @@ class AgentConstructMcp:
             return self.client.request(
                 "POST", f"/api/v1/deployment-plans/{arguments['plan_id']}/execute"
             )
-        if name == "get_environment_status":
+        if name in {"get_environment_status", "explain_environment"}:
             return self.client.request("GET", f"/api/v1/environments/{arguments['environment_id']}")
+        if name == "recommend_optimization":
+            return self.client.request(
+                "GET", f"/api/v1/environments/{arguments['environment_id']}/recommendation"
+            )
+        if name == "create_change_plan":
+            return self.client.request(
+                "POST", f"/api/v1/environments/{arguments['environment_id']}/change-plan"
+            )
         if name == "get_audit_events":
             suffix = (
                 f"?environment_id={arguments['environment_id']}"

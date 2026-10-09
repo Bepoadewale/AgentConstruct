@@ -22,7 +22,13 @@ class PolicyClient:
         )
         self.fixture = fixture
 
-    def evaluate(self, principal: Principal, spec: WorkloadSpec, action: str) -> PolicyDecision:
+    def evaluate(
+        self,
+        principal: Principal,
+        spec: WorkloadSpec,
+        action: str,
+        target_environment_type: str | None = None,
+    ) -> PolicyDecision:
         payload = {
             "principal": {
                 "subject": principal.subject,
@@ -31,6 +37,7 @@ class PolicyClient:
             },
             "spec": spec.model_dump(mode="json"),
             "action": action,
+            "target_environment_type": target_environment_type,
         }
         if self.fixture:
             return self._fixture(payload)
@@ -48,6 +55,13 @@ class PolicyClient:
     @staticmethod
     def _fixture(payload: dict) -> PolicyDecision:
         spec = payload["spec"]
+        if payload["action"] == "CHANGE":
+            if payload.get("target_environment_type") == "production":
+                return PolicyDecision(
+                    PolicyResult.APPROVAL_REQUIRED,
+                    "production change needs an independent approval",
+                )
+            return PolicyDecision(PolicyResult.ALLOW, "non-production change is allowed")
         if spec.get("monthly_budget_usd", 0) > 1500:
             return PolicyDecision(PolicyResult.DENY, "requested budget exceeds the V1 safety limit")
         if "production" in spec.get("environments", []):

@@ -17,6 +17,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - Durable local execution jobs processed by a separate bounded worker, with observed READY, FAILED and DESTROYED states.
 - Web UI with editable region, data and budget constraints; Prometheus metrics, OpenTelemetry business traces, Tempo and Grafana dashboard provisioning.
 - One governed REST API shared by the browser, a thin CLI, and a stdio MCP server. Agent clients can analyse, plan, compare, estimate, inspect, request eligible execution, and create a destroy plan; they cannot self-approve or receive cloud, shell, Terraform, Kubernetes, or secret access.
+- A bounded Day-2 loop: deterministic latency evidence, a transparent replica recommendation, immutable `CHANGE` plan, independent production approval, durable worker, observed result and audit. It is local fixture evidence, not autonomous remediation or cloud monitoring.
 - Terraform contracts for a separate state/lock/budget foundation and private VPC, EKS, ECR, RDS, Secrets Manager and IRSA runtime.
 - Hardened Kubernetes and Argo CD desired-state contracts, External Secrets and artifact-storage contracts, plus planned private observability/recovery controls.
 

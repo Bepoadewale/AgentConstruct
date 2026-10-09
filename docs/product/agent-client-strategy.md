@@ -15,10 +15,10 @@ The product stores the organisation boundary, projects, approved cloud target, p
 
 - **REST API:** the web UI and other clients use the same authenticated API.
 - **CLI:** `agentconstruct` forwards the caller's bearer token to that API.
-- **MCP:** `agentconstruct-mcp` is a stdio server that exposes the safe planning, inspection, execution-request, and destroy-plan tools.
+- **MCP:** `agentconstruct-mcp` is a stdio server that exposes the safe planning, inspection, bounded Day-2 recommendation/change-plan request, execution-request, and destroy-plan tools.
 
 The CLI and MCP server do not mint AWS credentials. Their token is only for the AgentConstruct API. The API remains the authority for tenant checks, policy, exact-plan approval, and execution state.
 
-**Executed locally:** MCP request dispatch and CLI request construction are unit tested. The REST workflow remains covered by the Compose demos.
+**Executed locally:** MCP request dispatch and CLI request construction are unit tested. The REST workflow, including the approved Day-2 fixture change, remains covered by the Compose demos.
 
 **Not executed:** an external Codex, Claude, Cursor, or GitHub App installation. Those clients can be connected later using the documented stdio/API boundary.
