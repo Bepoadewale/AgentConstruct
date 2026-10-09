@@ -15,6 +15,7 @@ from agentconstruct.db import SessionLocal, run_migrations, session
 from agentconstruct.domain import (
     ApprovalRequest,
     CloudConnectionRequest,
+    CloudInventorySnapshotRequest,
     IntentRequest,
     LocalLoginRequest,
     ProjectRequest,
@@ -142,6 +143,52 @@ def get_cloud_role_contract(
         return service.cloud_role_contract(principal, connection_id)
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
+
+
+@app.post("/api/v1/cloud-connections/{connection_id}/inventory-snapshots", status_code=201)
+def record_cloud_inventory_snapshot(
+    connection_id: str,
+    request: CloudInventorySnapshotRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("cloud_inventory_snapshots.create").inc()
+    try:
+        stored = service.record_cloud_inventory_snapshot(
+            principal,
+            connection_id,
+            request.region,
+            request.provenance,
+            request.captured_at,
+            request.snapshot,
+        )
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+    return {"id": stored.id, "connection_id": stored.cloud_connection_id, "captured_at": stored.captured_at}
+
+
+@app.get("/api/v1/cloud-connections/{connection_id}/inventory-snapshots")
+def list_cloud_inventory_snapshots(
+    connection_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("cloud_inventory_snapshots.list").inc()
+    try:
+        snapshots = service.cloud_inventory_snapshots(principal, connection_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+    return [
+        {
+            "id": snapshot.id,
+            "connection_id": snapshot.cloud_connection_id,
+            "region": snapshot.region,
+            "provenance": snapshot.provenance,
+            "captured_at": snapshot.captured_at,
+            "snapshot": snapshot.snapshot,
+        }
+        for snapshot in snapshots
+    ]
 
 
 @app.get("/api/v1/projects/{project_id}/repository-discovery")

@@ -34,6 +34,7 @@ from agentconstruct.models import (
     Recommendation,
     RepositoryConnection,
     StoredArchitecturePlan,
+    StoredCloudInventorySnapshot,
     WorkloadIntent,
 )
 from agentconstruct.planner import AwsV1Planner
@@ -146,6 +147,56 @@ class ProductService:
                 select(CloudConnection)
                 .where(CloudConnection.organization_id == principal.organization_id)
                 .order_by(CloudConnection.created_at)
+            )
+        )
+
+    def record_cloud_inventory_snapshot(
+        self,
+        principal: Principal,
+        connection_id: str,
+        region: str,
+        provenance: str,
+        captured_at,
+        snapshot: dict[str, Any],
+    ) -> StoredCloudInventorySnapshot:
+        """Persist metadata discovered through STS; credential material is never accepted."""
+        connection = self.db.get(CloudConnection, connection_id)
+        if not connection or connection.organization_id != principal.organization_id:
+            raise PermissionError("cloud connection not found in this organization")
+        stored = StoredCloudInventorySnapshot(
+            organization_id=principal.organization_id,
+            cloud_connection_id=connection.id,
+            region=region,
+            provenance=provenance,
+            captured_at=captured_at,
+            snapshot=snapshot,
+        )
+        self.db.add(stored)
+        self.db.flush()
+        self.audit(
+            principal,
+            "cloud_inventory.snapshot_recorded",
+            "cloud_inventory_snapshot",
+            stored.id,
+            {"connection_id": connection.id, "region": region, "provenance": provenance},
+        )
+        self.db.commit()
+        return stored
+
+    def cloud_inventory_snapshots(
+        self, principal: Principal, connection_id: str
+    ) -> list[StoredCloudInventorySnapshot]:
+        connection = self.db.get(CloudConnection, connection_id)
+        if not connection or connection.organization_id != principal.organization_id:
+            raise PermissionError("cloud connection not found in this organization")
+        return list(
+            self.db.scalars(
+                select(StoredCloudInventorySnapshot)
+                .where(
+                    StoredCloudInventorySnapshot.organization_id == principal.organization_id,
+                    StoredCloudInventorySnapshot.cloud_connection_id == connection_id,
+                )
+                .order_by(StoredCloudInventorySnapshot.captured_at.desc())
             )
         )
 

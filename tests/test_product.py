@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from agentconstruct.db import make_engine, run_migrations
 from agentconstruct.domain import EnvironmentName, LifecycleState, PolicyResult, WorkloadSpec
 from agentconstruct.executor import ExecutionObservation
@@ -202,6 +204,29 @@ def test_cloud_connection_is_tenant_scoped_metadata_not_credentials():
     assert connection.connection_mode == "byoc_role_contract"
     other_subject, other_org, other_role = LOCAL_USERS["other-tenant"]
     assert service.cloud_connections(Principal(other_subject, other_org, other_role)) == []
+
+
+def test_live_inventory_snapshot_is_durable_and_tenant_scoped():
+    service, _ = make_service()
+    connection = service.create_cloud_connection(founder(), "Customer AWS", "aws", "byoc_role_contract")
+    stored = service.record_cloud_inventory_snapshot(
+        founder(),
+        connection.id,
+        "us-east-1",
+        "live-read-only-sts-discovery",
+        datetime.now(UTC),
+        {"resources": {"vpcs": [{"id": "vpc-123"}]}, "cost_explorer": {"result": "queried"}},
+    )
+    snapshots = service.cloud_inventory_snapshots(founder(), connection.id)
+    assert snapshots[0].id == stored.id
+    assert snapshots[0].snapshot["resources"]["vpcs"][0]["id"] == "vpc-123"
+    other_subject, other_org, other_role = LOCAL_USERS["other-tenant"]
+    try:
+        service.cloud_inventory_snapshots(Principal(other_subject, other_org, other_role), connection.id)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("cross-tenant inventory snapshot access was accepted")
 
 
 def test_repository_discovery_and_byoc_role_contract_are_fixture_only_and_tenant_scoped():

@@ -57,12 +57,16 @@ opa-test:
 
 terraform-validate:
 	terraform fmt -check -recursive infrastructure/terraform
-	terraform -chdir=infrastructure/terraform/bootstrap init -backend=false -input=false
-	terraform -chdir=infrastructure/terraform/bootstrap validate
-	terraform -chdir=infrastructure/terraform/customer-connection init -backend=false -input=false
-	terraform -chdir=infrastructure/terraform/customer-connection validate
-	terraform -chdir=infrastructure/terraform/pilot init -backend=false -input=false
-	terraform -chdir=infrastructure/terraform/pilot validate
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-bootstrap terraform -chdir=infrastructure/terraform/agentconstruct-bootstrap init -backend=false -input=false
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-bootstrap terraform -chdir=infrastructure/terraform/agentconstruct-bootstrap validate
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-foundation terraform -chdir=infrastructure/terraform/bootstrap init -backend=false -input=false
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-foundation terraform -chdir=infrastructure/terraform/bootstrap validate
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-management terraform -chdir=infrastructure/terraform/management-identity init -backend=false -input=false
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-management terraform -chdir=infrastructure/terraform/management-identity validate
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-connection terraform -chdir=infrastructure/terraform/customer-connection init -backend=false -input=false
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-connection terraform -chdir=infrastructure/terraform/customer-connection validate
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-pilot terraform -chdir=infrastructure/terraform/pilot init -backend=false -input=false
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-pilot terraform -chdir=infrastructure/terraform/pilot validate
 
 customer-aws-connection-plan:
 	./scripts/customer-aws-connection.sh plan
