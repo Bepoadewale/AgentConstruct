@@ -201,3 +201,33 @@ make clean-local
 Both cycles passed. The simple workload used `aws-app-runner`; the complex workload used `aws-eks-governed`; each local execution carried the selected profile into the bounded executor. Browser, policy and readiness-failure paths passed. Tempo received traces. Ruff passed, pytest passed **44 tests**, OPA passed **3/3**, both Terraform roots formatted and validated with `init -backend=false`, and Kubernetes rendered without being applied. The final cleanup confirmed that no project Compose container, volume, virtual environment or local state remained.
 
 The GitHub desired-state pull-request/check contract, GitHub webhook contract and customer AWS OIDC/STS role contract are tested as deterministic fixtures only. No GitHub App installation, webhook, repository write, AWS credentials, AWS role assumption, Terraform apply, Argo reconciliation or Kubernetes cluster was contacted.
+
+## Final product-proof clean-room evidence
+
+Date: 2026-10-09. Environment: macOS, Docker Desktop, Python 3.12, Terraform and kubectl.
+
+Two clean cycles began and ended with `make clean-local`. Each cycle rebuilt the Compose stack and ran the full customer and agent-client proof:
+
+```bash
+make bootstrap-local
+make smoke
+make browser-contract
+make demo-simple
+make demo-complex
+make demo-degraded
+make demo-day2
+make demo
+make demo-failure
+make demo-readiness-failure
+make trace-check
+make verify
+make opa-test
+make terraform-validate
+make kubernetes-render
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | AGENTCONSTRUCT_TOKEN=fixture-token .venv/bin/agentconstruct-mcp
+make clean-local
+```
+
+Both cycles passed. The browser contract and all three planning stories passed: a small request selected App Runner, a complex GPU/Kubernetes request selected EKS, and degraded Day-2 evidence created a governed change with an independent approval. Policy denial and observed readiness failure passed. Tempo received traces; the MCP catalogue exposed governed tools with no approval tool. Ruff passed, pytest passed **44 tests**, OPA passed **3/3**, both Terraform roots formatted and validated offline, and Kubernetes rendered without an apply. Final cleanup left no project containers, volume, virtual environment or local state.
+
+This is local and static evidence. It is not AWS execution, customer-cloud access, external identity, GitHub App delivery, live agent-client integration, actual cloud billing, or a cloud-pilot claim.

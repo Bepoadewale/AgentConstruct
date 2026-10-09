@@ -58,6 +58,12 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: make bootstrap-local
-      - run: make smoke && make browser-contract && make demo && make demo-failure && make demo-readiness-failure && sleep 10 && make trace-check && make verify
+      - run: >-
+          make smoke && make browser-contract && make demo-simple && make demo-complex
+          && make demo-degraded && make demo-day2 && make demo && make demo-failure
+          && make demo-readiness-failure && sleep 10 && make trace-check && make verify
+      - run: >-
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+          | AGENTCONSTRUCT_TOKEN=fixture-token .venv/bin/agentconstruct-mcp
       - if: always()
         run: make clean-local
