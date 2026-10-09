@@ -13,6 +13,8 @@ customer request → typed workload specification → reusable-cloud inventory f
 → observed READY/FAILED → audit → governed destroy
 
 For the first Day-2 loop, a bounded telemetry fixture can explain elevated latency, propose a replica change with a cost range and rollback, then send that exact change through the same policy, approval, worker and observation path. It never repairs a protected environment automatically.
+
+The browser also compares the viable choices in plain language: the leanest option, a scale-ready option when one is viable, and Kubernetes or specialised infrastructure only when the request proves it is needed. It shows cost ranges, complexity, assumptions, rejected options and upgrade triggers before approval.
 ```
 
 Customers do not have to choose subnets, Helm values or Kubernetes internals to use the demo. They can inspect those decisions and set important constraints.
@@ -32,7 +34,10 @@ make install
 make bootstrap-local
 make smoke
 make demo
+make demo-simple
+make demo-complex
 make demo-day2
+make demo-degraded
 make demo-failure
 make demo-readiness-failure
 make trace-check
@@ -47,7 +52,7 @@ The V1 browser is deliberately plain HTML/CSS/JavaScript; see [ADR-009](docs/dec
 
 ## What is real, simulated and next
 
-- **Executed locally:** natural-language fixture interpretation, typed validation, AWS candidate comparison, fixture-inventory reuse, transparent estimated cost ranges and complexity scores, live OPA policy, PostgreSQL lifecycle/audit state, tenant-scoped GitHub/AWS connection metadata, exact-plan approval, durable queued fixture work, observed status, bounded Day-2 recommendation/change evidence, metrics, traces and dashboards.
+- **Executed locally:** natural-language fixture interpretation, typed validation, AWS candidate comparison, fixture-inventory reuse, transparent estimated cost ranges and complexity scores, live OPA policy, PostgreSQL lifecycle/audit state, tenant-scoped GitHub/AWS connection metadata, exact-plan approval, durable queued fixture work, observed status, persisted incident/recommendation records, bounded Day-2 recommendation/change evidence, metrics, traces and dashboards.
 - **Simulated locally:** the AI intent provider, AWS inventory, AWS pricing and the deployment target. The executor can call only fixed fixture endpoints; it has no Docker, Kubernetes, Terraform or AWS authority.
 - **Roadmap:** customer AWS role assumption with short-lived credentials, live discovery/pricing, profile-specific Terraform rendering, GitHub App installation/webhooks, real GitOps/Argo execution, enterprise OIDC, customer billing and production support.
 

@@ -4,7 +4,7 @@ from agentconstruct.db import make_engine, run_migrations
 from agentconstruct.domain import EnvironmentName, LifecycleState, PolicyResult, WorkloadSpec
 from agentconstruct.executor import ExecutionObservation
 from agentconstruct.intent import DeterministicIntentProvider
-from agentconstruct.models import RepositoryConnection
+from agentconstruct.models import Incident, Recommendation, RepositoryConnection
 from agentconstruct.planner import AwsV1Planner
 from agentconstruct.policy import PolicyClient
 from agentconstruct.security import LOCAL_USERS, Principal, issue_local_token, verify_token
@@ -16,8 +16,18 @@ from sqlalchemy.orm import sessionmaker
 
 
 class LocalExecutor:
-    def deploy(self, environment_id: str, should_fail: bool = False) -> ExecutionObservation:
-        return ExecutionObservation("FAILED" if should_fail else "READY", {"environment_id": environment_id, "health_checked": not should_fail})
+    def deploy(
+        self, environment_id: str, should_fail: bool = False, should_degrade: bool = False
+    ) -> ExecutionObservation:
+        state = "FAILED" if should_fail else "DEGRADED" if should_degrade else "READY"
+        return ExecutionObservation(
+            state,
+            {
+                "environment_id": environment_id,
+                "health_checked": not should_fail,
+                "degradation_detected": should_degrade,
+            },
+        )
 
     def destroy(self, environment_id: str) -> ExecutionObservation:
         return ExecutionObservation("DESTROYED", {"environment_id": environment_id, "cleanup_verified": True})
@@ -255,6 +265,7 @@ def test_day2_recommendation_becomes_a_protected_exact_change_plan_and_observed_
     recommendation = service.recommendation(founder(), production.id)
     assert recommendation["evidence"]["queue_time_ms"] == 1200
     assert recommendation["proposed_change"]["to"] == 2
+    assert recommendation["record_state"] == "PROPOSED"
     change = service.change_plan(founder(), production.id)
     assert change.action == "CHANGE"
     assert change.state == LifecycleState.APPROVAL_REQUIRED
@@ -273,6 +284,10 @@ def test_day2_recommendation_becomes_a_protected_exact_change_plan_and_observed_
     assert observed.state == LifecycleState.READY
     assert observed.desired_state["min_replicas"] == 2
     assert observed.observed_state["p95_latency_ms"] == 1500
+    db_record = service.db.get(Recommendation, recommendation["record_id"])
+    assert db_record and db_record.state == "APPLIED"
+    incident = service.db.get(Incident, recommendation["incident_id"])
+    assert incident and incident.state == "RESOLVED"
     assert any(event.action == "environment.change_observed" for event in service.audits(founder()))
 
 
@@ -296,3 +311,30 @@ def test_day2_recommendation_is_tenant_scoped_and_non_mutating():
         pass
     else:
         raise AssertionError("cross-tenant Day-2 diagnosis was accepted")
+
+
+def test_degraded_environment_opens_durable_incident_and_can_use_the_same_change_loop():
+    service, _ = make_service()
+    project = service.create_project(founder(), "degraded-loop", "https://github.com/example/rag")
+    prompt = f"{complete_prompt()} Force degraded local readiness evidence."
+    intent = service.create_intent(founder(), project.id, prompt, None, None, "idem-degraded-loop")
+    deployment = service.plan_intent(founder(), intent.id)
+    service.approve(operator(), deployment.id, deployment.plan_hash)
+    environments = service.execute(operator(), deployment.id)
+    while service.run_next_job():
+        pass
+    production = next(
+        environment
+        for environment in environments
+        if environment.environment_type == EnvironmentName.PRODUCTION
+    )
+    assert service.get_environment(founder(), production.id).state == LifecycleState.DEGRADED
+    incidents = service.incidents(founder(), production.id)
+    assert len(incidents) == 1 and incidents[0].state == "OPEN"
+    change = service.change_plan(founder(), production.id)
+    assert service.get_environment(founder(), production.id).state == LifecycleState.CHANGE_PROPOSED
+    service.approve(operator(), change.id, change.plan_hash)
+    service.execute(operator(), change.id)
+    assert service.run_next_job()
+    assert service.get_environment(founder(), production.id).state == LifecycleState.READY
+    assert service.incidents(founder(), production.id)[0].state == "RESOLVED"

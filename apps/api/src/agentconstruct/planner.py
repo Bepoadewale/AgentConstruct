@@ -168,11 +168,11 @@ class AwsV1Planner:
                 CandidateClass.KUBERNETES,
                 "Managed Kubernetes",
                 region,
-                620,
-                1180,
+                950,
+                1450,
                 4,
-                ["EKS", "ECR", "ALB", "Argo CD"],
-                "Run Kubernetes-specific multi-service scheduling and policies.",
+                ["EKS", "GPU node group", "ECR", "ALB", "Argo CD"],
+                "Run Kubernetes-specific multi-service scheduling, policies and accelerator placement.",
             ),
             self._candidate(
                 "aws-managed-ai",
@@ -278,7 +278,10 @@ class AwsV1Planner:
         klass = candidate.candidate_class
         if candidate.region not in inventory.approved_regions:
             rejected.append("region is not approved by discovered customer policy")
-        if spec.requires_gpu and klass != CandidateClass.GPU_INFERENCE:
+        if spec.requires_gpu and klass not in {
+            CandidateClass.GPU_INFERENCE,
+            CandidateClass.KUBERNETES,
+        }:
             rejected.append("GPU requirement needs accelerator-backed compute")
         if not spec.requires_gpu and klass == CandidateClass.GPU_INFERENCE:
             rejected.append("no GPU requirement justifies accelerator cost")
@@ -288,6 +291,8 @@ class AwsV1Planner:
             spec.requires_kubernetes or (spec.requires_gpu and spec.multi_service)
         ):
             rejected.append("Kubernetes-specific capability is not required")
+        if klass == CandidateClass.KUBERNETES and spec.requires_gpu:
+            candidate.satisfies.append("GPU scheduling through an isolated accelerator node group")
         if klass == CandidateClass.STATIC and spec.workload_type not in {
             "static_site",
             "static_application",

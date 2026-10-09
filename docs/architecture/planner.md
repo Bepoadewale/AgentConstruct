@@ -25,7 +25,7 @@ natural-language request
 8. Choose the lowest-complexity candidate in that band.
 9. Store the selected option, rejected options, risks, cost assumptions, and upgrade triggers in the immutable plan payload.
 
-EKS is selected only for explicit Kubernetes needs, or later when a stricter profile adds a justified requirement. A small FastAPI application therefore selects App Runner or ECS Fargate before EKS. A GPU requirement selects the GPU profile only when the budget permits it.
+EKS is selected only for explicit Kubernetes needs. A small FastAPI application therefore selects App Runner or ECS Fargate before EKS. A GPU requirement selects an accelerator profile only when the budget permits it; an explicit multi-service GPU/Kubernetes requirement selects the specialised EKS profile instead.
 
 ## Boundaries
 

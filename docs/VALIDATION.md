@@ -143,3 +143,32 @@ make clean-local
 Both cycles passed. The Day-2 demo created a production environment, read deterministic high-latency evidence, created a `CHANGE` plan, required a separate operator to approve the exact plan, observed the fixed local change result, and then used the existing governed destroy path. Ruff passed, pytest passed **36 tests**, OPA passed **3/3**, both Terraform roots formatted and validated with `init -backend=false`, Kubernetes rendered without applying, and the MCP catalogue included the non-mutating recommendation and governed change-plan tools.
 
 This is local fixture evidence only. The telemetry, cost delta and fixed change endpoint do not represent a cloud metric source, actual AWS cost, customer workload, or autonomous remediation.
+
+## Customer planning and degraded-state clean-room evidence
+
+Date: 2026-10-09. Environment: macOS, Docker Desktop, Python 3.12, Terraform and kubectl.
+
+Two clean Compose cycles began and ended with `make clean-local`. Each rebuilt the stack and ran:
+
+```bash
+make bootstrap-local
+make smoke
+make browser-contract
+make demo-simple
+make demo-complex
+make demo-degraded
+make demo-day2
+make demo
+make demo-failure
+make demo-readiness-failure
+make trace-check
+make verify
+make opa-test
+make terraform-validate
+make kubernetes-render
+make clean-local
+```
+
+Both cycles passed. `demo-simple` selected `aws-app-runner` for the low-traffic container API; `demo-complex` selected `aws-eks-governed` only for the explicit multi-service GPU/Kubernetes request. `demo-degraded` recorded `DEGRADED` state and an open PostgreSQL incident. `demo-day2` persisted a recommendation, required the separate operator to approve the production `CHANGE` plan, observed the fixed local outcome, then resolved the incident. Browser, policy, readiness-failure, traces, Ruff, pytest (**38 tests**), OPA (**3/3**), Terraform offline validation and Kubernetes rendering also passed.
+
+This remains local fixture/static evidence. Neither App Runner, EKS, GPU capacity, Terraform apply nor an AWS account was executed.

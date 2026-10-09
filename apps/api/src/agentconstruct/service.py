@@ -26,9 +26,11 @@ from agentconstruct.models import (
     DeploymentPlan,
     Environment,
     ExecutionJob,
+    Incident,
     Organization,
     ProductUser,
     Project,
+    Recommendation,
     RepositoryConnection,
     StoredArchitecturePlan,
     WorkloadIntent,
@@ -370,6 +372,7 @@ class ProductService:
                     "profile": plan.payload["architecture"]["profile"],
                     "plan_hash": plan.plan_hash,
                     "should_fail": "force failure" in intent.prompt.lower(),
+                    "should_degrade": "force degraded" in intent.prompt.lower(),
                     "spec": plan.payload["spec"],
                     "min_replicas": 1,
                 },
@@ -447,6 +450,7 @@ class ProductService:
                     LifecycleState.READY if observation.state == "READY" else LifecycleState.FAILED
                 )
                 action = "environment.change_observed"
+                self._resolve_day2_records(plan, environment)
             else:
                 for state in (
                     LifecycleState.PROVISIONING,
@@ -456,14 +460,29 @@ class ProductService:
                     require_transition(LifecycleState(environment.state), state)
                     environment.state = state
                 observation = self.executor.deploy(
-                    environment.id, should_fail=bool(environment.desired_state.get("should_fail"))
+                    environment.id,
+                    should_fail=bool(environment.desired_state.get("should_fail")),
+                    should_degrade=bool(environment.desired_state.get("should_degrade")),
                 )
-                environment.state = (
-                    LifecycleState.READY if observation.state == "READY" else LifecycleState.FAILED
+                environment.state = {
+                    "READY": LifecycleState.READY,
+                    "DEGRADED": LifecycleState.DEGRADED,
+                }.get(observation.state, LifecycleState.FAILED)
+                action = (
+                    "environment.degraded"
+                    if environment.state == LifecycleState.DEGRADED
+                    else "environment.observed"
                 )
-                action = "environment.observed"
+                if environment.state == LifecycleState.DEGRADED:
+                    self._open_incident(
+                        environment,
+                        "Fixture observation detected degraded application health.",
+                        observation.detail,
+                    )
             environment.observed_state = observation.detail
-            job.state = "SUCCEEDED" if observation.state in {"READY", "DESTROYED"} else "FAILED"
+            job.state = (
+                "SUCCEEDED" if observation.state in {"READY", "DEGRADED", "DESTROYED"} else "FAILED"
+            )
             job.result = {"observation": observation.detail, "state": environment.state}
             principal = Principal(
                 subject="system-worker",
@@ -532,15 +551,30 @@ class ProductService:
             environment = self._environment(principal, environment_id)
             if LifecycleState(environment.state) not in {LifecycleState.READY, LifecycleState.DEGRADED}:
                 raise ValueError("environment must be ready or degraded before it can be diagnosed")
-            recommendation = self.day2_advisor.recommend(environment)
-            return recommendation.model_dump(mode="json")
+            record = self._recommendation_record(principal, environment)
+            return self._recommendation_response(record)
 
     def change_plan(self, principal: Principal, environment_id: str) -> DeploymentPlan:
         with self._trace("agentconstruct.day2.change_plan"):
             environment = self._environment(principal, environment_id)
+            if LifecycleState(environment.state) == LifecycleState.CHANGE_PROPOSED:
+                existing = self.db.scalar(
+                    select(DeploymentPlan)
+                    .where(
+                        DeploymentPlan.environment_id == environment.id,
+                        DeploymentPlan.action == PlanAction.CHANGE,
+                        DeploymentPlan.state.in_(
+                            [LifecycleState.PLANNED, LifecycleState.APPROVAL_REQUIRED]
+                        ),
+                    )
+                    .order_by(DeploymentPlan.created_at.desc())
+                )
+                if existing:
+                    return existing
             if LifecycleState(environment.state) not in {LifecycleState.READY, LifecycleState.DEGRADED}:
                 raise ValueError("environment cannot receive a change plan in its current state")
-            recommendation = self.day2_advisor.recommend(environment)
+            record = self._recommendation_record(principal, environment)
+            recommendation = record.recommendation
             spec = WorkloadSpec.model_validate(environment.desired_state["spec"])
             with self._trace("agentconstruct.policy.evaluate"):
                 decision = self.policy.evaluate(
@@ -553,7 +587,8 @@ class ProductService:
                 "action": PlanAction.CHANGE,
                 "environment_id": environment.id,
                 "spec": spec.model_dump(mode="json"),
-                "recommendation": recommendation.model_dump(mode="json"),
+                "recommendation": recommendation,
+                "recommendation_record_id": record.id,
                 "policy": {"result": decision.result, "reason": decision.reason},
             }
             digest = plan_hash(payload)
@@ -577,12 +612,24 @@ class ProductService:
             )
             self.db.add(plan)
             self.db.flush()
+            record.deployment_plan_id = plan.id
+            if decision.result == PolicyResult.DENY:
+                record.state = "DENIED"
+            else:
+                record.state = "PLANNED"
+                require_transition(LifecycleState(environment.state), LifecycleState.CHANGE_PROPOSED)
+                environment.state = LifecycleState.CHANGE_PROPOSED
             self.audit(
                 principal,
                 "change_plan.created",
                 "deployment_plan",
                 plan.id,
-                {"hash": digest, "policy": decision.result, "recommendation": recommendation.diagnosis},
+                {
+                    "hash": digest,
+                    "policy": decision.result,
+                    "recommendation": recommendation["diagnosis"],
+                    "recommendation_id": record.id,
+                },
             )
             self.db.commit()
             return plan
@@ -613,7 +660,7 @@ class ProductService:
         if plan.state not in {LifecycleState.PLANNED, LifecycleState.APPROVED}:
             raise ValueError("change plan is not executable")
         environment = self._environment(principal, plan.environment_id)
-        if LifecycleState(environment.state) not in {LifecycleState.READY, LifecycleState.DEGRADED}:
+        if LifecycleState(environment.state) not in {LifecycleState.CHANGE_PROPOSED}:
             raise ValueError("environment cannot receive a change in its current state")
         if plan.state == LifecycleState.APPROVED and not self.db.scalar(
             select(Approval).where(
@@ -640,6 +687,97 @@ class ProductService:
         )
         self.db.commit()
         return environment
+
+    def incidents(self, principal: Principal, environment_id: str) -> list[Incident]:
+        environment = self._environment(principal, environment_id)
+        return list(
+            self.db.scalars(
+                select(Incident)
+                .where(Incident.environment_id == environment.id)
+                .order_by(Incident.created_at.desc())
+            )
+        )
+
+    def _open_incident(self, environment: Environment, summary: str, evidence: dict) -> Incident:
+        incident = self.db.scalar(
+            select(Incident).where(
+                Incident.environment_id == environment.id, Incident.state == "OPEN"
+            )
+        )
+        if incident:
+            return incident
+        incident = Incident(
+            organization_id=environment.organization_id,
+            environment_id=environment.id,
+            summary=summary,
+            evidence=evidence,
+        )
+        self.db.add(incident)
+        return incident
+
+    def _recommendation_record(self, principal: Principal, environment: Environment) -> Recommendation:
+        incident = self.db.scalar(
+            select(Incident)
+            .where(Incident.environment_id == environment.id, Incident.state == "OPEN")
+            .order_by(Incident.created_at.desc())
+        )
+        if not incident:
+            incident = self._open_incident(
+                environment,
+                "Latency and saturation need a bounded diagnostic recommendation.",
+                self.day2_advisor.recommend(environment).evidence.model_dump(mode="json"),
+            )
+            self.db.flush()
+        record = self.db.scalar(
+            select(Recommendation)
+            .where(
+                Recommendation.environment_id == environment.id,
+                Recommendation.incident_id == incident.id,
+                Recommendation.state.in_(["PROPOSED", "PLANNED"]),
+            )
+            .order_by(Recommendation.created_at.desc())
+        )
+        if record:
+            return record
+        recommendation = self.day2_advisor.recommend(environment)
+        record = Recommendation(
+            organization_id=principal.organization_id,
+            environment_id=environment.id,
+            incident_id=incident.id,
+            recommendation=recommendation.model_dump(mode="json"),
+        )
+        self.db.add(record)
+        self.db.flush()
+        self.audit(
+            principal,
+            "recommendation.created",
+            "recommendation",
+            record.id,
+            {"environment_id": environment.id, "incident_id": incident.id},
+        )
+        self.db.commit()
+        return record
+
+    @staticmethod
+    def _recommendation_response(record: Recommendation) -> dict[str, Any]:
+        return {
+            **record.recommendation,
+            "record_id": record.id,
+            "incident_id": record.incident_id,
+            "record_state": record.state,
+        }
+
+    def _resolve_day2_records(self, plan: DeploymentPlan, environment: Environment) -> None:
+        record_id = plan.payload.get("recommendation_record_id")
+        if not record_id:
+            return
+        record = self.db.get(Recommendation, record_id)
+        if record and record.organization_id == environment.organization_id:
+            record.state = "APPLIED"
+            if record.incident_id:
+                incident = self.db.get(Incident, record.incident_id)
+                if incident:
+                    incident.state = "RESOLVED"
 
     def _environment(self, principal: Principal, environment_id: str) -> Environment:
         environment = self.db.get(Environment, environment_id)

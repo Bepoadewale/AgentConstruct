@@ -18,10 +18,16 @@ class FixtureExecutor:
     def __init__(self, url: str | None = None):
         self.url = url or os.getenv("AGENTCONSTRUCT_EXECUTOR_URL", "http://fixture-executor:8090")
 
-    def deploy(self, environment_id: str, should_fail: bool = False) -> ExecutionObservation:
+    def deploy(
+        self, environment_id: str, should_fail: bool = False, should_degrade: bool = False
+    ) -> ExecutionObservation:
         response = httpx.post(
             f"{self.url}/deployments",
-            json={"environment_id": environment_id, "should_fail": should_fail},
+            json={
+                "environment_id": environment_id,
+                "should_fail": should_fail,
+                "should_degrade": should_degrade,
+            },
             timeout=5,
         )
         response.raise_for_status()

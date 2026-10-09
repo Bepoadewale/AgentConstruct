@@ -132,6 +132,31 @@ class Environment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class Incident(Base):
+    __tablename__ = "incidents"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    environment_id: Mapped[str] = mapped_column(ForeignKey("environments.id"), index=True)
+    state: Mapped[str] = mapped_column(String(32), default="OPEN")
+    summary: Mapped[str] = mapped_column(Text)
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Recommendation(Base):
+    __tablename__ = "recommendations"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    environment_id: Mapped[str] = mapped_column(ForeignKey("environments.id"), index=True)
+    incident_id: Mapped[str | None] = mapped_column(ForeignKey("incidents.id"), nullable=True)
+    deployment_plan_id: Mapped[str | None] = mapped_column(
+        ForeignKey("deployment_plans.id"), nullable=True
+    )
+    state: Mapped[str] = mapped_column(String(32), default="PROPOSED")
+    recommendation: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

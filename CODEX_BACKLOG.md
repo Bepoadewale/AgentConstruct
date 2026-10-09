@@ -29,6 +29,8 @@
 - [x] Record two local validation cycles; repeat fully cold bootstrap in PR 1.
 - [x] Expose the governed product API through a thin CLI and a stdio MCP server without granting agents approval, cloud, shell, Terraform, Kubernetes or secret authority.
 - [x] Demonstrate a bounded Day-2 loop: evidence, recommendation, exact change plan, independent approval, observed local change and audit.
+- [x] Show the customer why an architecture was selected and prove both simple non-EKS and complex specialised-EKS local scenarios.
+- [x] Persist local incident and recommendation evidence for degraded health and governed Day-2 changes.
 
 ## P1 — Customer-cloud execution
 

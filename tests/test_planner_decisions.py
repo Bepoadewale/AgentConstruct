@@ -70,6 +70,19 @@ def test_gpu_requirement_selects_accelerator_profile():
     )
 
 
+def test_complex_gpu_kubernetes_workload_justifies_specialised_eks_profile():
+    result = plan(
+        requires_gpu=True,
+        requires_kubernetes=True,
+        multi_service=True,
+        peak_rps=100,
+        monthly_budget_usd=1500,
+        model_requirements={"allow_managed_model": False},
+    )
+    assert result.profile == "aws-eks-governed"
+    assert "GPU node group" in {component.service for component in result.components}
+
+
 def test_no_gpu_requirement_does_not_select_gpu_profile():
     assert selected(requires_gpu=False) != "aws-gpu-inference"
 
