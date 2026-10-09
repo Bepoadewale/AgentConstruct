@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: AgentConstruct read-only AWS discovery connection. Creates no workload resources.
+
+Parameters:
+  AgentConstructControlPlaneRoleArn:
+    Type: String
+    Description: AgentConstruct role allowed to assume this read-only customer role.
+  ExternalId:
+    Type: String
+    NoEcho: true
+    Description: Unique AgentConstruct connection value for this customer account.
+  ConnectionId:
+    Type: String
+    AllowedPattern: "[A-Za-z0-9-]{8,40}"
+    Description: Non-secret AgentConstruct connection identifier.
+
+Resources:
+  DiscoveryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "AgentConstructDiscovery-${ConnectionId}"
+      Description: AgentConstruct read-only infrastructure and cost discovery. No workload mutation or data access.
+      MaxSessionDuration: 3600
+      Tags:
+        - Key: ManagedBy
+          Value: agentconstruct
+        - Key: ConnectionId
+          Value: !Ref ConnectionId
+        - Key: Access
+          Value: discovery-read-only
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Ref AgentConstructControlPlaneRoleArn
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref ExternalId
+      Policies:
+        - PolicyName: AgentConstructDiscoveryMetadataOnly
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: DiscoverInfrastructureMetadata
+                Effect: Allow
+                Action:
+                  - apprunner:DescribeService
+                  - apprunner:ListServices
+                  - ce:GetCostAndUsage
+                  - ce:GetCostForecast
+                  - ce:GetDimensionValues
+                  - cloudwatch:DescribeAlarms
+                  - ec2:Describe*
+                  - ecr:DescribeRepositories
+                  - ecr:ListImages
+                  - ecs:DescribeClusters
+                  - ecs:DescribeServices
+                  - ecs:ListClusters
+                  - ecs:ListServices
+                  - eks:DescribeCluster
+                  - eks:ListClusters
+                  - elasticache:Describe*
+                  - kms:DescribeKey
+                  - kms:ListAliases
+                  - lambda:GetFunctionConfiguration
+                  - lambda:ListFunctions
+                  - rds:Describe*
+                  - s3:GetBucketEncryption
+                  - s3:GetBucketLocation
+                  - s3:GetBucketTagging
+                  - s3:ListAllMyBuckets
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:ListSecrets
+                  - tag:GetResources
+                Resource: "*"
+
+Outputs:
+  DiscoveryRoleArn:
+    Description: Provide this output to AgentConstruct only if automatic verification is unavailable.
+    Value: !GetAtt DiscoveryRole.Arn
+  ConnectionId:
+    Value: !Ref ConnectionId

@@ -25,3 +25,14 @@ def test_customer_connection_apply_and_destroy_require_explicit_confirmation():
     assert "APPLY_AGENTCONSTRUCT_CUSTOMER_CONNECTION" in script
     assert "DESTROY_AGENTCONSTRUCT_CUSTOMER_CONNECTION" in script
     assert "agentconstruct/customer-connections/${CUSTOMER_CONNECTION_ID}.tfstate" in script
+
+
+def test_quick_create_template_is_metadata_only_and_uses_external_id_trust():
+    template = Path("infrastructure/cloudformation/customer-discovery-role.yaml").read_text()
+    assert "AWS::IAM::Role" in template
+    assert "sts:ExternalId" in template
+    assert "secretsmanager:DescribeSecret" in template
+    assert "secretsmanager:GetSecretValue" not in template
+    assert "s3:GetObject" not in template
+    assert "iam:PassRole" not in template
+    assert ":Create" not in template

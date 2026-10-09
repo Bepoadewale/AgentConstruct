@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Protocol
+from urllib.parse import urlparse
+
+import httpx
+import jwt
 
 from agentconstruct.domain import CloudInventorySnapshot
 
@@ -57,7 +63,9 @@ class GitHubConnection(Protocol):
         self, installation_id: str, repository: str, path: str, content: str
     ) -> str: ...
 
-    def validate_webhook(self, event: str, delivery_id: str, signature: str) -> GitHubWebhookContract: ...
+    def validate_webhook(
+        self, event: str, delivery_id: str, signature: str
+    ) -> GitHubWebhookContract: ...
 
 
 class AwsCloudConnection(Protocol):
@@ -69,7 +77,9 @@ class AwsCloudConnection(Protocol):
 
     def role_contract(self, connection_id: str) -> AwsRoleContract: ...
 
-    def assume_scoped_role(self, contract: AwsRoleContract, subject_token: str) -> AssumedRoleSession: ...
+    def assume_scoped_role(
+        self, contract: AwsRoleContract, subject_token: str
+    ) -> AssumedRoleSession: ...
 
 
 class CloudDiscovery(Protocol):
@@ -101,7 +111,9 @@ class FixtureGitHubConnection:
             status="SIMULATED",
         )
 
-    def validate_webhook(self, event: str, delivery_id: str, signature: str) -> GitHubWebhookContract:
+    def validate_webhook(
+        self, event: str, delivery_id: str, signature: str
+    ) -> GitHubWebhookContract:
         if not signature.startswith("fixture-sha256="):
             raise ValueError("fixture webhook signature is invalid")
         return GitHubWebhookContract(
@@ -111,6 +123,100 @@ class FixtureGitHubConnection:
             repository="example/support-rag-api",
             verification="SIMULATED_VALID",
         )
+
+
+class GitHubAppReadOnlyConnection:
+    """Live GitHub App reader. It never exposes or persists installation tokens."""
+
+    api_url = "https://api.github.com"
+    execution = "EXECUTED_READ_ONLY"
+
+    def __init__(self, app_id: str, installation_id: str, private_key_path: str):
+        self.app_id = app_id
+        self.installation_id = installation_id
+        self.private_key_path = Path(private_key_path)
+
+    def _app_jwt(self) -> str:
+        now = datetime.now(UTC)
+        return jwt.encode(
+            {
+                "iat": now - timedelta(seconds=30),
+                "exp": now + timedelta(minutes=9),
+                "iss": self.app_id,
+            },
+            self.private_key_path.read_text(),
+            algorithm="RS256",
+        )
+
+    def _installation_token(self) -> str:
+        response = httpx.post(
+            f"{self.api_url}/app/installations/{self.installation_id}/access_tokens",
+            headers={
+                "Authorization": f"Bearer {self._app_jwt()}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        return str(response.json()["token"])
+
+    @staticmethod
+    def _repository_name(repository: str) -> str:
+        parsed = urlparse(repository)
+        candidate = parsed.path.strip("/") if parsed.scheme else repository.strip("/")
+        candidate = candidate.removesuffix(".git")
+        if len(candidate.split("/")) != 2:
+            raise ValueError("repository must be an owner/name GitHub repository")
+        return candidate
+
+    def inspect_repository(self, installation_id: str, repository: str) -> RepositoryMetadata:
+        if installation_id != self.installation_id:
+            raise PermissionError("GitHub installation is not configured for this connection")
+        name = self._repository_name(repository)
+        response = httpx.get(
+            f"{self.api_url}/repos/{name}",
+            headers={
+                "Authorization": f"Bearer {self._installation_token()}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return RepositoryMetadata(
+            "github_app", self.installation_id, name, payload["default_branch"]
+        )
+
+    def publish_desired_state(
+        self, installation_id: str, repository: str, path: str, content: str
+    ) -> str:
+        raise PermissionError(
+            "live GitHub App integration is read-only until reviewed-write is approved"
+        )
+
+    def validate_webhook(
+        self, event: str, delivery_id: str, signature: str
+    ) -> GitHubWebhookContract:
+        raise PermissionError("live webhook processing is not enabled in read-only mode")
+
+
+def configured_github_connection() -> GitHubConnection:
+    """Use live GitHub only after an explicit operator opt-in and complete key configuration."""
+    enabled = os.getenv("AGENTCONSTRUCT_GITHUB_APP_READ_ONLY", "false").lower() == "true"
+    app_id = os.getenv("AGENTCONSTRUCT_GITHUB_APP_ID")
+    installation_id = os.getenv("AGENTCONSTRUCT_GITHUB_APP_INSTALLATION_ID")
+    key_path = os.getenv("AGENTCONSTRUCT_GITHUB_APP_PRIVATE_KEY_PATH")
+    if not enabled:
+        return FixtureGitHubConnection()
+    if not all([app_id, installation_id, key_path]):
+        raise RuntimeError(
+            "live GitHub App mode requires app ID, installation ID, and private-key path"
+        )
+    if not Path(key_path).is_file():
+        raise RuntimeError("configured GitHub App private key is unavailable")
+    return GitHubAppReadOnlyConnection(app_id, installation_id, key_path)
 
 
 class FixtureAwsDiscovery:
@@ -138,7 +244,9 @@ class FixtureAwsDiscovery:
             ),
         )
 
-    def assume_scoped_role(self, contract: AwsRoleContract, subject_token: str) -> AssumedRoleSession:
+    def assume_scoped_role(
+        self, contract: AwsRoleContract, subject_token: str
+    ) -> AssumedRoleSession:
         if not subject_token:
             raise ValueError("an AgentConstruct identity token is required")
         return AssumedRoleSession(

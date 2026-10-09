@@ -2,7 +2,7 @@
 
 AgentConstruct turns an AI workload request into a governed infrastructure plan. A customer describes the outcome, reviews the design, cost and risks, approves the exact plan, and sees a safe local deployment result.
 
-**Delivery state: executable local V1 foundation; cloud-pilot contracts and future operator workflow validated statically.** The local workflow is real: FastAPI, PostgreSQL, OPA, a bounded execution fixture, Prometheus, Tempo and Grafana run in Docker Compose. The AWS/EKS/GitOps design, GitHub OIDC workflow and operator commands exist, but no AWS resource, customer GitHub App, customer-cloud role or real deployment has been executed.
+**Delivery state: executable local V1 foundation; customer-AWS and GitHub App read-only discovery executed; workload runtime not executed.** The local workflow is real: FastAPI, PostgreSQL, OPA, a bounded execution fixture, Prometheus, Tempo and Grafana run in Docker Compose. Terraform created the customer discovery identity path and AgentConstruct recorded a live inventory snapshot. The GitHub App read real repository metadata through a short-lived installation token. No application, network, database, compute, GitHub write, or GitOps workload was deployed.
 
 ## What it does
 
@@ -48,13 +48,16 @@ make clean-local
 
 Open http://localhost:8080. Grafana is at http://localhost:3000 and Prometheus is at http://localhost:9090. The local login is a documented signed fixture, not production identity.
 
+For customer AWS onboarding, see [Connect an AWS account](docs/customer-aws-connection.md). Customers use one AWS CloudFormation Quick Create stack for read-only discovery; they do not provide access keys or administrator access.
+
 The V1 browser is deliberately plain HTML/CSS/JavaScript; see [ADR-009](docs/decisions/ADR-009-plain-web-ui.md). It keeps the first product flow small and does not move privileged logic into the browser.
 
 ## What is real, simulated and next
 
 - **Executed locally:** natural-language fixture interpretation, typed validation, AWS candidate comparison, fixture-inventory reuse, transparent estimated cost ranges and complexity scores, live OPA policy, PostgreSQL lifecycle/audit state, tenant-scoped GitHub/AWS connection metadata, exact-plan approval, durable queued fixture work, observed status, persisted incident/recommendation records, bounded Day-2 recommendation/change evidence, metrics, traces and dashboards.
-- **Simulated locally:** the AI intent provider, AWS inventory, AWS pricing, GitHub App/desired-state publication, BYOC role contract, and deployment target. The executor can call only fixed fixture endpoints; it has no Docker, Kubernetes, Terraform, GitHub or AWS authority.
-- **Roadmap:** customer AWS role assumption with short-lived credentials, live discovery/pricing, profile-specific Terraform rendering, GitHub App installation/webhooks, real GitOps/Argo execution, enterprise OIDC, customer billing and production support.
+- **Simulated locally:** the AI intent provider, default planner inventory/pricing, GitHub App/desired-state publication, and deployment target. The executor can call only fixed fixture endpoints; it has no Docker, Kubernetes, Terraform, GitHub or AWS authority.
+- **Executed discovery:** short-lived AWS STS role chaining, real inventory/Cost Explorer query, a tenant-scoped credential-free snapshot, and GitHub App read-only repository metadata. The AWS discovery role is read-only; the future execution role has no permissions; the GitHub adapter refuses writes.
+- **Roadmap:** hosted GitHub OIDC assumption, GitHub webhooks and reviewed desired-state PRs, profile-specific Terraform rendering/deployment, real GitOps/Argo execution, enterprise OIDC, customer billing and production support.
 
 ## Architecture
 

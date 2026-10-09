@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import secrets
 from typing import Any
+from urllib.parse import urlencode
 
 from opentelemetry import trace
 from sqlalchemy import select
@@ -18,7 +21,7 @@ from agentconstruct.domain import (
 )
 from agentconstruct.execution_profiles import execution_profile
 from agentconstruct.executor import FixtureExecutor
-from agentconstruct.integrations import FixtureAwsDiscovery, FixtureGitHubConnection
+from agentconstruct.integrations import FixtureAwsDiscovery, configured_github_connection
 from agentconstruct.intent import DeterministicIntentProvider, IntentProvider
 from agentconstruct.models import (
     Approval,
@@ -34,6 +37,7 @@ from agentconstruct.models import (
     Recommendation,
     RepositoryConnection,
     StoredArchitecturePlan,
+    StoredCloudInventorySnapshot,
     WorkloadIntent,
 )
 from agentconstruct.planner import AwsV1Planner
@@ -60,7 +64,7 @@ class ProductService:
         self.intent_provider = intent_provider or DeterministicIntentProvider()
         self.planner = AwsV1Planner()
         self.cloud_discovery = FixtureAwsDiscovery()
-        self.github = FixtureGitHubConnection()
+        self.github = configured_github_connection()
         self.day2_advisor = FixtureDay2Advisor()
         self.policy = policy or PolicyClient()
         self.executor = executor or FixtureExecutor()
@@ -149,12 +153,121 @@ class ProductService:
             )
         )
 
+    def aws_quick_create_setup(
+        self, principal: Principal, connection_id: str, account_id: str
+    ) -> dict[str, object]:
+        """Generate a one-click AWS Console setup; it does not create AWS resources itself."""
+        connection = self.db.get(CloudConnection, connection_id)
+        if not connection or connection.organization_id != principal.organization_id:
+            raise PermissionError("cloud connection not found in this organization")
+        control_plane_role_arn = os.getenv("AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN")
+        template_url = os.getenv("AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL")
+        if not control_plane_role_arn:
+            raise RuntimeError("AWS customer connection setup is not configured")
+        external_id = secrets.token_urlsafe(32)
+        stack_name = f"AgentConstruct-Discovery-{connection.id[:8]}"
+        parameters = {
+            "AgentConstructControlPlaneRoleArn": control_plane_role_arn,
+            "ExternalId": external_id,
+            "ConnectionId": connection.id,
+        }
+        quick_create_url = None
+        if template_url:
+            quick_create_url = (
+                "https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?"
+                + urlencode({"templateURL": template_url, "stackName": stack_name})
+                + "&"
+                + urlencode({f"param_{key}": value for key, value in parameters.items()})
+            )
+        self.audit(
+            principal,
+            "cloud_connection.aws_quick_create_generated",
+            "cloud_connection",
+            connection.id,
+            {"account_id": account_id, "stack_name": stack_name, "template_published": bool(template_url)},
+        )
+        self.db.commit()
+        return {
+            "connection_id": connection.id,
+            "account_id": account_id,
+            "stack_name": stack_name,
+            "template_path": "infrastructure/cloudformation/customer-discovery-role.yaml",
+            "quick_create_url": quick_create_url,
+            "parameters": parameters,
+            "customer_steps": [
+                "Open the AWS Quick Create link.",
+                "Review the one read-only IAM role and acknowledge IAM resource creation.",
+                "Create the stack, then return to AgentConstruct to verify the connection.",
+            ],
+            "boundary": "This action only creates a setup link. AgentConstruct does not create customer AWS resources until the customer creates the stack in their own account.",
+        }
+
+    def record_cloud_inventory_snapshot(
+        self,
+        principal: Principal,
+        connection_id: str,
+        region: str,
+        provenance: str,
+        captured_at,
+        snapshot: dict[str, Any],
+    ) -> StoredCloudInventorySnapshot:
+        """Persist metadata discovered through STS; credential material is never accepted."""
+        connection = self.db.get(CloudConnection, connection_id)
+        if not connection or connection.organization_id != principal.organization_id:
+            raise PermissionError("cloud connection not found in this organization")
+        stored = StoredCloudInventorySnapshot(
+            organization_id=principal.organization_id,
+            cloud_connection_id=connection.id,
+            region=region,
+            provenance=provenance,
+            captured_at=captured_at,
+            snapshot=snapshot,
+        )
+        self.db.add(stored)
+        self.db.flush()
+        self.audit(
+            principal,
+            "cloud_inventory.snapshot_recorded",
+            "cloud_inventory_snapshot",
+            stored.id,
+            {"connection_id": connection.id, "region": region, "provenance": provenance},
+        )
+        self.db.commit()
+        return stored
+
+    def cloud_inventory_snapshots(
+        self, principal: Principal, connection_id: str
+    ) -> list[StoredCloudInventorySnapshot]:
+        connection = self.db.get(CloudConnection, connection_id)
+        if not connection or connection.organization_id != principal.organization_id:
+            raise PermissionError("cloud connection not found in this organization")
+        return list(
+            self.db.scalars(
+                select(StoredCloudInventorySnapshot)
+                .where(
+                    StoredCloudInventorySnapshot.organization_id == principal.organization_id,
+                    StoredCloudInventorySnapshot.cloud_connection_id == connection_id,
+                )
+                .order_by(StoredCloudInventorySnapshot.captured_at.desc())
+            )
+        )
+
     def repository_discovery(self, principal: Principal, project_id: str) -> dict[str, str]:
         project = self._project(principal, project_id)
         if not project.repository_url:
             raise ValueError("project has no repository connection")
-        metadata = self.github.inspect_repository("fixture-installation", project.repository_url)
-        return metadata.__dict__ | {"execution": "SIMULATED"}
+        installation_id = getattr(self.github, "installation_id", "fixture-installation")
+        metadata = self.github.inspect_repository(installation_id, project.repository_url)
+        execution = getattr(self.github, "execution", "SIMULATED")
+        self.audit(
+            principal,
+            "repository.discovered",
+            "project",
+            project.id,
+            {"provider": metadata.provider, "repository": metadata.repository, "execution": execution},
+        )
+        self.db.commit()
+        return metadata.__dict__ | {"execution": execution}
 
     def desired_state_publication(
         self, principal: Principal, project_id: str, plan_id: str

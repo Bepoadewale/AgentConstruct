@@ -238,4 +238,30 @@ Date: 2026-10-09. `make lint`, `make test`, and `make terraform-validate` passed
 
 The new customer-connection root is an identity-only contract: a read-only discovery role and an empty future-execution role. Static tests verify that the discovery policy contains no create, update, delete, secret-read or execution permission and that apply/destroy require a separate confirmation string.
 
+## Executed customer AWS discovery connection
+
+Date: 2026-10-09. Environment: macOS, Terraform, AWS CLI and the authenticated customer AWS account.
+
+The following identity-only Terraform roots were planned against the authenticated account and then applied after review:
+
+- `agentconstruct-bootstrap`: encrypted/versioned AgentConstruct state bucket, public-access block and DynamoDB lock table (**5 added**).
+- `management-identity`: GitHub OIDC provider, `agentconstruct-control-plane-github`, and its narrowly scoped `sts:AssumeRole` policy (**3 added**).
+- `customer-connection`: `agentconstruct-adewale-primary-aws-discovery`, its read-only inventory/cost policy, and `agentconstruct-adewale-primary-aws-execution` with **no permissions** (**3 added**).
+
+The state for all three roots was migrated to the new encrypted bucket and DynamoDB lock table. Follow-up authenticated plans reported **No changes**. A temporary customer-owner trust path was used only to prove the two-hop STS chain, then removed by Terraform. The final control-plane trust policy permits only GitHub OIDC for `Bepoadewale/AgentConstruct` on `main`.
+
+The verified STS path was: temporary owner verification identity → AgentConstruct control-plane role → customer read-only discovery role with an external ID. The discovery session returned one VPC, one ECR repository, six S3 buckets, and no EKS, ECS, RDS or App Runner workload. Cost Explorer returned daily unblended values for 2026-10-01 through 2026-10-08. Those values are recorded as delayed billing data, not settled billing.
+
+The live result was stored through the running AgentConstruct API as a tenant-scoped, credential-free inventory snapshot with `live-read-only-sts-discovery` provenance and an audit event. No access key was created or stored. No application, VPC, compute, database, EKS, ECS, App Runner, GitOps, or other customer workload resource was deployed.
+
+## Executed GitHub App read-only discovery
+
+Date: 2026-10-09. The existing GitHub App `ai-platform-control-plane-pilot` was installed on the selected customer repository `Bepoadewale/ai-platform-control-plane`. AgentConstruct used the App private key only from the owner-protected local file, minted a short-lived installation token for installation `167128937`, and read the repository metadata: `main` is its default branch.
+
+The local AgentConstruct API then created a tenant-scoped project connection, ran repository discovery through the live App adapter, and recorded an audit event. The adapter explicitly rejected a desired-state write. No token, private key, webhook secret, pull request, commit, repository setting, or customer code was written or stored. Webhooks and reviewed desired-state PR publication remain unexecuted.
+
+## AWS Quick Create onboarding contract
+
+Date: 2026-10-09. `aws cloudformation validate-template` authenticated successfully against the AWS account for `infrastructure/cloudformation/customer-discovery-role.yaml`. Validation created no stack, role, workload, or other AWS resource. The template defines one customer-side discovery role with an AgentConstruct control-plane trust principal, per-connection external ID, short sessions, and metadata-only policy. Unit tests also verify that it has no secret-value, S3-object, IAM pass-role, or create permission.
+
 No authenticated plan was run. An eventual plan requires a real AgentConstruct control-plane IAM role ARN, unique external ID, dedicated encrypted state backend, and explicit customer approval. No IAM role, credential, workload, network or other AWS resource was created.

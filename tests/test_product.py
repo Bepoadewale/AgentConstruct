@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from agentconstruct.db import make_engine, run_migrations
 from agentconstruct.domain import EnvironmentName, LifecycleState, PolicyResult, WorkloadSpec
 from agentconstruct.executor import ExecutionObservation
@@ -202,6 +204,43 @@ def test_cloud_connection_is_tenant_scoped_metadata_not_credentials():
     assert connection.connection_mode == "byoc_role_contract"
     other_subject, other_org, other_role = LOCAL_USERS["other-tenant"]
     assert service.cloud_connections(Principal(other_subject, other_org, other_role)) == []
+
+
+def test_aws_quick_create_setup_is_tenant_scoped_and_never_applies(monkeypatch):
+    monkeypatch.setenv(
+        "AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN",
+        "arn:aws:iam::654654474502:role/agentconstruct-control-plane-github",
+    )
+    monkeypatch.setenv("AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL", "https://example.test/template.yaml")
+    service, _ = make_service()
+    connection = service.create_cloud_connection(founder(), "Customer AWS", "aws", "byoc_role_contract")
+    setup = service.aws_quick_create_setup(founder(), connection.id, "654654474502")
+    assert setup["quick_create_url"].startswith("https://console.aws.amazon.com/")
+    assert setup["parameters"]["ConnectionId"] == connection.id
+    assert "does not create customer AWS resources" in setup["boundary"]
+
+
+def test_live_inventory_snapshot_is_durable_and_tenant_scoped():
+    service, _ = make_service()
+    connection = service.create_cloud_connection(founder(), "Customer AWS", "aws", "byoc_role_contract")
+    stored = service.record_cloud_inventory_snapshot(
+        founder(),
+        connection.id,
+        "us-east-1",
+        "live-read-only-sts-discovery",
+        datetime.now(UTC),
+        {"resources": {"vpcs": [{"id": "vpc-123"}]}, "cost_explorer": {"result": "queried"}},
+    )
+    snapshots = service.cloud_inventory_snapshots(founder(), connection.id)
+    assert snapshots[0].id == stored.id
+    assert snapshots[0].snapshot["resources"]["vpcs"][0]["id"] == "vpc-123"
+    other_subject, other_org, other_role = LOCAL_USERS["other-tenant"]
+    try:
+        service.cloud_inventory_snapshots(Principal(other_subject, other_org, other_role), connection.id)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("cross-tenant inventory snapshot access was accepted")
 
 
 def test_repository_discovery_and_byoc_role_contract_are_fixture_only_and_tenant_scoped():

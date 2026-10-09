@@ -59,6 +59,20 @@ class CloudConnection(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class StoredCloudInventorySnapshot(Base):
+    """A customer-owned, credential-free record returned by a discovery run."""
+
+    __tablename__ = "cloud_inventory_snapshots"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    cloud_connection_id: Mapped[str] = mapped_column(ForeignKey("cloud_connections.id"), index=True)
+    region: Mapped[str] = mapped_column(String(32))
+    provenance: Mapped[str] = mapped_column(String(80))
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class WorkloadIntent(Base):
     __tablename__ = "workload_intents"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

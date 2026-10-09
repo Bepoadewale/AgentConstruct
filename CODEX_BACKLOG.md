@@ -34,7 +34,8 @@
 
 ## P1 — Customer-cloud execution
 
-- [ ] Create the AgentConstruct management/control-plane workload identity in its own AWS account, then run the reviewed customer AWS connection Terraform plan. Apply only with explicit approval; validate short-lived discovery-role assumption without creating a workload.
+- [x] Create the AgentConstruct control-plane GitHub OIDC identity and a real customer discovery connection. Terraform applied only state/lock and IAM resources; STS, inventory and Cost Explorer were verified without a workload.
+- [ ] Dispatch the hosted GitHub OIDC workflow to prove the production trust route, then keep all deployment permissions profile-specific and separately approved.
 - [ ] Implement the live AWS STS role-assumption adapter with least privilege after the discovery-role pilot.
 - [ ] GitHub App installation, repository discovery and scoped desired-state publication.
 - [ ] Real GitOps/Argo observer and customer-cloud workload agent.

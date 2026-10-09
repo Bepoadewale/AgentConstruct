@@ -36,12 +36,18 @@ services:
       AGENTCONSTRUCT_OPA_URL: http://opa:8181/v1/data/agentconstruct/decision
       AGENTCONSTRUCT_EXECUTOR_URL: http://fixture-executor:8090
       AGENTCONSTRUCT_LOCAL_SIGNING_KEY: local-compose-fixture-signing-key-at-least-32-bytes
+      AGENTCONSTRUCT_GITHUB_APP_READ_ONLY: ${AGENTCONSTRUCT_GITHUB_APP_READ_ONLY:-false}
+      AGENTCONSTRUCT_GITHUB_APP_ID: ${AGENTCONSTRUCT_GITHUB_APP_ID:-}
+      AGENTCONSTRUCT_GITHUB_APP_INSTALLATION_ID: ${AGENTCONSTRUCT_GITHUB_APP_INSTALLATION_ID:-}
+      AGENTCONSTRUCT_GITHUB_APP_PRIVATE_KEY_PATH: /run/secrets/github-app.pem
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       postgres: {condition: service_healthy}
       opa: {condition: service_started}
       fixture-executor: {condition: service_started}
     ports: ["8080:8080"]
+    volumes:
+      - "${AGENTCONSTRUCT_GITHUB_APP_KEY_HOST_PATH:-/dev/null}:/run/secrets/github-app.pem:ro"
 
   worker:
     build:

@@ -219,6 +219,19 @@ class CloudConnectionRequest(BaseModel):
     connection_mode: str = Field(default="byoc_role_contract", pattern=r"^byoc_role_contract$")
 
 
+class AwsQuickCreateRequest(BaseModel):
+    account_id: str = Field(pattern=r"^[0-9]{12}$")
+
+
+class CloudInventorySnapshotRequest(BaseModel):
+    """Credential-free discovery result received from the trusted discovery worker."""
+
+    region: str = Field(pattern=r"^[a-z]{2}-[a-z]+-\d$")
+    provenance: str = Field(min_length=3, max_length=80)
+    captured_at: datetime
+    snapshot: dict[str, Any]
+
+
 class ApprovalRequest(BaseModel):
     plan_hash: str = Field(min_length=64, max_length=64)
 

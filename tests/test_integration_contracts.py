@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from agentconstruct.execution_profiles import execution_profile
-from agentconstruct.integrations import FixtureAwsDiscovery, FixtureGitHubConnection
+from agentconstruct.integrations import (
+    FixtureAwsDiscovery,
+    FixtureGitHubConnection,
+    GitHubAppReadOnlyConnection,
+)
 
 
 def test_github_fixture_models_reviewed_desired_state_and_webhook_contracts():
@@ -13,6 +17,17 @@ def test_github_fixture_models_reviewed_desired_state_and_webhook_contracts():
     assert pull_request.required_checks == ("agentconstruct-plan", "agentconstruct-policy")
     webhook = github.validate_webhook("push", "delivery-1", "fixture-sha256=valid")
     assert webhook.verification == "SIMULATED_VALID"
+
+
+def test_live_github_adapter_parses_repository_and_refuses_writes():
+    connection = GitHubAppReadOnlyConnection("123", "456", "/private/key.pem")
+    assert connection._repository_name("https://github.com/example/service.git") == "example/service"
+    try:
+        connection.publish_desired_state("456", "example/service", "state.yaml", "content")
+    except PermissionError as error:
+        assert "read-only" in str(error)
+    else:
+        raise AssertionError("read-only GitHub App adapter allowed a write")
 
 
 def test_aws_fixture_byoc_contract_never_returns_credentials():
