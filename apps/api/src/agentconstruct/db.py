@@ -57,6 +57,15 @@ def run_migrations(target: Engine | None = None) -> None:
         if version < 4:
             Base.metadata.create_all(bind=connection)
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (4)"))
+            version = 4
+        if version < 5:
+            connection.execute(text("ALTER TABLE cloud_connections ADD COLUMN account_id VARCHAR(12)"))
+            connection.execute(text("ALTER TABLE cloud_connections ADD COLUMN discovery_role_arn TEXT"))
+            connection.execute(text("ALTER TABLE cloud_connections ADD COLUMN external_id TEXT"))
+            connection.execute(
+                text("ALTER TABLE cloud_connections ADD COLUMN setup_state VARCHAR(32) DEFAULT 'DRAFT'")
+            )
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (5)"))
 
 
 def session() -> Generator[Session, None, None]:

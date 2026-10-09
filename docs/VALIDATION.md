@@ -265,3 +265,11 @@ The local AgentConstruct API then created a tenant-scoped project connection, ra
 Date: 2026-10-09. `aws cloudformation validate-template` authenticated successfully against the AWS account for `infrastructure/cloudformation/customer-discovery-role.yaml`. Validation created no stack, role, workload, or other AWS resource. The template defines one customer-side discovery role with an AgentConstruct control-plane trust principal, per-connection external ID, short sessions, and metadata-only policy. Unit tests also verify that it has no secret-value, S3-object, IAM pass-role, or create permission.
 
 No authenticated plan was run. An eventual plan requires a real AgentConstruct control-plane IAM role ARN, unique external ID, dedicated encrypted state backend, and explicit customer approval. No IAM role, credential, workload, network or other AWS resource was created.
+
+## AWS connection wizard contract
+
+Date: 2026-10-09. The browser contract and unit tests cover the AWS target picker, account-ID validation, Quick Create handoff, and server-side verification endpoint. The verification adapter only uses STS `AssumeRole` in the control-plane process, verifies that the resulting account matches the requested account, and stores a credential-free inventory snapshot. Tests use a deterministic STS adapter; no new customer stack, public template bucket, or live UI verification occurred.
+
+The public-template Terraform root uses a versioned S3 object key and permits public `GetObject` only under its `cloudformation/` prefix. It blocks public ACLs and all bucket listing. Its plan, apply and destroy commands are account-guarded; apply and destroy require an explicit confirmation string. It has not been applied.
+
+An authenticated plan against AWS account `654654474502` completed with **7 to add, 0 to change, 0 to destroy**: the dedicated template bucket, ownership controls, versioning, encryption, narrowly scoped public-read policy, public-access configuration, and one hash-versioned YAML object. The plan produced the expected `s3.us-east-1.amazonaws.com/cloudformation/...` URL. No apply was run and no public bucket or object exists yet.

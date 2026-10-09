@@ -23,8 +23,16 @@
         <label for="repository">GitHub repository</label>
         <input id="repository" value="https://github.com/example/support-rag-api" aria-label="GitHub repository" />
         <label for="cloud-target">AWS target</label>
-        <input id="cloud-target" value="Demo AWS account — BYOC role contract" aria-label="AWS target" />
-        <p class="message">Local demo only. This stores connection metadata, never AWS credentials.</p>
+        <div class="connection-row"><select id="cloud-target" aria-label="AWS target"><option value="">Local demo target — no AWS account connected</option></select><button id="show-aws-connect" type="button" class="secondary">Connect AWS account</button></div>
+        <p id="cloud-target-message" class="message">A connected account is optional for local planning. AgentConstruct never asks for AWS access keys.</p>
+        <div id="aws-connect" class="connection-card hidden">
+          <h3>Connect an AWS account</h3>
+          <p>Enter the AWS account ID. AgentConstruct opens one AWS CloudFormation review page that creates a read-only discovery role. It creates no workload resources.</p>
+          <label for="aws-account-id">AWS account ID</label>
+          <input id="aws-account-id" inputmode="numeric" pattern="[0-9]{12}" maxlength="12" placeholder="123456789012" aria-label="AWS account ID" />
+          <div class="connection-row"><button id="open-aws-setup" type="button">Open AWS setup</button><button id="verify-aws" type="button" class="secondary hidden">Verify connection</button></div>
+          <p id="aws-connect-message" class="message"></p>
+        </div>
         <div class="grid controls">
           <label for="region">Region<select id="region"><option>us-east-1</option><option>eu-west-1</option></select></label>
           <label for="data-classification">Data<select id="data-classification"><option value="restricted">Restricted</option><option value="internal">Internal</option></select></label>

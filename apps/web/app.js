@@ -2,6 +2,8 @@ let token = null;
 let plan = null;
 let productionEnvironment = null;
 let day2Environment = null;
+let cloudConnections = [];
+let selectedCloudConnection = null;
 
 function idempotencyKey() {
   return globalThis.crypto?.randomUUID?.() || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -23,6 +25,23 @@ async function login(username) {
 
 function show(message, failure = false) {
   const node = document.querySelector("#message"); node.textContent = message; node.className = `message ${failure ? "failure" : "success"}`;
+}
+
+function showAwsConnection(message, failure = false) {
+  const node = document.querySelector("#aws-connect-message");
+  node.textContent = message;
+  node.className = `message ${failure ? "failure" : "success"}`;
+}
+
+function renderCloudConnections() {
+  const picker = document.querySelector("#cloud-target");
+  picker.innerHTML = `<option value="">Local demo target — no AWS account connected</option>${cloudConnections.map((connection) => `<option value="${connection.id}">${connection.display_name}${connection.account_id ? ` · ${connection.account_id}` : ""} · ${connection.setup_state}</option>`).join("")}`;
+  selectedCloudConnection = cloudConnections.find((connection) => connection.id === picker.value) || null;
+}
+
+async function refreshCloudConnections() {
+  cloudConnections = await api("/api/v1/cloud-connections");
+  renderCloudConnections();
 }
 
 function optionLabel(candidate, selectedId, index) {
@@ -71,7 +90,7 @@ document.querySelector("#create").addEventListener("click", async () => {
     const repository = document.querySelector("#repository").value;
     const cloudTarget = document.querySelector("#cloud-target").value;
     const constraints = ` Use ${document.querySelector("#region").value}. Treat data as ${document.querySelector("#data-classification").value}. Keep monthly infrastructure under $${document.querySelector("#budget").value}.`;
-    const cloud = await api("/api/v1/cloud-connections", { method: "POST", body: JSON.stringify({ display_name: cloudTarget }) });
+    const cloud = cloudTarget ? { id: cloudTarget } : await api("/api/v1/cloud-connections", { method: "POST", body: JSON.stringify({ display_name: "Local demo target — BYOC role contract" }) });
     const project = await api("/api/v1/projects", { method: "POST", body: JSON.stringify({ name: `support-rag-${Date.now().toString().slice(-6)}`, repository_url: repository }) });
     const repositoryDiscovery = await api(`/api/v1/projects/${project.id}/repository-discovery`);
     const intent = await api("/api/v1/intents", { method: "POST", body: JSON.stringify({ project_id: project.id, prompt: `${document.querySelector("#prompt").value}${constraints}`, source_repository: repository, cloud_connection_id: cloud.id, idempotency_key: idempotencyKey() }) });
@@ -89,6 +108,48 @@ document.querySelector("#create").addEventListener("click", async () => {
     show(`Plan created. Policy result: ${plan.policy_result}.`);
     await refreshAudit();
   } catch (error) { show(error.message, true); }
+});
+
+document.querySelector("#cloud-target").addEventListener("change", (event) => {
+  selectedCloudConnection = cloudConnections.find((connection) => connection.id === event.target.value) || null;
+  document.querySelector("#cloud-target-message").textContent = selectedCloudConnection
+    ? `Connected account ${selectedCloudConnection.account_id || "setup pending"}. Setup state: ${selectedCloudConnection.setup_state}. No browser-held AWS credentials.`
+    : "A connected account is optional for local planning. AgentConstruct never asks for AWS access keys.";
+});
+
+document.querySelector("#show-aws-connect").addEventListener("click", () => {
+  document.querySelector("#aws-connect").classList.toggle("hidden");
+});
+
+document.querySelector("#open-aws-setup").addEventListener("click", async () => {
+  try {
+    const accountId = document.querySelector("#aws-account-id").value.trim();
+    if (!/^\d{12}$/.test(accountId)) throw new Error("Enter a 12-digit AWS account ID.");
+    showAwsConnection("Preparing your read-only AWS setup…");
+    const connection = await api("/api/v1/cloud-connections", { method: "POST", body: JSON.stringify({ display_name: `AWS account ${accountId}` }) });
+    const setup = await api(`/api/v1/cloud-connections/${connection.id}/aws-quick-create`, { method: "POST", body: JSON.stringify({ account_id: accountId }) });
+    cloudConnections.push({ ...connection, account_id: accountId, setup_state: "SETUP_LINK_GENERATED" });
+    renderCloudConnections();
+    document.querySelector("#cloud-target").value = connection.id;
+    selectedCloudConnection = cloudConnections.find((item) => item.id === connection.id);
+    document.querySelector("#verify-aws").classList.remove("hidden");
+    showAwsConnection("AWS will open a review page. Create the read-only role there, then return here and choose Verify connection.");
+    window.open(setup.quick_create_url, "_blank", "noopener,noreferrer");
+    await refreshAudit();
+  } catch (error) { showAwsConnection(error.message, true); }
+});
+
+document.querySelector("#verify-aws").addEventListener("click", async () => {
+  try {
+    if (!selectedCloudConnection) throw new Error("Open AWS setup for an account first.");
+    showAwsConnection("Using short-lived STS credentials to verify the read-only role…");
+    const verified = await api(`/api/v1/cloud-connections/${selectedCloudConnection.id}/aws-verify`, { method: "POST", body: JSON.stringify({ region: document.querySelector("#region").value }) });
+    selectedCloudConnection.setup_state = "VERIFIED";
+    showAwsConnection(`Connected. Recorded a credential-free inventory snapshot from ${verified.region}.`);
+    await refreshCloudConnections();
+    document.querySelector("#cloud-target").value = selectedCloudConnection.id;
+    await refreshAudit();
+  } catch (error) { showAwsConnection(error.message, true); }
 });
 
 document.querySelector("#approve").addEventListener("click", async () => {
@@ -141,4 +202,4 @@ document.querySelector("#optimize").addEventListener("click", async () => {
   } catch (error) { show(error.message, true); }
 });
 document.querySelector("#refresh-audit").addEventListener("click", () => refreshAudit().catch((error) => show(error.message, true)));
-login("founder").then(refreshAudit).catch((error) => show(error.message, true));
+login("founder").then(async () => { await refreshAudit(); await refreshCloudConnections(); }).catch((error) => show(error.message, true));

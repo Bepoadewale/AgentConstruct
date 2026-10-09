@@ -36,3 +36,18 @@ def test_quick_create_template_is_metadata_only_and_uses_external_id_trust():
     assert "s3:GetObject" not in template
     assert "iam:PassRole" not in template
     assert ":Create" not in template
+
+
+def test_public_template_host_allows_only_versioned_template_reads_and_is_confirmation_gated():
+    configuration = Path("infrastructure/terraform/connection-template-host/main.tf").read_text()
+    script = Path("scripts/customer-aws-template-host.sh").read_text()
+    assert 'actions   = ["s3:GetObject"]' in configuration
+    assert 'resources = ["${aws_s3_bucket.templates.arn}/cloudformation/*"]' in configuration
+    assert "s3:ListBucket" not in configuration
+    assert "APPLY_AGENTCONSTRUCT_TEMPLATE_HOST" in script
+    assert "DESTROY_AGENTCONSTRUCT_TEMPLATE_HOST" in script
+
+
+def test_control_plane_identity_can_assume_the_quick_create_role_name_pattern():
+    configuration = Path("infrastructure/terraform/management-identity/main.tf").read_text()
+    assert "role/AgentConstructDiscovery-*" in configuration

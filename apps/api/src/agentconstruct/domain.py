@@ -223,6 +223,10 @@ class AwsQuickCreateRequest(BaseModel):
     account_id: str = Field(pattern=r"^[0-9]{12}$")
 
 
+class AwsConnectionVerificationRequest(BaseModel):
+    region: str = Field(default="us-east-1", pattern=r"^[a-z]{2}-[a-z]+-\d$")
+
+
 class CloudInventorySnapshotRequest(BaseModel):
     """Credential-free discovery result received from the trusted discovery worker."""
 

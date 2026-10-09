@@ -56,6 +56,10 @@ class CloudConnection(Base):
     provider: Mapped[str] = mapped_column(String(32), default="aws")
     display_name: Mapped[str] = mapped_column(String(100))
     connection_mode: Mapped[str] = mapped_column(String(64), default="byoc_role_contract")
+    account_id: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    discovery_role_arn: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    setup_state: Mapped[str] = mapped_column(String(32), default="DRAFT")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
