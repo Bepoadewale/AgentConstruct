@@ -42,7 +42,7 @@ def run_migrations(target: Engine | None = None) -> None:
         ).scalar_one()
         if version < 1:
             Base.metadata.create_all(bind=connection)
-            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (5)"))
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (6)"))
             return
         if version < 2:
             connection.execute(
@@ -70,6 +70,15 @@ def run_migrations(target: Engine | None = None) -> None:
                 if name not in columns:
                     connection.execute(text(statement))
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (5)"))
+            version = 5
+        if version < 6:
+            columns = {column["name"] for column in inspect(connection).get_columns("cloud_connections")}
+            if "external_id_secret_ref" not in columns:
+                connection.execute(
+                    text("ALTER TABLE cloud_connections ADD COLUMN external_id_secret_ref TEXT")
+                )
+            Base.metadata.create_all(bind=connection)
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (6)"))
 
 
 def session() -> Generator[Session, None, None]:

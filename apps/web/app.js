@@ -142,8 +142,15 @@ document.querySelector("#open-aws-setup").addEventListener("click", async () => 
 document.querySelector("#verify-aws").addEventListener("click", async () => {
   try {
     if (!selectedCloudConnection) throw new Error("Open AWS setup for an account first.");
-    showAwsConnection("Using short-lived STS credentials to verify the read-only role…");
-    const verified = await api(`/api/v1/cloud-connections/${selectedCloudConnection.id}/aws-verify`, { method: "POST", body: JSON.stringify({ region: document.querySelector("#region").value }) });
+    showAwsConnection("Queuing a read-only STS verification. No AWS resources will be created…");
+    const queued = await api(`/api/v1/cloud-connections/${selectedCloudConnection.id}/aws-verify`, { method: "POST", body: JSON.stringify({ region: document.querySelector("#region").value }) });
+    let verified;
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      verified = await api(`/api/v1/cloud-connections/${selectedCloudConnection.id}/aws-verification-jobs/${queued.id}`);
+      if (["SUCCEEDED", "FAILED"].includes(verified.state)) break;
+    }
+    if (!verified || verified.state !== "SUCCEEDED") throw new Error(verified?.error || "AWS verification did not finish in time.");
     selectedCloudConnection.setup_state = "VERIFIED";
     showAwsConnection(`Connected. Recorded a credential-free inventory snapshot from ${verified.region}.`);
     await refreshCloudConnections();

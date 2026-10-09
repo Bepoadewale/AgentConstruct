@@ -164,7 +164,7 @@ def create_aws_quick_create_setup(
         translate(error)
 
 
-@app.post("/api/v1/cloud-connections/{connection_id}/aws-verify", status_code=201)
+@app.post("/api/v1/cloud-connections/{connection_id}/aws-verify", status_code=202)
 def verify_aws_connection(
     connection_id: str,
     request: AwsConnectionVerificationRequest,
@@ -173,16 +173,38 @@ def verify_aws_connection(
 ):
     REQUESTS.labels("cloud_connections.aws_verify").inc()
     try:
-        stored = service.verify_aws_connection(principal, connection_id, request.region)
+        job = service.queue_aws_connection_verification(principal, connection_id, request.region)
     except (PermissionError, ValueError, KeyError, RuntimeError) as error:
         translate(error)
     return {
-        "id": stored.id,
-        "connection_id": stored.cloud_connection_id,
-        "region": stored.region,
-        "provenance": stored.provenance,
-        "captured_at": stored.captured_at,
-        "snapshot": stored.snapshot,
+        "id": job.id,
+        "connection_id": job.cloud_connection_id,
+        "region": job.region,
+        "state": job.state,
+        "credentials_stored": False,
+    }
+
+
+@app.get("/api/v1/cloud-connections/{connection_id}/aws-verification-jobs/{job_id}")
+def get_aws_verification_job(
+    connection_id: str,
+    job_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("cloud_connections.aws_verify_status").inc()
+    try:
+        job = service.cloud_discovery_job(principal, connection_id, job_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+    return {
+        "id": job.id,
+        "connection_id": job.cloud_connection_id,
+        "region": job.region,
+        "state": job.state,
+        "attempts": job.attempts,
+        "result": job.result,
+        "error": job.error,
         "credentials_stored": False,
     }
 

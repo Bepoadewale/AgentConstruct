@@ -63,6 +63,8 @@ terraform-validate:
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-foundation terraform -chdir=infrastructure/terraform/bootstrap validate
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-management terraform -chdir=infrastructure/terraform/management-identity init -backend=false -input=false
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-management terraform -chdir=infrastructure/terraform/management-identity validate
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-runtime terraform -chdir=infrastructure/terraform/control-plane-runtime-identity init -backend=false -input=false
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-runtime terraform -chdir=infrastructure/terraform/control-plane-runtime-identity validate
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-connection terraform -chdir=infrastructure/terraform/customer-connection init -backend=false -input=false
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-connection terraform -chdir=infrastructure/terraform/customer-connection validate
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-template-host terraform -chdir=infrastructure/terraform/connection-template-host init -backend=false -input=false

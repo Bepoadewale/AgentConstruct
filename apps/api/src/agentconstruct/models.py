@@ -58,6 +58,8 @@ class CloudConnection(Base):
     connection_mode: Mapped[str] = mapped_column(String(64), default="byoc_role_contract")
     account_id: Mapped[str | None] = mapped_column(String(12), nullable=True)
     discovery_role_arn: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # A reference to a control-plane secret. Never persist the customer's ExternalId here.
+    external_id_secret_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
     external_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     setup_state: Mapped[str] = mapped_column(String(32), default="DRAFT")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -75,6 +77,25 @@ class StoredCloudInventorySnapshot(Base):
     snapshot: Mapped[dict] = mapped_column(JSON)
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class CloudDiscoveryJob(Base):
+    """Durable, tenant-scoped work item for a read-only AWS discovery run."""
+
+    __tablename__ = "cloud_discovery_jobs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    cloud_connection_id: Mapped[str] = mapped_column(ForeignKey("cloud_connections.id"), index=True)
+    requester_subject: Mapped[str] = mapped_column(String(160))
+    region: Mapped[str] = mapped_column(String(32))
+    state: Mapped[str] = mapped_column(String(32), default="QUEUED", index=True)
+    attempts: Mapped[int] = mapped_column(default=0)
+    result: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class WorkloadIntent(Base):
