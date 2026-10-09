@@ -1,7 +1,7 @@
 # Product Roadmap
 
 1. **V1 foundation:** local intent → plan → policy → approval → bounded execution → observation → destruction.
-2. **BYOC execution:** scoped AWS role assumption, GitHub App, desired-state publication and GitOps observation.
+2. **BYOC execution:** scoped AWS role assumption, live inventory and pricing, profile-specific Terraform rendering, GitHub App, desired-state publication and GitOps observation.
 3. **AI runtime controls:** metering, release governance, model quality evidence and cost intelligence.
 4. **Business controls:** enterprise identity, policy packs, support and commercial packaging.
 

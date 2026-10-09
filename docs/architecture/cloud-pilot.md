@@ -2,7 +2,7 @@
 
 **State: planned cloud contract. It has not created or changed an AWS resource.**
 
-AgentConstruct will run the product control plane in a private AWS network. A customer uses the product UI/API; they never receive AWS, Kubernetes, Terraform or database credentials.
+AgentConstruct will run its product control plane in a private AWS network. A customer uses the product UI/API; they never receive AWS, Kubernetes, Terraform or database credentials. The EKS stack below is a planned advanced control-plane reference profile, not the default answer for every customer workload. The local planner selects a simpler AWS family when that meets the request.
 
 ![Planned AWS cloud-pilot topology](../../assets/agentconstruct-cloud-pilot.svg)
 

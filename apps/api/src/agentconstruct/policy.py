@@ -17,12 +17,18 @@ class PolicyDecision:
 
 class PolicyClient:
     def __init__(self, url: str | None = None, fixture: bool = False):
-        self.url = url or os.getenv("AGENTCONSTRUCT_OPA_URL", "http://opa:8181/v1/data/agentconstruct/decision")
+        self.url = url or os.getenv(
+            "AGENTCONSTRUCT_OPA_URL", "http://opa:8181/v1/data/agentconstruct/decision"
+        )
         self.fixture = fixture
 
     def evaluate(self, principal: Principal, spec: WorkloadSpec, action: str) -> PolicyDecision:
         payload = {
-            "principal": {"subject": principal.subject, "organization_id": principal.organization_id, "role": principal.role},
+            "principal": {
+                "subject": principal.subject,
+                "organization_id": principal.organization_id,
+                "role": principal.role,
+            },
             "spec": spec.model_dump(mode="json"),
             "action": action,
         }
@@ -34,7 +40,10 @@ class PolicyClient:
             result = response.json()["result"]
             return PolicyDecision(PolicyResult(result["result"]), result["reason"])
         except (httpx.HTTPError, KeyError, ValueError) as error:
-            return PolicyDecision(PolicyResult.DENY, f"policy unavailable or invalid; fail closed: {type(error).__name__}")
+            return PolicyDecision(
+                PolicyResult.DENY,
+                f"policy unavailable or invalid; fail closed: {type(error).__name__}",
+            )
 
     @staticmethod
     def _fixture(payload: dict) -> PolicyDecision:
@@ -42,5 +51,8 @@ class PolicyClient:
         if spec.get("monthly_budget_usd", 0) > 1500:
             return PolicyDecision(PolicyResult.DENY, "requested budget exceeds the V1 safety limit")
         if "production" in spec.get("environments", []):
-            return PolicyDecision(PolicyResult.APPROVAL_REQUIRED, "production deployment needs an independent approval")
+            return PolicyDecision(
+                PolicyResult.APPROVAL_REQUIRED,
+                "production deployment needs an independent approval",
+            )
         return PolicyDecision(PolicyResult.ALLOW, "development deployment is allowed")

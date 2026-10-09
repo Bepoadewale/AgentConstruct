@@ -5,7 +5,7 @@
 | Capability | Evidence |
 | --- | --- |
 | Intent to typed specification | Provider interface, deterministic fixture, schema validation, provenance and material follow-up questions |
-| Architecture and cost proposal | Constrained AWS V1 planner with assumptions and cost ranges |
+| Architecture and cost proposal | Constrained AWS V1 candidate planner: hard-constraint rejection, fixture inventory reuse, component cost ranges, complexity scores, rejected alternatives and upgrade triggers |
 | Governance | Live OPA policy, immutable SHA-256 plan hash, independent approval and audit |
 | Durable state | PostgreSQL in Compose; SQLite only in fast unit tests |
 | Cloud connection | Tenant-scoped BYOC role-contract metadata only; no AWS credential is stored or used |
@@ -16,13 +16,13 @@
 ## Simulated
 
 - Natural-language understanding uses deterministic parsing, not a paid model.
-- The AWS architecture recommendation is a small rule catalogue, not arbitrary design generation.
+- AWS inventory and pricing are local fixtures. The AWS architecture recommendation is a small rule catalogue, not arbitrary design generation.
 - Deployment is a bounded local fixture, not AWS, Terraform, Docker or Kubernetes execution.
 - Local signed JWT is a development fixture. The JWKS verifier adapter is code, not enterprise OIDC execution evidence.
 
 ## Roadmap only
 
-Customer AWS role assumption, GitHub App installation/webhooks, real GitOps/Argo execution, enterprise identity, live price APIs, subscription billing, model runtime controls and automated remediation.
+Customer AWS role assumption, live account discovery/pricing, profile-specific Terraform rendering, GitHub App installation/webhooks, real GitOps/Argo execution, enterprise identity, subscription billing, model runtime controls and automated remediation.
 
 ## Statically validated cloud contract
 

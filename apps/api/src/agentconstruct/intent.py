@@ -20,12 +20,26 @@ class DeterministicIntentProvider:
 
     def interpret(self, prompt: str, source_repository: str | None) -> IntentInterpretation:
         lower = prompt.lower()
-        average = self._number_before(lower, r"(\d+)\s*(?:requests?|rps)\s*(?:/|per)\s*(?:second|sec)")
+        average = self._number_before(
+            lower, r"(\d+)\s*(?:requests?|rps)\s*(?:/|per)\s*(?:second|sec)"
+        )
         peak = self._number_after_word(lower, "peak")
         budget = self._number_before(lower, r"(?:under|below|budget)\s*\$?([\d,]+)")
-        environments = [environment for environment in EnvironmentName if environment.value in lower]
-        data_classification = "restricted" if any(word in lower for word in ("private", "customer data", "restricted")) else "unknown"
-        workload_type = "rag_application" if "rag" in lower else "ai_api" if "api" in lower else "unknown"
+        environments = [
+            environment for environment in EnvironmentName if environment.value in lower
+        ]
+        data_classification = (
+            "restricted"
+            if any(word in lower for word in ("private", "customer data", "restricted"))
+            else "unknown"
+        )
+        workload_type = (
+            "rag_application" if "rag" in lower else "ai_api" if "api" in lower else "unknown"
+        )
+        requires_gpu = any(word in lower for word in ("gpu", "accelerator", "cuda"))
+        requires_kubernetes = "kubernetes" in lower and any(
+            word in lower for word in ("required", "must", "need")
+        )
         unknowns = []
         if not source_repository:
             unknowns.append("source_repository")
@@ -55,13 +69,40 @@ class DeterministicIntentProvider:
             region_constraints=["us-east-1"] if "us-east-1" in lower else [],
             model_requirements={"runtime": "containerized"},
             integration_requirements=["slack"] if "slack" in lower else [],
+            runtime="containerized" if "container" in lower or workload_type != "unknown" else None,
+            containerized=workload_type != "unknown",
+            event_driven=any(
+                word in lower
+                for word in ("event-driven", "event driven", "queue", "document processor")
+            ),
+            stateful=any(word in lower for word in ("database", "stateful", "postgres")),
+            requires_private_connectivity=data_classification == "restricted",
+            requires_kubernetes=requires_kubernetes,
+            requires_gpu=requires_gpu,
+            multi_service=any(
+                word in lower for word in ("multi-service", "microservice", "multiple services")
+            ),
+            field_status={
+                "data_classification": "INFERRED"
+                if data_classification != "unknown"
+                else "UNKNOWN",
+                "requires_gpu": "INFERRED",
+                "requires_kubernetes": "INFERRED",
+            },
             unknowns=unknowns,
             confidence=0.92 if not unknowns else 0.64,
             provenance=provenance,
         )
         return IntentInterpretation(
             spec=spec,
-            questions=[MaterialQuestion(field=field, question=self._question_for(field), reason="AgentConstruct must not guess a value that changes architecture, security, or cost.") for field in unknowns],
+            questions=[
+                MaterialQuestion(
+                    field=field,
+                    question=self._question_for(field),
+                    reason="AgentConstruct must not guess a value that changes architecture, security, or cost.",
+                )
+                for field in unknowns
+            ],
         )
 
     @staticmethod

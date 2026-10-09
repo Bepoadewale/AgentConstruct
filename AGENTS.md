@@ -7,6 +7,8 @@ Build and maintain **AgentConstruct**, the private commercial product. Use plain
 ## Product rules
 
 - AI proposes; typed validation, policy and approved deterministic systems authorize and execute.
+- Start every recommendation with the cheapest, simplest option that meets hard requirements. EKS, GPUs, containers and multi-cloud are never defaults.
+- Mark fixture inventory and fixture pricing as simulated. Never call an estimate an AWS bill.
 - Never give an LLM, customer browser, developer, or agent unrestricted shell, Terraform, Kubernetes, cloud-admin or secret access.
 - Keep customer workloads, cloud accounts and data in the customer cloud where possible.
 - Preserve public repositories as technical evidence; do not copy private strategy, pricing, buyer research or proprietary ranking logic into them.

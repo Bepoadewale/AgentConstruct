@@ -34,6 +34,8 @@
 - [ ] GitHub App installation, repository discovery and scoped desired-state publication.
 - [ ] Real GitOps/Argo observer and customer-cloud workload agent.
 - [ ] Enterprise OIDC/JWKS adapter and organisation lifecycle.
+- [ ] Replace the fixture inventory and pricing catalogue with customer-approved AWS discovery and timestamped pricing sources.
+- [ ] Render Terraform only for the selected architecture family; do not send every plan to the EKS reference stack.
 
 ## P1 — First cloud pilot prerequisites
 
