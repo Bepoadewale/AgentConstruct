@@ -105,3 +105,14 @@ Results from both cycles:
 The first fresh bootstrap exposed a PostgreSQL race between the API and worker creating the migration table. The code now takes a PostgreSQL transaction-scoped advisory lock before migrations. Both recorded cycles passed with that fix.
 
 This evidence proves local planner and runtime behavior only. AWS inventory/pricing remain deterministic fixtures; no AWS account, billable resource, GitHub App, or customer role was contacted.
+
+## Governed agent-interface validation
+
+Date: 2026-10-09. The CLI and stdio MCP server were tested as thin API clients, not as alternate execution authorities.
+
+- The MCP catalogue exposed analysis, planning, comparison, estimate, status, audit, eligible-execution, and destroy-plan operations.
+- It deliberately exposed no approval, cloud credential, secret, shell, Terraform or Kubernetes tool.
+- CLI request construction preserved the caller's project, repository, cloud-connection reference and idempotency key.
+- Unit validation passed with **33 tests**.
+
+Two clean Compose cycles then passed with the installed `agentconstruct-mcp` entry point included in each cycle. Each cycle passed smoke, browser contract, canonical demo, policy failure, readiness failure, Tempo trace check, Ruff, all then-current 32 tests, OPA 3/3, Terraform `fmt`/offline-backend `init`/`validate`, Kubernetes render, MCP `tools/list`, and scoped cleanup. The final 33-test run added a tenant-scoped agent-read test. The MCP contract confirmed the tools were available without an approval tool.

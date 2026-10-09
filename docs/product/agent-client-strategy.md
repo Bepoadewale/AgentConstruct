@@ -1,0 +1,24 @@
+# Agent Client Strategy
+
+General AI tools can reason about infrastructure. AgentConstruct keeps the durable customer context and the safety controls that those tools should not own.
+
+```text
+human web UI, CLI, Codex, Claude, Cursor, or another agent
+  → AgentConstruct REST API or MCP server
+  → typed request, policy, immutable plan, independent approval
+  → bounded executor and observed result
+```
+
+The product stores the organisation boundary, projects, approved cloud target, plans, approvals, observed state, and audit history. A general AI client can ask it to analyse, compare, plan, inspect, diagnose, or propose. It cannot use AgentConstruct to self-approve a protected change, obtain cloud credentials, run arbitrary Terraform, run `kubectl`, or read unrestricted secrets.
+
+## Local V1 interfaces
+
+- **REST API:** the web UI and other clients use the same authenticated API.
+- **CLI:** `agentconstruct` forwards the caller's bearer token to that API.
+- **MCP:** `agentconstruct-mcp` is a stdio server that exposes the safe planning, inspection, execution-request, and destroy-plan tools.
+
+The CLI and MCP server do not mint AWS credentials. Their token is only for the AgentConstruct API. The API remains the authority for tenant checks, policy, exact-plan approval, and execution state.
+
+**Executed locally:** MCP request dispatch and CLI request construction are unit tested. The REST workflow remains covered by the Compose demos.
+
+**Not executed:** an external Codex, Claude, Cursor, or GitHub App installation. Those clients can be connected later using the documented stdio/API boundary.

@@ -15,6 +15,8 @@ customer request → typed workload specification → reusable-cloud inventory f
 
 Customers do not have to choose subnets, Helm values or Kubernetes internals to use the demo. They can inspect those decisions and set important constraints.
 
+Developers and AI clients can use the same governed product surface through the REST API, `agentconstruct` CLI, or `agentconstruct-mcp` stdio server. See [agent client strategy](docs/product/agent-client-strategy.md).
+
 | Role | Can do | Cannot do |
 | --- | --- | --- |
 | Developer/founder | Describe a workload, create a plan, inspect cost and request deployment | Choose another organisation, bypass policy, approve their own protected production plan |
@@ -48,6 +50,6 @@ The V1 browser is deliberately plain HTML/CSS/JavaScript; see [ADR-009](docs/dec
 
 ## Architecture
 
-See the [documentation map](docs/README.md), [minimum-necessary infrastructure](docs/product/minimum-necessary-infrastructure.md), [planner](docs/architecture/planner.md), [AWS V1 families](docs/architecture/aws-v1.md), [provider model](docs/architecture/provider-model.md), [planned cloud-pilot architecture](docs/architecture/cloud-pilot.md), [security model](docs/security/security-model.md), and [validation evidence](docs/VALIDATION.md).
+See the [documentation map](docs/README.md), [minimum-necessary infrastructure](docs/product/minimum-necessary-infrastructure.md), [planner](docs/architecture/planner.md), [agent interfaces](docs/architecture/agent-interfaces.md), [AWS V1 families](docs/architecture/aws-v1.md), [provider model](docs/architecture/provider-model.md), [planned cloud-pilot architecture](docs/architecture/cloud-pilot.md), [security model](docs/security/security-model.md), and [validation evidence](docs/VALIDATION.md).
 
 AgentConstruct is private commercial product work. The public portfolio repositories remain independent technical evidence and are not copied wholesale into this product.
