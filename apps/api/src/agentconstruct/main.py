@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from agentconstruct.db import SessionLocal, run_migrations, session
 from agentconstruct.domain import (
     ApprovalRequest,
+    AwsConnectionVerificationRequest,
     AwsQuickCreateRequest,
     CloudConnectionRequest,
     CloudInventorySnapshotRequest,
@@ -113,6 +114,7 @@ def create_cloud_connection(
         "provider": connection.provider,
         "mode": connection.connection_mode,
         "executed": False,
+        "setup_state": connection.setup_state,
     }
 
 
@@ -128,6 +130,8 @@ def list_cloud_connections(
             "provider": item.provider,
             "mode": item.connection_mode,
             "executed": False,
+            "account_id": item.account_id,
+            "setup_state": item.setup_state,
         }
         for item in service.cloud_connections(principal)
     ]
@@ -158,6 +162,29 @@ def create_aws_quick_create_setup(
         return service.aws_quick_create_setup(principal, connection_id, request.account_id)
     except (PermissionError, ValueError, KeyError, RuntimeError) as error:
         translate(error)
+
+
+@app.post("/api/v1/cloud-connections/{connection_id}/aws-verify", status_code=201)
+def verify_aws_connection(
+    connection_id: str,
+    request: AwsConnectionVerificationRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("cloud_connections.aws_verify").inc()
+    try:
+        stored = service.verify_aws_connection(principal, connection_id, request.region)
+    except (PermissionError, ValueError, KeyError, RuntimeError) as error:
+        translate(error)
+    return {
+        "id": stored.id,
+        "connection_id": stored.cloud_connection_id,
+        "region": stored.region,
+        "provenance": stored.provenance,
+        "captured_at": stored.captured_at,
+        "snapshot": stored.snapshot,
+        "credentials_stored": False,
+    }
 
 
 @app.post("/api/v1/cloud-connections/{connection_id}/inventory-snapshots", status_code=201)

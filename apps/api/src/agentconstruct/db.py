@@ -4,7 +4,7 @@ import os
 from collections.abc import Generator
 from pathlib import Path
 
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from agentconstruct.models import Base
@@ -42,7 +42,7 @@ def run_migrations(target: Engine | None = None) -> None:
         ).scalar_one()
         if version < 1:
             Base.metadata.create_all(bind=connection)
-            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (4)"))
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (5)"))
             return
         if version < 2:
             connection.execute(
@@ -57,6 +57,19 @@ def run_migrations(target: Engine | None = None) -> None:
         if version < 4:
             Base.metadata.create_all(bind=connection)
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (4)"))
+            version = 4
+        if version < 5:
+            columns = {column["name"] for column in inspect(connection).get_columns("cloud_connections")}
+            additions = {
+                "account_id": "ALTER TABLE cloud_connections ADD COLUMN account_id VARCHAR(12)",
+                "discovery_role_arn": "ALTER TABLE cloud_connections ADD COLUMN discovery_role_arn TEXT",
+                "external_id": "ALTER TABLE cloud_connections ADD COLUMN external_id TEXT",
+                "setup_state": "ALTER TABLE cloud_connections ADD COLUMN setup_state VARCHAR(32) DEFAULT 'DRAFT'",
+            }
+            for name, statement in additions.items():
+                if name not in columns:
+                    connection.execute(text(statement))
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (5)"))
 
 
 def session() -> Generator[Session, None, None]:

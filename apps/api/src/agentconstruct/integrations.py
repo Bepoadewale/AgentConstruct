@@ -9,8 +9,10 @@ from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlparse
 
+import boto3
 import httpx
 import jwt
+from botocore.exceptions import BotoCoreError, ClientError
 
 from agentconstruct.domain import CloudInventorySnapshot
 
@@ -257,3 +259,65 @@ class FixtureAwsDiscovery:
                 "or live role assumption exists."
             ),
         )
+
+
+class StsAwsDiscovery:
+    """Server-side, short-lived discovery for an already-approved customer role.
+
+    The browser never receives the assumed-role credentials. The process identity must
+    already be the configured AgentConstruct control-plane identity.
+    """
+
+    def __init__(self, session: object | None = None):
+        self.session = session or boto3.Session()
+
+    def verify(self, connection_id: str, role_arn: str, external_id: str, region: str) -> CloudInventorySnapshot:
+        sts = self.session.client("sts", region_name=region)
+        assumed = sts.assume_role(
+            RoleArn=role_arn,
+            RoleSessionName=f"agentconstruct-discovery-{connection_id[:8]}",
+            ExternalId=external_id,
+            DurationSeconds=900,
+        )["Credentials"]
+        customer = boto3.Session(
+            aws_access_key_id=assumed["AccessKeyId"],
+            aws_secret_access_key=assumed["SecretAccessKey"],
+            aws_session_token=assumed["SessionToken"],
+            region_name=region,
+        )
+        account = customer.client("sts").get_caller_identity()["Account"]
+        resources = [f"aws-account:{account}"]
+        resources.extend(self._inventory(customer, region))
+        return CloudInventorySnapshot(
+            provider="aws",
+            region=region,
+            approved_resources=resources,
+            approved_regions=[region],
+            discovered_at=datetime.now(UTC),
+            provenance="live-read-only-sts-discovery",
+        )
+
+    @staticmethod
+    def _inventory(customer: object, region: str) -> list[str]:
+        """Collect only counts and identifiers needed by the planner; never workload data."""
+        discovered: list[str] = []
+        checks = (
+            ("vpc", lambda: customer.client("ec2", region_name=region).describe_vpcs().get("Vpcs", [])),
+            ("ecr", lambda: customer.client("ecr", region_name=region).describe_repositories().get("repositories", [])),
+            ("eks", lambda: customer.client("eks", region_name=region).list_clusters().get("clusters", [])),
+            ("ecs", lambda: customer.client("ecs", region_name=region).list_clusters().get("clusterArns", [])),
+            ("rds", lambda: customer.client("rds", region_name=region).describe_db_instances().get("DBInstances", [])),
+            ("lambda", lambda: customer.client("lambda", region_name=region).list_functions().get("Functions", [])),
+            ("app-runner", lambda: customer.client("apprunner", region_name=region).list_services().get("ServiceSummaryList", [])),
+        )
+        for name, query in checks:
+            try:
+                discovered.append(f"{name}:{len(query())}")
+            except (BotoCoreError, ClientError) as error:  # Customer policy may omit a service.
+                discovered.append(f"{name}:unavailable:{type(error).__name__}")
+        try:
+            buckets = customer.client("s3", region_name=region).list_buckets().get("Buckets", [])
+            discovered.append(f"s3:{len(buckets)}")
+        except (BotoCoreError, ClientError) as error:
+            discovered.append(f"s3:unavailable:{type(error).__name__}")
+        return discovered

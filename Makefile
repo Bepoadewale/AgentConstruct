@@ -3,7 +3,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export PYTHONPATH := apps/api/src
 
-.PHONY: install lint test bootstrap-local smoke demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check browser-contract verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
+.PHONY: install lint test bootstrap-local smoke demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check browser-contract verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy customer-aws-template-host-plan customer-aws-template-host-apply customer-aws-template-host-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
 
 install:
 	command -v $(PYTHON) >/dev/null || { echo "Python 3.12 is required"; exit 1; }
@@ -65,6 +65,8 @@ terraform-validate:
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-management terraform -chdir=infrastructure/terraform/management-identity validate
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-connection terraform -chdir=infrastructure/terraform/customer-connection init -backend=false -input=false
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-connection terraform -chdir=infrastructure/terraform/customer-connection validate
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-template-host terraform -chdir=infrastructure/terraform/connection-template-host init -backend=false -input=false
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-template-host terraform -chdir=infrastructure/terraform/connection-template-host validate
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-pilot terraform -chdir=infrastructure/terraform/pilot init -backend=false -input=false
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-pilot terraform -chdir=infrastructure/terraform/pilot validate
 
@@ -76,6 +78,15 @@ customer-aws-connection-apply:
 
 customer-aws-connection-destroy:
 	./scripts/customer-aws-connection.sh destroy
+
+customer-aws-template-host-plan:
+	./scripts/customer-aws-template-host.sh plan
+
+customer-aws-template-host-apply:
+	./scripts/customer-aws-template-host.sh apply
+
+customer-aws-template-host-destroy:
+	./scripts/customer-aws-template-host.sh destroy
 
 kubernetes-render:
 	kubectl kustomize infrastructure/kubernetes/base >/dev/null

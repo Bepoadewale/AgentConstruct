@@ -1,7 +1,10 @@
 data "aws_caller_identity" "current" {}
 locals {
-  tags           = { Project = "agentconstruct", ManagedBy = "terraform", Scope = "control-plane-identity", Purpose = "customer-discovery" }
-  discovery_arns = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/agentconstruct-*-discovery"]
+  tags = { Project = "agentconstruct", ManagedBy = "terraform", Scope = "control-plane-identity", Purpose = "customer-discovery" }
+  discovery_arns = [
+    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/agentconstruct-*-discovery",
+    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/AgentConstructDiscovery-*",
+  ]
 }
 
 resource "aws_iam_openid_connect_provider" "github" {

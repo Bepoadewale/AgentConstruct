@@ -21,7 +21,11 @@ from agentconstruct.domain import (
 )
 from agentconstruct.execution_profiles import execution_profile
 from agentconstruct.executor import FixtureExecutor
-from agentconstruct.integrations import FixtureAwsDiscovery, configured_github_connection
+from agentconstruct.integrations import (
+    FixtureAwsDiscovery,
+    StsAwsDiscovery,
+    configured_github_connection,
+)
 from agentconstruct.intent import DeterministicIntentProvider, IntentProvider
 from agentconstruct.models import (
     Approval,
@@ -162,23 +166,28 @@ class ProductService:
             raise PermissionError("cloud connection not found in this organization")
         control_plane_role_arn = os.getenv("AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN")
         template_url = os.getenv("AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL")
-        if not control_plane_role_arn:
-            raise RuntimeError("AWS customer connection setup is not configured")
+        if not control_plane_role_arn or not template_url:
+            raise RuntimeError("AWS customer connection setup is not configured with a hosted template")
         external_id = secrets.token_urlsafe(32)
         stack_name = f"AgentConstruct-Discovery-{connection.id[:8]}"
+        discovery_role_arn = (
+            f"arn:aws:iam::{account_id}:role/AgentConstructDiscovery-{connection.id}"
+        )
         parameters = {
             "AgentConstructControlPlaneRoleArn": control_plane_role_arn,
             "ExternalId": external_id,
             "ConnectionId": connection.id,
         }
-        quick_create_url = None
-        if template_url:
-            quick_create_url = (
-                "https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?"
-                + urlencode({"templateURL": template_url, "stackName": stack_name})
-                + "&"
-                + urlencode({f"param_{key}": value for key, value in parameters.items()})
-            )
+        quick_create_url = (
+            "https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?"
+            + urlencode({"templateURL": template_url, "stackName": stack_name})
+            + "&"
+            + urlencode({f"param_{key}": value for key, value in parameters.items()})
+        )
+        connection.account_id = account_id
+        connection.discovery_role_arn = discovery_role_arn
+        connection.external_id = external_id
+        connection.setup_state = "SETUP_LINK_GENERATED"
         self.audit(
             principal,
             "cloud_connection.aws_quick_create_generated",
@@ -193,7 +202,6 @@ class ProductService:
             "stack_name": stack_name,
             "template_path": "infrastructure/cloudformation/customer-discovery-role.yaml",
             "quick_create_url": quick_create_url,
-            "parameters": parameters,
             "customer_steps": [
                 "Open the AWS Quick Create link.",
                 "Review the one read-only IAM role and acknowledge IAM resource creation.",
@@ -201,6 +209,52 @@ class ProductService:
             ],
             "boundary": "This action only creates a setup link. AgentConstruct does not create customer AWS resources until the customer creates the stack in their own account.",
         }
+
+    def verify_aws_connection(
+        self,
+        principal: Principal,
+        connection_id: str,
+        region: str,
+        discovery: StsAwsDiscovery | None = None,
+    ) -> StoredCloudInventorySnapshot:
+        """Assume only the per-customer read-only role and store no credentials."""
+        connection = self.db.get(CloudConnection, connection_id)
+        if not connection or connection.organization_id != principal.organization_id:
+            raise PermissionError("cloud connection not found in this organization")
+        if not all([connection.account_id, connection.discovery_role_arn, connection.external_id]):
+            raise ValueError("generate the AWS setup link before verifying this connection")
+        if os.getenv("AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED", "false").lower() != "true":
+            raise RuntimeError("live AWS discovery is not enabled for this control-plane process")
+        snapshot = (discovery or StsAwsDiscovery()).verify(
+            connection.id, connection.discovery_role_arn, connection.external_id, region
+        )
+        discovered_account = next(
+            (
+                item.removeprefix("aws-account:")
+                for item in snapshot.approved_resources
+                if item.startswith("aws-account:")
+            ),
+            None,
+        )
+        if discovered_account != connection.account_id:
+            raise PermissionError("assumed AWS role belongs to a different account")
+        connection.setup_state = "VERIFIED"
+        self.audit(
+            principal,
+            "cloud_connection.aws_verified",
+            "cloud_connection",
+            connection.id,
+            {"account_id": connection.account_id, "region": region, "provenance": snapshot.provenance},
+        )
+        self.db.commit()
+        return self.record_cloud_inventory_snapshot(
+            principal,
+            connection.id,
+            region,
+            snapshot.provenance,
+            snapshot.discovered_at,
+            snapshot.model_dump(mode="json"),
+        )
 
     def record_cloud_inventory_snapshot(
         self,

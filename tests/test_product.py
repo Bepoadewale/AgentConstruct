@@ -3,7 +3,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from agentconstruct.db import make_engine, run_migrations
-from agentconstruct.domain import EnvironmentName, LifecycleState, PolicyResult, WorkloadSpec
+from agentconstruct.domain import (
+    CloudInventorySnapshot,
+    EnvironmentName,
+    LifecycleState,
+    PolicyResult,
+    WorkloadSpec,
+)
 from agentconstruct.executor import ExecutionObservation
 from agentconstruct.intent import DeterministicIntentProvider
 from agentconstruct.models import Incident, Recommendation, RepositoryConnection
@@ -169,6 +175,35 @@ def test_invalid_state_transition_is_rejected():
         raise AssertionError("invalid lifecycle transition was accepted")
 
 
+def test_aws_quick_create_and_server_side_sts_verification_store_no_credentials(monkeypatch):
+    class VerifiedReadOnlyDiscovery:
+        def verify(self, connection_id, role_arn, external_id, region):
+            assert connection_id
+            assert role_arn.endswith(f"AgentConstructDiscovery-{connection_id}")
+            assert external_id
+            return CloudInventorySnapshot(
+                region=region,
+                approved_regions=[region],
+                approved_resources=["aws-account:123456789012", "vpc:1", "eks:0"],
+                discovered_at=datetime.now(UTC),
+                provenance="live-read-only-sts-discovery",
+            )
+
+    monkeypatch.setenv("AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN", "arn:aws:iam::111122223333:role/agentconstruct-control-plane")
+    monkeypatch.setenv("AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL", "https://templates.example/customer.yaml")
+    monkeypatch.setenv("AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED", "true")
+    service, _ = make_service()
+    connection = service.create_cloud_connection(founder(), "Customer AWS", "aws", "byoc_role_contract")
+    setup = service.aws_quick_create_setup(founder(), connection.id, "123456789012")
+    assert "console.aws.amazon.com/cloudformation" in str(setup["quick_create_url"])
+    stored = service.verify_aws_connection(founder(), connection.id, "us-east-1", VerifiedReadOnlyDiscovery())
+    assert stored.provenance == "live-read-only-sts-discovery"
+    assert stored.snapshot["approved_resources"] == ["aws-account:123456789012", "vpc:1", "eks:0"]
+    saved = service.db.get(type(connection), connection.id)
+    assert saved.setup_state == "VERIFIED"
+    assert "AccessKeyId" not in str(stored.snapshot)
+
+
 def test_stale_and_replayed_approval_are_rejected():
     service, _ = make_service()
     project = service.create_project(founder(), "approval-safety", "https://github.com/example/rag")
@@ -216,7 +251,9 @@ def test_aws_quick_create_setup_is_tenant_scoped_and_never_applies(monkeypatch):
     connection = service.create_cloud_connection(founder(), "Customer AWS", "aws", "byoc_role_contract")
     setup = service.aws_quick_create_setup(founder(), connection.id, "654654474502")
     assert setup["quick_create_url"].startswith("https://console.aws.amazon.com/")
-    assert setup["parameters"]["ConnectionId"] == connection.id
+    assert setup["connection_id"] == connection.id
+    assert "parameters" not in setup
+    assert service.db.get(type(connection), connection.id).external_id
     assert "does not create customer AWS resources" in setup["boundary"]
 
 
