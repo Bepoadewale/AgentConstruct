@@ -15,7 +15,7 @@
 | Incident evidence | PostgreSQL persists local degraded-health incidents and the recommendation lifecycle from proposed to applied/resolved |
 | Identity boundary | Local signed-token fixture plus an unconfigured JWT/JWKS verifier interface for a future trusted issuer |
 | UI and monitoring | Plain JavaScript browser UI with editable region/data/budget constraints; `/metrics`, Prometheus, business OTel spans, Tempo and Grafana datasources/dashboard for request, plan-policy and observed-execution outcomes |
-| Agent clients | Authenticated REST API, thin CLI, and stdio MCP server. They use the same API and do not expose approval, cloud credentials, shell, Terraform, Kubernetes, or secrets. |
+| Agent clients | Authenticated REST API, thin CLI, and stdio MCP server. They use the same API and do not expose approval, cloud credentials, shell, Terraform, Kubernetes, or secrets. The full local Compose proof exercises MCP tool discovery. |
 
 ## Simulated
 
@@ -32,4 +32,4 @@ Customer AWS role assumption, live account discovery/pricing, profile-specific T
 
 Terraform describes separate state/lock/budget guardrails plus a private VPC, EKS, ECR, RDS, Secrets Manager and IRSA foundation. Kubernetes describes hardened API replicas, probes, a PDB, default-deny policy and placeholder-only secret/image references. Argo CD describes reviewed desired-state reconciliation. Terraform format, offline-backend initialisation and validation passed. None of those resources or controllers has run in AWS.
 
-GitHub Actions also validates the Terraform and Kubernetes contracts. A manual GitHub OIDC workflow has exact plan/apply/destroy confirmations and an account check, but it has not been dispatched and no AWS identity has been assumed.
+GitHub Actions runs lint, tests, dependency audit, secret scan, OPA tests, SBOM, filesystem scan, image build, Terraform/Kubernetes contract checks, and the full local proof (simple, complex, degraded, Day-2, policy/readiness failure, traces and MCP tool discovery). A manual GitHub OIDC workflow has exact plan/apply/destroy confirmations and an account check, but it has not been dispatched and no AWS identity has been assumed.
