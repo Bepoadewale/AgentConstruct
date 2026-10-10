@@ -13,7 +13,10 @@ def main() -> None:
     while True:
         db = SessionLocal()
         try:
-            ProductService(db).run_next_job()
+            service = ProductService(db)
+            # Both queues are durable. Discovery is deliberately read-only.
+            if not service.run_next_discovery_job():
+                service.run_next_job()
         finally:
             db.close()
         time.sleep(0.25)

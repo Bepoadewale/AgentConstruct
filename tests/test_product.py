@@ -196,12 +196,32 @@ def test_aws_quick_create_and_server_side_sts_verification_store_no_credentials(
     connection = service.create_cloud_connection(founder(), "Customer AWS", "aws", "byoc_role_contract")
     setup = service.aws_quick_create_setup(founder(), connection.id, "123456789012")
     assert "console.aws.amazon.com/cloudformation" in str(setup["quick_create_url"])
+    saved_after_setup = service.db.get(type(connection), connection.id)
+    assert saved_after_setup.external_id is None
+    assert saved_after_setup.external_id_secret_ref.startswith("local-encrypted:")
     stored = service.verify_aws_connection(founder(), connection.id, "us-east-1", VerifiedReadOnlyDiscovery())
     assert stored.provenance == "live-read-only-sts-discovery"
     assert stored.snapshot["approved_resources"] == ["aws-account:123456789012", "vpc:1", "eks:0"]
     saved = service.db.get(type(connection), connection.id)
     assert saved.setup_state == "VERIFIED"
     assert "AccessKeyId" not in str(stored.snapshot)
+
+
+def test_aws_verification_is_durable_and_tenant_scoped(monkeypatch):
+    monkeypatch.setenv("AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN", "arn:aws:iam::111122223333:role/runtime")
+    monkeypatch.setenv("AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL", "https://templates.example/customer.yaml")
+    monkeypatch.setenv("AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED", "true")
+    service, _ = make_service()
+    connection = service.create_cloud_connection(founder(), "Customer AWS", "aws", "byoc_role_contract")
+    service.aws_quick_create_setup(founder(), connection.id, "123456789012")
+    job = service.queue_aws_connection_verification(founder(), connection.id, "us-east-1")
+    assert job.state == "QUEUED"
+    try:
+        service.cloud_discovery_job(Principal("other", "org-other", "developer"), connection.id, job.id)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("cross-tenant verification job access was accepted")
 
 
 def test_stale_and_replayed_approval_are_rejected():
@@ -253,7 +273,9 @@ def test_aws_quick_create_setup_is_tenant_scoped_and_never_applies(monkeypatch):
     assert setup["quick_create_url"].startswith("https://console.aws.amazon.com/")
     assert setup["connection_id"] == connection.id
     assert "parameters" not in setup
-    assert service.db.get(type(connection), connection.id).external_id
+    saved = service.db.get(type(connection), connection.id)
+    assert saved.external_id is None
+    assert saved.external_id_secret_ref
     assert "does not create customer AWS resources" in setup["boundary"]
 
 

@@ -11,6 +11,10 @@ from opentelemetry import trace
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from agentconstruct.connection_secrets import (
+    ConnectionSecretStore,
+    configured_connection_secret_store,
+)
 from agentconstruct.day2 import FixtureDay2Advisor
 from agentconstruct.domain import (
     EnvironmentName,
@@ -31,6 +35,7 @@ from agentconstruct.models import (
     Approval,
     AuditEvent,
     CloudConnection,
+    CloudDiscoveryJob,
     DeploymentPlan,
     Environment,
     ExecutionJob,
@@ -63,6 +68,7 @@ class ProductService:
         policy: PolicyClient | None = None,
         executor: FixtureExecutor | None = None,
         intent_provider: IntentProvider | None = None,
+        connection_secrets: ConnectionSecretStore | None = None,
     ):
         self.db = db
         self.intent_provider = intent_provider or DeterministicIntentProvider()
@@ -72,6 +78,7 @@ class ProductService:
         self.day2_advisor = FixtureDay2Advisor()
         self.policy = policy or PolicyClient()
         self.executor = executor or FixtureExecutor()
+        self.connection_secrets = connection_secrets or configured_connection_secret_store()
 
     def _trace(self, name: str):
         return trace.get_tracer("agentconstruct.product").start_as_current_span(name)
@@ -186,7 +193,11 @@ class ProductService:
         )
         connection.account_id = account_id
         connection.discovery_role_arn = discovery_role_arn
-        connection.external_id = external_id
+        connection.external_id_secret_ref = self.connection_secrets.put_external_id(
+            principal.organization_id, connection.id, external_id
+        )
+        # Do not retain a plaintext legacy value. Existing values require a new setup link.
+        connection.external_id = None
         connection.setup_state = "SETUP_LINK_GENERATED"
         self.audit(
             principal,
@@ -210,6 +221,48 @@ class ProductService:
             "boundary": "This action only creates a setup link. AgentConstruct does not create customer AWS resources until the customer creates the stack in their own account.",
         }
 
+    def queue_aws_connection_verification(
+        self, principal: Principal, connection_id: str, region: str
+    ) -> CloudDiscoveryJob:
+        connection = self.db.get(CloudConnection, connection_id)
+        if not connection or connection.organization_id != principal.organization_id:
+            raise PermissionError("cloud connection not found in this organization")
+        if not all([connection.account_id, connection.discovery_role_arn, connection.external_id_secret_ref]):
+            raise ValueError("generate a new AWS setup link before verifying this connection")
+        if os.getenv("AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED", "false").lower() != "true":
+            raise RuntimeError("live AWS discovery is not enabled for this control-plane process")
+        job = CloudDiscoveryJob(
+            organization_id=principal.organization_id,
+            cloud_connection_id=connection.id,
+            requester_subject=principal.subject,
+            region=region,
+            state="QUEUED",
+            result={"operation": "READ_ONLY_AWS_DISCOVERY"},
+        )
+        self.db.add(job)
+        self.db.flush()
+        self.audit(
+            principal,
+            "cloud_connection.aws_verification_queued",
+            "cloud_discovery_job",
+            job.id,
+            {"connection_id": connection.id, "region": region},
+        )
+        self.db.commit()
+        return job
+
+    def cloud_discovery_job(
+        self, principal: Principal, connection_id: str, job_id: str
+    ) -> CloudDiscoveryJob:
+        job = self.db.get(CloudDiscoveryJob, job_id)
+        if (
+            not job
+            or job.organization_id != principal.organization_id
+            or job.cloud_connection_id != connection_id
+        ):
+            raise PermissionError("cloud discovery job not found in this organization")
+        return job
+
     def verify_aws_connection(
         self,
         principal: Principal,
@@ -221,12 +274,13 @@ class ProductService:
         connection = self.db.get(CloudConnection, connection_id)
         if not connection or connection.organization_id != principal.organization_id:
             raise PermissionError("cloud connection not found in this organization")
-        if not all([connection.account_id, connection.discovery_role_arn, connection.external_id]):
-            raise ValueError("generate the AWS setup link before verifying this connection")
+        if not all([connection.account_id, connection.discovery_role_arn, connection.external_id_secret_ref]):
+            raise ValueError("generate a new AWS setup link before verifying this connection")
         if os.getenv("AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED", "false").lower() != "true":
             raise RuntimeError("live AWS discovery is not enabled for this control-plane process")
+        external_id = self.connection_secrets.get_external_id(connection.external_id_secret_ref)
         snapshot = (discovery or StsAwsDiscovery()).verify(
-            connection.id, connection.discovery_role_arn, connection.external_id, region
+            connection.id, connection.discovery_role_arn, external_id, region
         )
         discovered_account = next(
             (
@@ -255,6 +309,47 @@ class ProductService:
             snapshot.discovered_at,
             snapshot.model_dump(mode="json"),
         )
+
+    def run_next_discovery_job(self) -> bool:
+        """Process one durable read-only discovery job; no cloud mutation occurs here."""
+        job = self.db.scalar(
+            select(CloudDiscoveryJob)
+            .where(CloudDiscoveryJob.state == "QUEUED")
+            .order_by(CloudDiscoveryJob.created_at)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        if not job:
+            return False
+        job.state = "RUNNING"
+        job.attempts += 1
+        self.db.commit()
+        principal = Principal(job.requester_subject, job.organization_id, "developer")
+        try:
+            snapshot = self.verify_aws_connection(principal, job.cloud_connection_id, job.region)
+            job.state = "SUCCEEDED"
+            job.result = {"snapshot_id": snapshot.id, "provenance": snapshot.provenance}
+            job.error = None
+            self.audit(
+                principal,
+                "cloud_connection.aws_verification_succeeded",
+                "cloud_discovery_job",
+                job.id,
+                {"connection_id": job.cloud_connection_id, "snapshot_id": snapshot.id},
+            )
+        except Exception as error:  # noqa: BLE001 - worker records bounded provider failures safely.
+            job.state = "FAILED"
+            job.error = str(error)[:300]
+            job.result = {}
+            self.audit(
+                principal,
+                "cloud_connection.aws_verification_failed",
+                "cloud_discovery_job",
+                job.id,
+                {"connection_id": job.cloud_connection_id, "reason": job.error},
+            )
+        self.db.commit()
+        return True
 
     def record_cloud_inventory_snapshot(
         self,
