@@ -8,10 +8,18 @@ from test_product import founder, make_service, operator
 
 def plan_content() -> dict:
     return {
-        "provider": "aws",
-        "repository": {"url": "https://github.com/example/service", "branch": "main"},
-        "target": {"account_id": "123456789012", "region": "us-east-1"},
-        "request": "Deploy a private FastAPI service with monitoring.",
+        "kind": "agentconstruct.aws.infrastructure-plan.review.v1",
+        "application_analysis": {
+            "repository": "https://github.com/example/service",
+            "branch": "main",
+            "request": "Deploy a private FastAPI service with monitoring.",
+        },
+        "target": {"provider": "aws", "account_id": "123456789012", "region": "us-east-1"},
+        "observability": {
+            "metrics_backend": "Prometheus-compatible Amazon Managed Service for Prometheus",
+            "dashboard": "Amazon Managed Grafana",
+        },
+        "policy_findings": {"result": "APPROVAL_REQUIRED"},
     }
 
 

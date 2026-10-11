@@ -1,6 +1,6 @@
 # AgentConstruct
 
-AgentConstruct turns an AI workload request into a governed infrastructure plan. A developer describes the outcome and reviews one recommended AWS design, its cost and risks. Submission and administrator decisions are the next product slice; approval will never mean deployment.
+AgentConstruct turns an AI workload request into a governed infrastructure plan. A developer describes the outcome, reviews one recommended AWS design, then submits its exact digest for workspace-administrator approval or rejection. Approval never means deployment.
 
 **Delivery state: executable local V1 foundation; customer-AWS and GitHub App read-only discovery executed; workload runtime not executed.** The local workflow is real: FastAPI, PostgreSQL, OPA, a bounded execution fixture, Prometheus, Tempo and Grafana run in Docker Compose. Terraform created the customer discovery identity path and AgentConstruct recorded a live inventory snapshot. The GitHub App read real repository metadata through a short-lived installation token. No application, network, database, compute, GitHub write, or GitOps workload was deployed.
 
@@ -10,6 +10,7 @@ AgentConstruct turns an AI workload request into a governed infrastructure plan.
 customer request → typed workload specification → reusable-cloud inventory fixture
 → simplest viable architecture and cost plan
 → policy → immutable customer-plan review draft
+→ submission → administrator decision
 
 The separate execution lifecycle remains available only through the bounded local fixture.
 
@@ -24,8 +25,8 @@ Developers and AI clients can use the same governed product surface through the 
 
 | Role | Can do | Cannot do |
 | --- | --- | --- |
-| Developer/founder | Describe a workload, create a customer-plan review draft and inspect cost | Choose another organisation, bypass policy, approve or reject a customer plan |
-| Workspace administrator | Create and inspect a customer-plan review draft | Approve changed/stale revisions or bypass cloud controls |
+| Developer/founder | Describe a workload, create/revise/submit a customer-plan review and inspect cost | Choose another organisation, bypass policy, approve or reject a customer plan |
+| Workspace administrator | Create and submit a plan; approve or reject submitted workspace plans, including their own | Approve changed/stale revisions or bypass cloud controls |
 | Intent provider | Propose a typed requirement set | Run shell commands, Terraform, `kubectl`, or cloud mutations |
 
 ## Run it locally

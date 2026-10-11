@@ -8,7 +8,7 @@
 - [x] Add role-aware local sign-in, tenant-scoped workspace dashboards and browser navigation.
 - [x] Add GitHub installation/repository/branch and AWS connected-account selection experiences.
 - [x] Render one AWS plan with required Prometheus/Grafana details and cost estimate.
-- [ ] Add submit, administrator approval/rejection, self-approval and revision UI/API flows.
+- [x] Add submit, administrator approval/rejection, self-approval and revision UI/API flows.
 - [ ] Prove the two-browser developer/admin journey with API and browser tests.
 
 ### Completed hardening — local commercial V1

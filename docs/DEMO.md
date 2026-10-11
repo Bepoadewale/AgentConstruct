@@ -1,11 +1,11 @@
 # Two-User Local Demonstration
 
-The final two-browser approval demonstration is delivered after the customer-plan submission and decision UI slices. The current local product demo has separate signed `founder` developer and `administrator` workspace-administrator sign-in choices, dashboard views, and a server-side administrator-only pending-approval queue.
+The local product demo has separate signed `founder` developer and `administrator` workspace-administrator sign-in choices, dashboard views, a server-side administrator-only pending-approval queue, and persisted customer-plan decisions. This is a local fixture identity flow, not enterprise sign-in.
 
-1. Developer selects fixture or authorised read-only GitHub/AWS connections, creates one plan and submits it.
-2. Administrator opens the approval queue and approves or rejects the exact submitted revision.
-3. Developer refreshes and sees the persisted result.
-4. Administrator creates, submits and self-approves a separate plan; the audit identifies it as self-approval.
+1. In Browser A, sign in as **developer**, select fixture or authorised read-only GitHub/AWS connections, create one plan, and select **Submit for approval**.
+2. In Browser B, sign in as **administrator**, open the pending plan from the dashboard, then approve or reject the exact submitted digest. Rejection requires a reason.
+3. Return to Browser A, refresh the dashboard or reopen the revision, and see the persisted result. A rejected plan can create a new immutable draft revision.
+4. In Browser B, create, submit and approve an administrator-owned plan. Its audit event and decision record identify `is_self_approval: true`.
 
 This demo never creates AWS infrastructure. Real GitHub/AWS modes remain explicit opt-in integrations.
 

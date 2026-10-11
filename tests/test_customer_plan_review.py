@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from agentconstruct.domain import InfrastructurePlanState
-from test_product import complete_prompt, founder, make_service
+from agentconstruct.domain import InfrastructurePlanDecision, InfrastructurePlanState
+from test_product import complete_prompt, founder, make_service, operator
 
 
 def test_simple_fastapi_customer_review_selects_one_non_eks_aws_plan_with_monitoring():
@@ -47,4 +47,29 @@ def test_customer_review_is_tenant_scoped_and_never_marks_deployment_executed():
     deployment = service.plan_intent(founder(), intent.id)
     review = service.create_customer_plan_review(founder(), deployment.id)
     assert review.content["evidence"]["execution"] == "unexecuted customer plan review"
+    assert deployment.state != "READY"
+
+
+def test_customer_review_submits_then_administrator_approves_without_deploying():
+    service, _ = make_service()
+    project = service.create_project(
+        founder(), "review-submit", "https://github.com/example/review-submit", "main"
+    )
+    intent = service.create_intent(
+        founder(), project.id, complete_prompt(500), project.repository_url, None, "review-submit-001"
+    )
+    deployment = service.plan_intent(founder(), intent.id)
+    review = service.create_customer_plan_review(founder(), deployment.id)
+
+    submitted = service.submit_infrastructure_plan(founder(), review.id)
+    detail = service.infrastructure_plan_revision_detail(founder(), submitted.id)
+    assert detail["state"] == InfrastructurePlanState.SUBMITTED
+    assert detail["execution"] == "UNEXECUTED_APPROVAL_ONLY"
+
+    approved = service.decide_infrastructure_plan(
+        operator(), review.id, InfrastructurePlanDecision.APPROVED, review.content_digest
+    )
+    decision = service.infrastructure_plan_revision_detail(founder(), approved.id)["decision"]
+    assert approved.state == InfrastructurePlanState.APPROVED
+    assert decision["is_self_approval"] is False
     assert deployment.state != "READY"

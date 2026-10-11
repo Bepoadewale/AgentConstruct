@@ -7,6 +7,7 @@ let selectedCloudConnection = null;
 let currentUser = null;
 let githubConnection = null;
 let currentProject = null;
+let customerReview = null;
 
 function idempotencyKey() {
   return globalThis.crypto?.randomUUID?.() || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -50,7 +51,9 @@ function logout() {
   token = null;
   currentUser = null;
   plan = null;
+  customerReview = null;
   document.querySelector("#product-app").classList.add("hidden");
+  document.querySelector("#customer-review").classList.add("hidden");
   document.querySelector("#login").classList.remove("hidden");
   document.querySelector("#logout").classList.add("hidden");
   document.querySelector("#login-message").textContent = "Signed out of the local fixture.";
@@ -72,6 +75,16 @@ async function refreshDashboard() {
     document.querySelector("#dashboard-pending").textContent = pending.length
       ? pending.map((item) => `${item.title} · revision ${item.revision}`).join("; ")
       : "No pending plan approvals.";
+    const list = document.querySelector("#admin-pending-list");
+    list.replaceChildren();
+    pending.forEach((item) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "secondary";
+      button.textContent = `Review ${item.title} · revision ${item.revision}`;
+      button.addEventListener("click", () => openCustomerReview(item.id).catch((error) => show(error.message, true)));
+      list.append(button);
+    });
   }
 }
 
@@ -145,10 +158,12 @@ async function showCloudConnectionDetail(connectionId) {
 }
 
 function renderCustomerReview(review) {
+  customerReview = review;
   const content = review.content;
   document.querySelector("#customer-review").classList.remove("hidden");
   document.querySelector("#review-title").textContent = `AWS infrastructure plan · revision ${review.revision}`;
-  document.querySelector("#review-status").textContent = `${content.summary.status} Digest: ${review.content_digest}.`;
+  const reviewBoundary = review.state === "DRAFT" ? content.summary.status : "immutable review; not deployed";
+  document.querySelector("#review-status").textContent = `${review.state} · ${reviewBoundary} Digest: ${review.content_digest}.`;
   document.querySelector("#review-summary").textContent = `${content.summary.selected_profile}: ${content.summary.why}`;
   document.querySelector("#review-application").textContent = JSON.stringify(content.application_analysis, null, 2);
   document.querySelector("#review-target").textContent = JSON.stringify(content.target, null, 2);
@@ -158,6 +173,24 @@ function renderCustomerReview(review) {
   document.querySelector("#review-cost").textContent = JSON.stringify(content.cost_estimate, null, 2);
   document.querySelector("#review-deployment").textContent = JSON.stringify(content.deployment_strategy, null, 2);
   document.querySelector("#review-risks").textContent = JSON.stringify({ risks: content.risks_and_limitations, policy: content.policy_findings }, null, 2);
+  const submit = document.querySelector("#submit-review");
+  const revise = document.querySelector("#revise-review");
+  const decisions = document.querySelector("#administrator-decisions");
+  const actionMessage = document.querySelector("#review-action-message");
+  const isCreator = currentUser?.user?.subject === review.creator_subject;
+  submit.classList.toggle("hidden", !(review.state === "DRAFT" && isCreator));
+  revise.classList.toggle("hidden", !(review.state === "REJECTED" && isCreator));
+  decisions.classList.toggle("hidden", !(review.state === "SUBMITTED" && isAdministrator()));
+  if (review.state === "DRAFT") actionMessage.textContent = isCreator ? "Review the exact digest, then submit it for administrator approval. Submission never deploys infrastructure." : "Only the plan creator can submit this draft.";
+  else if (review.state === "SUBMITTED") actionMessage.textContent = isAdministrator() ? "This submitted plan is ready for an administrator decision. It is not deployed." : "Submitted for administrator review. It is not deployed.";
+  else if (review.state === "REJECTED") actionMessage.textContent = `Rejected: ${review.decision?.reason || "reason unavailable"}. The creator can make a new draft revision.`;
+  else if (review.state === "APPROVED") actionMessage.textContent = `Approved by ${review.decision?.approver_subject || "administrator"}${review.decision?.is_self_approval ? " (self-approval recorded)" : ""}. Approved does not mean deployed.`;
+}
+
+async function openCustomerReview(revisionId) {
+  const review = await api(`/api/v1/customer-plan-revisions/${revisionId}`);
+  renderCustomerReview(review);
+  document.querySelector("#customer-review").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function refreshAudit() {
@@ -212,6 +245,48 @@ document.querySelector("#create").addEventListener("click", async () => {
     renderCustomerReview(review);
     show(`One AWS review draft created. Policy result: ${plan.policy_result}. It has not been submitted, approved, or deployed.`);
     await Promise.all([refreshAudit(), refreshDashboard()]);
+  } catch (error) { show(error.message, true); }
+});
+
+document.querySelector("#submit-review").addEventListener("click", async () => {
+  try {
+    if (!customerReview) throw new Error("Create a customer-plan review first.");
+    const review = await api(`/api/v1/customer-plan-revisions/${customerReview.id}/submit`, { method: "POST" });
+    renderCustomerReview(review);
+    show("Plan submitted for administrator approval. It has not been deployed.");
+    await Promise.all([refreshDashboard(), refreshAudit()]);
+  } catch (error) { show(error.message, true); }
+});
+
+document.querySelector("#approve-review").addEventListener("click", async () => {
+  try {
+    if (!customerReview) throw new Error("Open a submitted customer plan first.");
+    const review = await api(`/api/v1/customer-plan-revisions/${customerReview.id}/decisions`, { method: "POST", body: JSON.stringify({ decision: "APPROVED", content_digest: customerReview.content_digest }) });
+    renderCustomerReview(review);
+    show("Plan approval is persisted. It is approved, not deployed.");
+    await Promise.all([refreshDashboard(), refreshAudit()]);
+  } catch (error) { show(error.message, true); }
+});
+
+document.querySelector("#reject-review").addEventListener("click", async () => {
+  try {
+    if (!customerReview) throw new Error("Open a submitted customer plan first.");
+    const reason = document.querySelector("#rejection-reason").value.trim();
+    if (!reason) throw new Error("Enter a rejection reason.");
+    const review = await api(`/api/v1/customer-plan-revisions/${customerReview.id}/decisions`, { method: "POST", body: JSON.stringify({ decision: "REJECTED", content_digest: customerReview.content_digest, reason }) });
+    renderCustomerReview(review);
+    show("Plan rejection is persisted. The creator can now make a revised draft.");
+    await Promise.all([refreshDashboard(), refreshAudit()]);
+  } catch (error) { show(error.message, true); }
+});
+
+document.querySelector("#revise-review").addEventListener("click", async () => {
+  try {
+    if (!customerReview) throw new Error("Open a rejected customer plan first.");
+    const review = await api(`/api/v1/customer-plans/${customerReview.plan_id}/revisions`, { method: "POST", body: JSON.stringify({ content: customerReview.content }) });
+    renderCustomerReview(review);
+    show("A new immutable draft revision was created. Update the request if needed, then submit the new digest.");
+    await Promise.all([refreshDashboard(), refreshAudit()]);
   } catch (error) { show(error.message, true); }
 });
 
