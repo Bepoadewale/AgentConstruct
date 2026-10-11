@@ -11,6 +11,7 @@
 | Customer AWS discovery | Executed: Terraform-created read-only discovery role, permissionless future-execution role, GitHub OIDC control-plane identity, STS chain, live inventory and Cost Explorer query. AgentConstruct stores only connection metadata and a credential-free inventory snapshot. |
 | Customer AWS Quick Create | Implemented: UI target picker/account-ID flow, API setup contract, durable server-side STS verification jobs, encrypted local / Secrets Manager production ExternalId contract, and credential-free inventory storage. The CloudFormation template is authenticated-validated. Hosting the versioned public template, creating the separate runtime identity, and using this new UI path against a new account remain unexecuted. |
 | GitHub repository discovery | Executed: the selected GitHub App installation issued a short-lived token to read `Bepoadewale/ai-platform-control-plane` metadata. The live adapter refuses write, PR publication and webhook processing. |
+| Connection experience | Local UI/API lists deterministic GitHub App installations, permitted repositories and branches; it persists the selected branch with a project. The existing live adapter can list configured-installation repositories and branches using a short-lived token. AWS target detail/status and disconnect are tenant-scoped and credential-free. |
 | Local execution | API persists a `QUEUED` job; a separate trusted worker invokes only the fixed fixture executor and records READY, FAILED or DESTROYED evidence |
 | Day-2 change loop | Deterministic latency evidence → explanation → immutable `CHANGE` plan → production approval → durable worker → observed recovery and audit |
 | Customer decision view | Browser renders viable leanest/scale-ready/specialised choices, fixture cost ranges, complexity, assumptions, rejected alternatives and upgrade triggers |
@@ -29,7 +30,7 @@
 
 ## Roadmap only
 
-GitHub-hosted control-plane OIDC assumption, GitHub webhooks/reviewed PR publication, profile-specific Terraform rendering/deployment, real GitOps/Argo execution, enterprise identity, external agent-client installation, subscription billing, model runtime controls and automated remediation.
+GitHub OAuth/install initiation, GitHub-hosted control-plane OIDC assumption, GitHub webhooks/reviewed PR publication, profile-specific Terraform rendering/deployment, real GitOps/Argo execution, enterprise identity, external agent-client installation, subscription billing, model runtime controls and automated remediation.
 
 ## Statically validated cloud contract
 

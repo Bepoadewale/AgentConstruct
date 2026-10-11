@@ -8,3 +8,7 @@ The final two-browser approval demonstration is delivered after the customer-pla
 4. Administrator creates, submits and self-approves a separate plan; the audit identifies it as self-approval.
 
 This demo never creates AWS infrastructure. Real GitHub/AWS modes remain explicit opt-in integrations.
+
+## Connection flow available now
+
+After local sign-in, select the fixture GitHub App installation, an authorized repository, and a branch. The local fixture does not call GitHub; a configured GitHub App runs the same list/inspect calls with a short-lived installation token and refuses writes. For AWS, choose an existing tenant-owned target or use **Connect AWS account** to open the customer-owned read-only role setup. The UI shows account, role, region, verification and capability information when available. It never asks for AWS access keys and does not grant deployment permission.

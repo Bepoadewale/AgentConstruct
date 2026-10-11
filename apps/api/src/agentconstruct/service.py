@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlencode
 
+from httpx import HTTPError
 from opentelemetry import trace
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -245,7 +246,11 @@ class ProductService:
         ]
 
     def create_project(
-        self, principal: Principal, name: str, repository_url: str | None
+        self,
+        principal: Principal,
+        name: str,
+        repository_url: str | None,
+        repository_branch: str | None = None,
     ) -> Project:
         project = Project(
             organization_id=principal.organization_id, name=name, repository_url=repository_url
@@ -259,6 +264,7 @@ class ProductService:
                     project_id=project.id,
                     provider="github",
                     repository_url=repository_url,
+                    selected_branch=repository_branch,
                 )
             )
         self.audit(principal, "project.created", "project", project.id, {"name": name})
@@ -484,13 +490,65 @@ class ProductService:
             )
         )
 
+    def cloud_connection_detail(self, principal: Principal, connection_id: str) -> dict[str, Any]:
+        connection = self._cloud_connection(principal, connection_id)
+        latest = self.db.scalar(
+            select(StoredCloudInventorySnapshot)
+            .where(
+                StoredCloudInventorySnapshot.organization_id == principal.organization_id,
+                StoredCloudInventorySnapshot.cloud_connection_id == connection.id,
+            )
+            .order_by(StoredCloudInventorySnapshot.captured_at.desc())
+            .limit(1)
+        )
+        snapshot = latest.snapshot if latest else {}
+        return {
+            "id": connection.id,
+            "display_name": connection.display_name,
+            "provider": connection.provider,
+            "account_id": connection.account_id,
+            "role_arn": connection.discovery_role_arn,
+            "setup_state": connection.setup_state,
+            "authorized_regions": snapshot.get("approved_regions", []),
+            "capabilities": [
+                "read-only inventory discovery",
+                "read-only Cost Explorer query when customer policy permits",
+            ],
+            "verified_at": latest.captured_at.isoformat() if latest else None,
+            "verification_provenance": latest.provenance if latest else None,
+            "credentials_stored": False,
+            "deployment_permission": "not granted",
+        }
+
+    def disconnect_cloud_connection(self, principal: Principal, connection_id: str) -> None:
+        connection = self._cloud_connection(principal, connection_id)
+        self.db.query(CloudDiscoveryJob).filter(
+            CloudDiscoveryJob.cloud_connection_id == connection.id
+        ).delete(synchronize_session=False)
+        self.db.query(StoredCloudInventorySnapshot).filter(
+            StoredCloudInventorySnapshot.cloud_connection_id == connection.id
+        ).delete(synchronize_session=False)
+        self.db.delete(connection)
+        self.audit(
+            principal,
+            "cloud_connection.disconnected",
+            "cloud_connection",
+            connection_id,
+            {"credentials_stored": False},
+        )
+        self.db.commit()
+
+    def _cloud_connection(self, principal: Principal, connection_id: str) -> CloudConnection:
+        connection = self.db.get(CloudConnection, connection_id)
+        if not connection or connection.organization_id != principal.organization_id:
+            raise PermissionError("cloud connection not found in this organization")
+        return connection
+
     def aws_quick_create_setup(
         self, principal: Principal, connection_id: str, account_id: str
     ) -> dict[str, object]:
         """Generate a one-click AWS Console setup; it does not create AWS resources itself."""
-        connection = self.db.get(CloudConnection, connection_id)
-        if not connection or connection.organization_id != principal.organization_id:
-            raise PermissionError("cloud connection not found in this organization")
+        connection = self._cloud_connection(principal, connection_id)
         control_plane_role_arn = os.getenv("AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN")
         template_url = os.getenv("AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL")
         if not control_plane_role_arn or not template_url:
@@ -544,9 +602,7 @@ class ProductService:
     def queue_aws_connection_verification(
         self, principal: Principal, connection_id: str, region: str
     ) -> CloudDiscoveryJob:
-        connection = self.db.get(CloudConnection, connection_id)
-        if not connection or connection.organization_id != principal.organization_id:
-            raise PermissionError("cloud connection not found in this organization")
+        connection = self._cloud_connection(principal, connection_id)
         if not all([connection.account_id, connection.discovery_role_arn, connection.external_id_secret_ref]):
             raise ValueError("generate a new AWS setup link before verifying this connection")
         if os.getenv("AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED", "false").lower() != "true":
@@ -591,9 +647,7 @@ class ProductService:
         discovery: StsAwsDiscovery | None = None,
     ) -> StoredCloudInventorySnapshot:
         """Assume only the per-customer read-only role and store no credentials."""
-        connection = self.db.get(CloudConnection, connection_id)
-        if not connection or connection.organization_id != principal.organization_id:
-            raise PermissionError("cloud connection not found in this organization")
+        connection = self._cloud_connection(principal, connection_id)
         if not all([connection.account_id, connection.discovery_role_arn, connection.external_id_secret_ref]):
             raise ValueError("generate a new AWS setup link before verifying this connection")
         if os.getenv("AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED", "false").lower() != "true":
@@ -681,9 +735,7 @@ class ProductService:
         snapshot: dict[str, Any],
     ) -> StoredCloudInventorySnapshot:
         """Persist metadata discovered through STS; credential material is never accepted."""
-        connection = self.db.get(CloudConnection, connection_id)
-        if not connection or connection.organization_id != principal.organization_id:
-            raise PermissionError("cloud connection not found in this organization")
+        connection = self._cloud_connection(principal, connection_id)
         stored = StoredCloudInventorySnapshot(
             organization_id=principal.organization_id,
             cloud_connection_id=connection.id,
@@ -721,6 +773,54 @@ class ProductService:
             )
         )
 
+    def github_connection_status(self, principal: Principal) -> dict[str, Any]:
+        del principal
+        execution = getattr(self.github, "execution", "SIMULATED")
+        try:
+            installations = [item.__dict__ for item in self.github.installations()]
+        except HTTPError as error:
+            raise ValueError(
+                "GitHub App connection is unavailable, expired, or missing permissions"
+            ) from error
+        return {
+            "mode": "read-only",
+            "execution": execution,
+            "installations": installations,
+            "install_url": os.getenv("AGENTCONSTRUCT_GITHUB_APP_INSTALL_URL"),
+            "writes_enabled": False,
+            "credentials_stored": False,
+        }
+
+    def github_repositories(self, principal: Principal, installation_id: str) -> list[dict[str, str]]:
+        del principal  # The configured adapter independently scopes access to installation repositories.
+        try:
+            return [item.__dict__ for item in self.github.repositories(installation_id)]
+        except HTTPError as error:
+            raise ValueError(
+                "GitHub repository list is unavailable, expired, or missing permissions"
+            ) from error
+
+    def github_branches(
+        self, principal: Principal, installation_id: str, repository: str
+    ) -> list[str]:
+        del principal
+        try:
+            return self.github.branches(installation_id, repository)
+        except HTTPError as error:
+            raise ValueError(
+                "GitHub branch list is unavailable, expired, or missing permissions"
+            ) from error
+
+    def disconnect_project_repository(self, principal: Principal, project_id: str) -> None:
+        project = self._project(principal, project_id)
+        self.db.query(RepositoryConnection).filter(
+            RepositoryConnection.project_id == project.id,
+            RepositoryConnection.organization_id == principal.organization_id,
+        ).delete(synchronize_session=False)
+        project.repository_url = None
+        self.audit(principal, "repository.disconnected", "project", project.id, {})
+        self.db.commit()
+
     def repository_discovery(self, principal: Principal, project_id: str) -> dict[str, str]:
         project = self._project(principal, project_id)
         if not project.repository_url:
@@ -736,7 +836,13 @@ class ProductService:
             {"provider": metadata.provider, "repository": metadata.repository, "execution": execution},
         )
         self.db.commit()
-        return metadata.__dict__ | {"execution": execution}
+        connection = self.db.scalar(
+            select(RepositoryConnection).where(RepositoryConnection.project_id == project.id)
+        )
+        return metadata.__dict__ | {
+            "execution": execution,
+            "selected_branch": connection.selected_branch if connection else metadata.default_branch,
+        }
 
     def desired_state_publication(
         self, principal: Principal, project_id: str, plan_id: str

@@ -47,6 +47,7 @@ class RepositoryConnection(Base):
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
     provider: Mapped[str] = mapped_column(String(32), default="github")
     repository_url: Mapped[str] = mapped_column(Text)
+    selected_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class CloudConnection(Base):
