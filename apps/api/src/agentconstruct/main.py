@@ -82,6 +82,39 @@ def local_login(request: LocalLoginRequest):
     }
 
 
+@app.get("/api/v1/me")
+def current_user(
+    principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)
+):
+    REQUESTS.labels("identity.current").inc()
+    try:
+        return service.workspace_profile(principal)
+    except PermissionError as error:
+        translate(error)
+
+
+@app.get("/api/v1/dashboard")
+def workspace_dashboard(
+    principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)
+):
+    REQUESTS.labels("workspace.dashboard").inc()
+    try:
+        return service.workspace_dashboard(principal)
+    except PermissionError as error:
+        translate(error)
+
+
+@app.get("/api/v1/admin/pending-approvals")
+def pending_approvals(
+    principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)
+):
+    REQUESTS.labels("admin.pending_approvals").inc()
+    try:
+        return service.pending_infrastructure_plan_revisions(principal)
+    except PermissionError as error:
+        translate(error)
+
+
 @app.post("/api/v1/projects", status_code=201)
 def create_project(
     request: ProjectRequest,

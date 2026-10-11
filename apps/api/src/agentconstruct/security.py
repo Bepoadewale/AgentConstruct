@@ -30,6 +30,8 @@ class IdentityVerifier(Protocol):
 
 LOCAL_USERS = {
     "founder": ("user-founder", "org-demo", "developer"),
+    "administrator": ("user-administrator", "org-demo", "administrator"),
+    # Keep the earlier fixture so existing local execution evidence remains reproducible.
     "operator": ("user-operator", "org-demo", "operator"),
     "other-tenant": ("user-other", "org-other", "developer"),
 }
@@ -57,7 +59,7 @@ def issue_local_token(username: str) -> str:
 
 def principal_from_claims(payload: dict) -> Principal:
     role = payload["role"]
-    if role not in {"developer", "operator"}:
+    if role not in {"developer", "operator", "administrator"}:
         raise HTTPException(403, "role not allowed")
     return Principal(subject=payload["sub"], organization_id=payload["org"], role=role)
 
