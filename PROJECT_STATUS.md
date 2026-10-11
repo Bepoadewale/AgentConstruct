@@ -31,7 +31,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - This does **not** deploy a workload into AWS or a customer account. One customer-AWS discovery connection is live and read-only; it is not deployment permission. Cost Explorer values are delayed billing data, not settled cost evidence.
 - The local identity issuer, intent provider and execution target are fixtures. The JWKS adapter is implemented but not connected to an enterprise issuer.
 - GitHub webhooks/reviewed desired-state PRs, GitHub-hosted OIDC assumption, profile-specific deployment permission, GitOps/Argo execution, enterprise IdP, external agent-client installation and billing are next work, not evidence.
-- The new customer plan lifecycle is service-layer evidence only in this PR. Role-aware dashboards, submit/review APIs and the two-browser demonstration are next work.
+- Role-aware local sign-in, `/me`, tenant-scoped workspace dashboards and an administrator-only pending-approval queue are implemented. They use separate signed local developer and administrator fixtures; they are not enterprise sign-in. Customer-plan submission/decision APIs and the two-browser approval demonstration remain next work.
 
 ## Next delivery sequence
 

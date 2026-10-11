@@ -95,6 +95,7 @@ class ProductService:
                 self.db.add(Organization(id=org_id, name=name))
         users = [
             ("user-founder", "org-demo", "developer"),
+            ("user-administrator", "org-demo", "administrator"),
             ("user-operator", "org-demo", "operator"),
             ("user-other", "org-other", "developer"),
         ]
@@ -118,6 +119,130 @@ class ProductService:
                 detail=detail,
             )
         )
+
+    def workspace_profile(self, principal: Principal) -> dict[str, Any]:
+        """Return only the current tenant's local identity and workspace metadata."""
+        user = self.db.scalar(
+            select(ProductUser).where(
+                ProductUser.subject == principal.subject,
+                ProductUser.organization_id == principal.organization_id,
+            )
+        )
+        organization = self.db.get(Organization, principal.organization_id)
+        if not user or not organization:
+            raise PermissionError("current user is not a member of this workspace")
+        role = "administrator" if self._is_workspace_administrator(principal) else "developer"
+        return {
+            "user": {"id": user.id, "subject": user.subject, "role": role},
+            "workspace": {"id": organization.id, "name": organization.name},
+        }
+
+    def workspace_dashboard(self, principal: Principal) -> dict[str, Any]:
+        """Tenant-scoped dashboard data. Developers see their plans; admins see workspace plans."""
+        profile = self.workspace_profile(principal)
+        is_admin = self._is_workspace_administrator(principal)
+        projects = self.db.scalars(
+            select(Project)
+            .where(Project.organization_id == principal.organization_id)
+            .order_by(Project.created_at.desc())
+        ).all()
+        connections = self.db.scalars(
+            select(CloudConnection)
+            .where(CloudConnection.organization_id == principal.organization_id)
+            .order_by(CloudConnection.created_at.desc())
+        ).all()
+        revisions_query = (
+            select(InfrastructurePlanRevision, InfrastructurePlan)
+            .join(InfrastructurePlan, InfrastructurePlan.id == InfrastructurePlanRevision.infrastructure_plan_id)
+            .where(InfrastructurePlanRevision.organization_id == principal.organization_id)
+            .order_by(InfrastructurePlanRevision.created_at.desc())
+        )
+        if not is_admin:
+            revisions_query = revisions_query.where(
+                InfrastructurePlan.creator_subject == principal.subject
+            )
+        revisions = self.db.execute(revisions_query.limit(20)).all()
+        activities = self.db.scalars(
+            select(AuditEvent)
+            .where(AuditEvent.organization_id == principal.organization_id)
+            .order_by(AuditEvent.created_at.desc())
+            .limit(12)
+        ).all()
+        pending_count = 0
+        if is_admin:
+            pending_count = len(
+                self.db.scalars(
+                    select(InfrastructurePlanRevision.id).where(
+                        InfrastructurePlanRevision.organization_id == principal.organization_id,
+                        InfrastructurePlanRevision.state == InfrastructurePlanState.SUBMITTED,
+                    )
+                ).all()
+            )
+        return {
+            **profile,
+            "projects": [
+                {"id": project.id, "name": project.name, "repository_url": project.repository_url}
+                for project in projects
+            ],
+            "cloud_connections": [
+                {
+                    "id": connection.id,
+                    "display_name": connection.display_name,
+                    "provider": connection.provider,
+                    "account_id": connection.account_id,
+                    "setup_state": connection.setup_state,
+                }
+                for connection in connections
+            ],
+            "plans": [
+                {
+                    "id": revision.id,
+                    "plan_id": plan.id,
+                    "title": plan.title,
+                    "revision": revision.revision_number,
+                    "state": revision.state,
+                    "creator_subject": plan.creator_subject,
+                    "created_at": revision.created_at.isoformat() if revision.created_at else None,
+                }
+                for revision, plan in revisions
+            ],
+            "pending_approval_count": pending_count,
+            "recent_activity": [
+                {
+                    "id": event.id,
+                    "action": event.action,
+                    "entity_type": event.entity_type,
+                    "entity_id": event.entity_id,
+                    "at": event.created_at.isoformat() if event.created_at else None,
+                }
+                for event in activities
+            ],
+        }
+
+    def pending_infrastructure_plan_revisions(self, principal: Principal) -> list[dict[str, Any]]:
+        if not self._is_workspace_administrator(principal):
+            raise PermissionError("workspace administrator role required for pending approvals")
+        rows = self.db.execute(
+            select(InfrastructurePlanRevision, InfrastructurePlan)
+            .join(InfrastructurePlan, InfrastructurePlan.id == InfrastructurePlanRevision.infrastructure_plan_id)
+            .where(
+                InfrastructurePlanRevision.organization_id == principal.organization_id,
+                InfrastructurePlanRevision.state == InfrastructurePlanState.SUBMITTED,
+            )
+            .order_by(InfrastructurePlanRevision.submitted_at.desc())
+        ).all()
+        return [
+            {
+                "id": revision.id,
+                "plan_id": plan.id,
+                "title": plan.title,
+                "revision": revision.revision_number,
+                "creator_subject": plan.creator_subject,
+                "content_digest": revision.content_digest,
+                "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
+            }
+            for revision, plan in rows
+        ]
 
     def create_project(
         self, principal: Principal, name: str, repository_url: str | None
@@ -815,8 +940,8 @@ class ProductService:
 
     def _approve(self, principal: Principal, plan_id: str, provided_hash: str) -> DeploymentPlan:
         plan = self._plan(principal, plan_id)
-        if principal.role != "operator":
-            raise PermissionError("operator role required for approval")
+        if not self._is_workspace_administrator(principal):
+            raise PermissionError("workspace administrator role required for approval")
         if plan.requester_subject == principal.subject:
             raise PermissionError("requester cannot approve their own protected plan")
         if plan.plan_hash != provided_hash:

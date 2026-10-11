@@ -4,6 +4,7 @@ let productionEnvironment = null;
 let day2Environment = null;
 let cloudConnections = [];
 let selectedCloudConnection = null;
+let currentUser = null;
 
 function idempotencyKey() {
   return globalThis.crypto?.randomUUID?.() || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -20,7 +21,55 @@ async function login(username) {
   const response = await fetch("/api/v1/auth/local-login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username }) });
   const body = await response.json();
   token = body.access_token;
-  document.querySelector("#identity").textContent = `local identity · ${username}`;
+  currentUser = await api("/api/v1/me");
+  document.querySelector("#identity").textContent = `${currentUser.workspace.name} · ${currentUser.user.role}`;
+}
+
+function isAdministrator() {
+  return currentUser?.user?.role === "administrator";
+}
+
+async function startSession(username) {
+  try {
+    document.querySelector("#login-message").textContent = "Signing in…";
+    await login(username);
+    document.querySelector("#login").classList.add("hidden");
+    document.querySelector("#product-app").classList.remove("hidden");
+    document.querySelector("#logout").classList.remove("hidden");
+    await Promise.all([refreshDashboard(), refreshAudit(), refreshCloudConnections()]);
+  } catch (error) {
+    document.querySelector("#login-message").textContent = error.message;
+    document.querySelector("#login-message").className = "message failure";
+  }
+}
+
+function logout() {
+  token = null;
+  currentUser = null;
+  plan = null;
+  document.querySelector("#product-app").classList.add("hidden");
+  document.querySelector("#login").classList.remove("hidden");
+  document.querySelector("#logout").classList.add("hidden");
+  document.querySelector("#login-message").textContent = "Signed out of the local fixture.";
+  document.querySelector("#login-message").className = "message success";
+}
+
+async function refreshDashboard() {
+  const dashboard = await api("/api/v1/dashboard");
+  document.querySelector("#dashboard-heading").textContent = `${dashboard.workspace.name} dashboard`;
+  document.querySelector("#dashboard-projects").textContent = dashboard.projects.length
+    ? dashboard.projects.map((project) => project.name).join(", ") : "No projects yet.";
+  document.querySelector("#dashboard-connections").textContent = dashboard.cloud_connections.length
+    ? dashboard.cloud_connections.map((connection) => `${connection.display_name} (${connection.setup_state})`).join(", ") : "No AWS account connected yet.";
+  document.querySelector("#dashboard-plans").textContent = dashboard.plans.length
+    ? dashboard.plans.map((item) => `${item.title} · ${item.state}`).join("; ") : "No customer plan revisions yet.";
+  document.querySelector("#admin-dashboard").classList.toggle("hidden", !isAdministrator());
+  if (isAdministrator()) {
+    const pending = await api("/api/v1/admin/pending-approvals");
+    document.querySelector("#dashboard-pending").textContent = pending.length
+      ? pending.map((item) => `${item.title} · revision ${item.revision}`).join("; ")
+      : "No pending plan approvals.";
+  }
 }
 
 function show(message, failure = false) {
@@ -106,7 +155,7 @@ document.querySelector("#create").addEventListener("click", async () => {
     document.querySelector("#approve").classList.toggle("hidden", plan.state !== "APPROVAL_REQUIRED");
     document.querySelector("#execute").classList.toggle("hidden", plan.state === "APPROVAL_REQUIRED" || plan.state === "POLICY_DENIED");
     show(`Plan created. Policy result: ${plan.policy_result}.`);
-    await refreshAudit();
+    await Promise.all([refreshAudit(), refreshDashboard()]);
   } catch (error) { show(error.message, true); }
 });
 
@@ -161,9 +210,9 @@ document.querySelector("#verify-aws").addEventListener("click", async () => {
 
 document.querySelector("#approve").addEventListener("click", async () => {
   try {
-    await login("operator");
+    if (!isAdministrator()) throw new Error("Sign in as a workspace administrator to approve this protected local execution plan.");
     plan = await api(`/api/v1/deployment-plans/${plan.id}/approve`, { method: "POST", body: JSON.stringify({ plan_hash: plan.plan_hash }) });
-    document.querySelector("#approve").classList.add("hidden"); document.querySelector("#execute").classList.remove("hidden"); show("Independent operator approved the exact immutable plan."); await refreshAudit();
+    document.querySelector("#approve").classList.add("hidden"); document.querySelector("#execute").classList.remove("hidden"); show("Workspace administrator approved the exact immutable plan."); await refreshAudit();
   } catch (error) { show(error.message, true); }
 });
 
@@ -180,10 +229,9 @@ document.querySelector("#execute").addEventListener("click", async () => {
 document.querySelector("#destroy").addEventListener("click", async () => {
   try {
     if (!productionEnvironment) throw new Error("No ready production environment is available to destroy.");
-    await login("founder");
+    if (!isAdministrator()) throw new Error("Sign in as a workspace administrator to approve protected destruction.");
     let destroyPlan = await api(`/api/v1/environments/${productionEnvironment.id}/destroy-plan`, { method: "POST" });
     if (destroyPlan.state === "DESTROY_APPROVAL_REQUIRED") {
-      await login("operator");
       destroyPlan = await api(`/api/v1/deployment-plans/${destroyPlan.id}/approve`, { method: "POST", body: JSON.stringify({ plan_hash: destroyPlan.plan_hash }) });
     }
     const result = await api(`/api/v1/deployment-plans/${destroyPlan.id}/execute`, { method: "POST" });
@@ -199,7 +247,7 @@ document.querySelector("#optimize").addEventListener("click", async () => {
     document.querySelector("#recommendation-summary").textContent = `${recommendation.diagnosis} Proposed change: minimum replicas ${recommendation.proposed_change.from} → ${recommendation.proposed_change.to}; estimated change: $${recommendation.estimated_monthly_cost_delta.monthly_low}–$${recommendation.estimated_monthly_cost_delta.monthly_high}/month. This is deterministic local telemetry, not AWS billing.`;
     let changePlan = await api(`/api/v1/environments/${day2Environment.id}/change-plan`, { method: "POST" });
     if (changePlan.state === "APPROVAL_REQUIRED") {
-      await login("operator");
+      if (!isAdministrator()) throw new Error("Sign in as a workspace administrator to approve this protected change.");
       changePlan = await api(`/api/v1/deployment-plans/${changePlan.id}/approve`, { method: "POST", body: JSON.stringify({ plan_hash: changePlan.plan_hash }) });
     }
     const result = await api(`/api/v1/deployment-plans/${changePlan.id}/execute`, { method: "POST" });
@@ -209,4 +257,6 @@ document.querySelector("#optimize").addEventListener("click", async () => {
   } catch (error) { show(error.message, true); }
 });
 document.querySelector("#refresh-audit").addEventListener("click", () => refreshAudit().catch((error) => show(error.message, true)));
-login("founder").then(async () => { await refreshAudit(); await refreshCloudConnections(); }).catch((error) => show(error.message, true));
+document.querySelector("#login-developer").addEventListener("click", () => startSession("founder"));
+document.querySelector("#login-administrator").addEventListener("click", () => startSession("administrator"));
+document.querySelector("#logout").addEventListener("click", logout);

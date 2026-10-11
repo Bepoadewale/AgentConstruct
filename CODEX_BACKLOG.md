@@ -5,7 +5,7 @@
 ### Developer and administrator workflow
 
 - [x] Audit the current product and add the separate immutable customer-plan revision foundation.
-- [ ] Add role-aware sign-in, workspace dashboards and browser navigation.
+- [x] Add role-aware local sign-in, tenant-scoped workspace dashboards and browser navigation.
 - [ ] Add GitHub installation/repository/branch and AWS connected-account selection experiences.
 - [ ] Render one AWS plan with required Prometheus/Grafana details and cost estimate.
 - [ ] Add submit, administrator approval/rejection, self-approval and revision UI/API flows.

@@ -16,6 +16,7 @@
 | Customer decision view | Browser renders viable leanest/scale-ready/specialised choices, fixture cost ranges, complexity, assumptions, rejected alternatives and upgrade triggers |
 | Incident evidence | PostgreSQL persists local degraded-health incidents and the recommendation lifecycle from proposed to applied/resolved |
 | Identity boundary | Local signed-token fixture plus an unconfigured JWT/JWKS verifier interface for a future trusted issuer |
+| Workspace views | Separate signed local developer and administrator fixture identities; backend-enforced current-user, tenant-scoped dashboard and administrator-only pending-approval API; browser sign-in/sign-out and role-aware dashboard |
 | UI and monitoring | Plain JavaScript browser UI with editable region/data/budget constraints; `/metrics`, Prometheus, business OTel spans, Tempo and Grafana datasources/dashboard for request, plan-policy and observed-execution outcomes |
 | Agent clients | Authenticated REST API, thin CLI, and stdio MCP server. They use the same API and do not expose approval, cloud credentials, shell, Terraform, Kubernetes, or secrets. The full local Compose proof exercises MCP tool discovery. |
 
@@ -24,7 +25,7 @@
 - Natural-language understanding uses deterministic parsing, not a paid model.
 - The default planner inventory and pricing remain local fixtures. The separately recorded customer discovery snapshot is live, read-only evidence; it does not grant deployment permission.
 - Deployment and Day-2 change application are bounded local fixtures, not AWS, Terraform, Docker or Kubernetes execution.
-- Local signed JWT is a development fixture. The JWKS verifier adapter is code, not enterprise OIDC execution evidence.
+- Local signed JWT, developer/administrator sign-in, and workspace dashboards are development fixtures. The JWKS verifier adapter is code, not enterprise OIDC execution evidence.
 
 ## Roadmap only
 

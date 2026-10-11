@@ -10,16 +10,33 @@
     <header>
       <a class="brand" href="/">AgentConstruct</a>
       <span class="badge">LOCAL PRODUCT DEMO</span>
-      <nav><a href="#describe">Describe</a><a href="#result">Plan</a><a href="#audit">Audit</a></nav>
+      <nav><a href="#dashboard">Dashboard</a><a href="#describe">Describe</a><a href="#result">Plan</a><a href="#audit">Audit</a><button id="logout" class="secondary hidden" type="button">Sign out</button></nav>
     </header>
     <main>
+      <section id="login" class="panel login-panel">
+        <p class="eyebrow">LOCAL IDENTITY FIXTURE</p>
+        <h1>Sign in to the local product demo.</h1>
+        <p class="lede">Choose a separate developer or workspace-administrator identity. This is a signed local fixture, not production customer sign-in.</p>
+        <div class="connection-row"><button id="login-developer" type="button">Continue as developer</button><button id="login-administrator" type="button" class="secondary">Continue as administrator</button></div>
+        <p id="login-message" class="message" role="status"></p>
+      </section>
+      <div id="product-app" class="hidden">
       <section class="hero">
         <p class="eyebrow">FROM AI CODE TO GOVERNED PRODUCTION INFRASTRUCTURE</p>
         <h1>Describe the AI system you want to deploy.</h1>
         <p class="lede">AgentConstruct turns a clear outcome into a reviewed architecture, cost estimate, security controls, and a bounded local deployment plan.</p>
       </section>
+      <section id="dashboard" class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">WORKSPACE DASHBOARD</p><h2 id="dashboard-heading">Your workspace</h2></div><span id="identity" class="identity">Not signed in</span></div>
+        <div class="dashboard-grid">
+          <div><strong>Projects</strong><p id="dashboard-projects" class="message">Loading…</p></div>
+          <div><strong>AWS connections</strong><p id="dashboard-connections" class="message">Loading…</p></div>
+          <div><strong>Your plan revisions</strong><p id="dashboard-plans" class="message">Loading…</p></div>
+          <div id="admin-dashboard" class="hidden"><strong>Pending administrator approvals</strong><p id="dashboard-pending" class="message">Loading…</p></div>
+        </div>
+      </section>
       <section id="describe" class="panel">
-        <div class="panel-heading"><div><p class="eyebrow">1 · CUSTOMER INTENT</p><h2>What should AgentConstruct build?</h2></div><span id="identity" class="identity">Signing in…</span></div>
+        <div class="panel-heading"><div><p class="eyebrow">1 · CUSTOMER INTENT</p><h2>What should AgentConstruct build?</h2></div><span class="identity">Plan locally first</span></div>
         <label for="repository">GitHub repository</label>
         <input id="repository" value="https://github.com/example/support-rag-api" aria-label="GitHub repository" />
         <label for="cloud-target">AWS target</label>
@@ -46,7 +63,7 @@
       <section id="result" class="grid hidden">
         <article class="panel"><p class="eyebrow">2 · INTERPRETED REQUIREMENTS</p><h2>Workload specification</h2><pre id="spec"></pre></article>
         <article class="panel"><p class="eyebrow">3 · RECOMMENDED ARCHITECTURE</p><h2 id="profile">Awaiting request</h2><div id="architecture"></div></article>
-        <article class="panel"><p class="eyebrow">4 · GOVERNANCE</p><h2 id="policy">Awaiting policy</h2><p id="risk"></p><button id="approve" class="hidden">Approve exact plan as operator</button><button id="execute" class="hidden">Execute bounded local plan</button></article>
+        <article class="panel"><p class="eyebrow">4 · GOVERNANCE</p><h2 id="policy">Awaiting policy</h2><p id="risk"></p><button id="approve" class="hidden">Approve exact plan</button><button id="execute" class="hidden">Execute bounded local plan</button></article>
         <article class="panel wide"><p class="eyebrow">WHY THIS OPTION</p><h2>Cheapest simple option that meets the request</h2><p id="recommendation-reason">Awaiting request</p><div id="alternatives" class="options"></div><p id="assumptions" class="message"></p><p id="upgrade-triggers" class="message"></p></article>
         <article class="panel wide"><p class="eyebrow">5 · OBSERVED RESULT</p><h2>Environment status</h2><div id="environments">No local execution yet.</div><div id="day2" class="hidden"><h3>Day-2 recommendation</h3><p id="recommendation-summary">No recommendation yet.</p><button id="optimize" class="secondary">Diagnose latency and create governed change plan</button></div><button id="destroy" class="secondary hidden">Request governed production destroy</button></article>
       </section>
@@ -57,6 +74,7 @@
       <section class="boundary">
         <strong>Evidence boundary.</strong> This local demo uses signed fixture identities, PostgreSQL, live OPA policy, and a bounded fixture executor. It does not create AWS resources, grant cloud credentials, or claim a production deployment.
       </section>
+      </div>
     </main>
     <script src="/app.js"></script>
   </body>
