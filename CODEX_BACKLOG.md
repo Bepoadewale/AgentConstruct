@@ -9,7 +9,7 @@
 - [x] Add GitHub installation/repository/branch and AWS connected-account selection experiences.
 - [x] Render one AWS plan with required Prometheus/Grafana details and cost estimate.
 - [x] Add submit, administrator approval/rejection, self-approval and revision UI/API flows.
-- [ ] Prove the two-browser developer/admin journey with API and browser tests.
+- [x] Prove the two-session developer/admin journey with browser controls, deterministic API E2E, restart persistence and security-boundary checks.
 
 ### Completed hardening — local commercial V1
 

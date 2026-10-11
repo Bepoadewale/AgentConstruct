@@ -273,3 +273,29 @@ Date: 2026-10-09. The browser contract and unit tests cover the AWS target picke
 The public-template Terraform root uses a versioned S3 object key and permits public `GetObject` only under its `cloudformation/` prefix. It blocks public ACLs and all bucket listing. Its plan, apply and destroy commands are account-guarded; apply and destroy require an explicit confirmation string. It has not been applied.
 
 An authenticated plan against AWS account `654654474502` completed with **7 to add, 0 to change, 0 to destroy**: the dedicated template bucket, ownership controls, versioning, encryption, narrowly scoped public-read policy, public-access configuration, and one hash-versioned YAML object. The plan produced the expected `s3.us-east-1.amazonaws.com/cloudformation/...` URL. No apply was run and no public bucket or object exists yet.
+
+## Customer-plan approval workflow clean-room evidence
+
+Date: 2026-10-11. Environment: macOS, Docker Desktop, Python 3.12, Terraform, kubectl and the local fixture identities.
+
+Two clean cycles began and ended with `make clean-local`. Each cycle ran the Compose bootstrap, smoke and browser-contract checks, the customer-plan two-session E2E, an API restart and persistence check, the simple/complex/degraded/Day-2 demos, both failure demonstrations, trace, lint, unit, OPA, Terraform and Kubernetes checks, and the MCP tool catalogue check.
+
+```bash
+make bootstrap-local
+make smoke
+make browser-contract
+make customer-plan-e2e
+docker compose restart api
+make smoke
+make customer-plan-persistence
+make demo-simple && make demo-complex && make demo-degraded && make demo-day2
+make demo && make demo-failure && make demo-readiness-failure
+make trace-check && make verify && make opa-test
+make terraform-validate && make kubernetes-render
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | AGENTCONSTRUCT_TOKEN=fixture-token .venv/bin/agentconstruct-mcp
+make clean-local
+```
+
+Both cycles passed. The E2E proved that a developer can submit a FastAPI plan, cannot approve it, sees an administrator approval after an API restart, receives a persisted rejection reason, and can create revision 2. It also proved that a workspace administrator can submit and self-approve their own plan with the explicit self-approval policy and audit record. A cross-tenant read was denied; a stale digest and duplicate decision were rejected. The selected simple plan used App Runner and included Prometheus-compatible metrics plus Amazon Managed Grafana rather than EKS. Ruff passed, pytest passed **72 tests**, OPA passed **3/3**, all Terraform roots formatted and validated with `init -backend=false`, Kubernetes rendered without a cluster apply, Tempo received traces, and the MCP catalogue was available. Final cleanup left no project Compose container, volume, virtual environment or local state.
+
+This is locally verified fixture evidence. It is not live GitHub authorization, live AWS role assumption, customer-cloud resource creation, Grafana/Prometheus deployment, or a production deployment claim.

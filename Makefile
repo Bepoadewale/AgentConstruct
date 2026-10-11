@@ -3,7 +3,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export PYTHONPATH := apps/api/src
 
-.PHONY: install lint test bootstrap-local smoke demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check browser-contract verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy customer-aws-template-host-plan customer-aws-template-host-apply customer-aws-template-host-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
+.PHONY: install lint test bootstrap-local smoke demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check browser-contract customer-plan-e2e customer-plan-persistence verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy customer-aws-template-host-plan customer-aws-template-host-apply customer-aws-template-host-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
 
 install:
 	command -v $(PYTHON) >/dev/null || { echo "Python 3.12 is required"; exit 1; }
@@ -51,6 +51,12 @@ trace-check:
 
 browser-contract:
 	./scripts/browser-contract.sh
+
+customer-plan-e2e:
+	$(PY) scripts/customer_plan_e2e.py
+
+customer-plan-persistence:
+	$(PY) scripts/customer_plan_e2e.py --verify-persistence
 
 opa-test:
 	docker compose exec -T opa opa test /policies
