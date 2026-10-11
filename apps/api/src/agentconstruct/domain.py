@@ -40,6 +40,20 @@ class PlanAction(StrEnum):
     DESTROY = "DESTROY"
 
 
+class InfrastructurePlanState(StrEnum):
+    """Customer-facing planning lifecycle. Approval never means deployment."""
+
+    DRAFT = "DRAFT"
+    SUBMITTED = "SUBMITTED"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
+class InfrastructurePlanDecision(StrEnum):
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
 class PolicyResult(StrEnum):
     ALLOW = "ALLOW"
     DENY = "DENY"

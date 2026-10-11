@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import secrets
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlencode
 
@@ -18,6 +19,8 @@ from agentconstruct.connection_secrets import (
 from agentconstruct.day2 import FixtureDay2Advisor
 from agentconstruct.domain import (
     EnvironmentName,
+    InfrastructurePlanDecision,
+    InfrastructurePlanState,
     LifecycleState,
     PlanAction,
     PolicyResult,
@@ -40,6 +43,9 @@ from agentconstruct.models import (
     Environment,
     ExecutionJob,
     Incident,
+    InfrastructurePlan,
+    InfrastructurePlanDecisionRecord,
+    InfrastructurePlanRevision,
     Organization,
     ProductUser,
     Project,
@@ -133,6 +139,195 @@ class ProductService:
         self.audit(principal, "project.created", "project", project.id, {"name": name})
         self.db.commit()
         return project
+
+    @staticmethod
+    def _is_workspace_administrator(principal: Principal) -> bool:
+        # "operator" is the current local fixture name. "administrator" is the product role.
+        return principal.role in {"operator", "administrator"}
+
+    def create_infrastructure_plan(
+        self,
+        principal: Principal,
+        project_id: str,
+        title: str,
+        content: dict[str, Any],
+    ) -> InfrastructurePlanRevision:
+        """Create a customer-facing DRAFT. It cannot deploy infrastructure."""
+        project = self._project(principal, project_id)
+        plan = InfrastructurePlan(
+            organization_id=principal.organization_id,
+            project_id=project.id,
+            creator_subject=principal.subject,
+            title=title,
+        )
+        self.db.add(plan)
+        self.db.flush()
+        revision = self._new_infrastructure_plan_revision(plan, principal, content, 1)
+        self.audit(
+            principal,
+            "infrastructure_plan.draft_created",
+            "infrastructure_plan_revision",
+            revision.id,
+            {"plan_id": plan.id, "revision": revision.revision_number, "digest": revision.content_digest},
+        )
+        self.db.commit()
+        return revision
+
+    def revise_infrastructure_plan(
+        self, principal: Principal, plan_id: str, content: dict[str, Any]
+    ) -> InfrastructurePlanRevision:
+        plan = self._infrastructure_plan(principal, plan_id)
+        if plan.creator_subject != principal.subject:
+            raise PermissionError("only the plan creator can create a revised draft")
+        previous = self.db.scalar(
+            select(InfrastructurePlanRevision)
+            .where(InfrastructurePlanRevision.infrastructure_plan_id == plan.id)
+            .order_by(InfrastructurePlanRevision.revision_number.desc())
+            .limit(1)
+        )
+        if not previous or previous.state not in {
+            InfrastructurePlanState.DRAFT,
+            InfrastructurePlanState.REJECTED,
+        }:
+            raise ValueError("a revision can be created only from a draft or rejected plan")
+        revision = self._new_infrastructure_plan_revision(
+            plan, principal, content, previous.revision_number + 1
+        )
+        self.audit(
+            principal,
+            "infrastructure_plan.revised",
+            "infrastructure_plan_revision",
+            revision.id,
+            {"plan_id": plan.id, "revision": revision.revision_number, "digest": revision.content_digest},
+        )
+        self.db.commit()
+        return revision
+
+    def _new_infrastructure_plan_revision(
+        self,
+        plan: InfrastructurePlan,
+        principal: Principal,
+        content: dict[str, Any],
+        revision_number: int,
+    ) -> InfrastructurePlanRevision:
+        revision = InfrastructurePlanRevision(
+            infrastructure_plan_id=plan.id,
+            organization_id=principal.organization_id,
+            revision_number=revision_number,
+            state=InfrastructurePlanState.DRAFT,
+            content=content,
+            content_digest=plan_hash(content),
+        )
+        self.db.add(revision)
+        self.db.flush()
+        return revision
+
+    def submit_infrastructure_plan(
+        self, principal: Principal, revision_id: str
+    ) -> InfrastructurePlanRevision:
+        revision = self._locked_infrastructure_revision(principal, revision_id)
+        plan = self._infrastructure_plan(principal, revision.infrastructure_plan_id)
+        if plan.creator_subject != principal.subject:
+            raise PermissionError("only the plan creator can submit a draft")
+        if revision.state != InfrastructurePlanState.DRAFT:
+            raise ValueError("only a draft revision can be submitted")
+        if revision.content_digest != plan_hash(revision.content):
+            raise ValueError("draft content integrity check failed")
+        revision.state = InfrastructurePlanState.SUBMITTED
+        revision.submitted_by_subject = principal.subject
+        revision.submitted_at = datetime.now(UTC)
+        self.audit(
+            principal,
+            "infrastructure_plan.submitted",
+            "infrastructure_plan_revision",
+            revision.id,
+            {"plan_id": plan.id, "revision": revision.revision_number, "digest": revision.content_digest},
+        )
+        self.db.commit()
+        return revision
+
+    def decide_infrastructure_plan(
+        self,
+        principal: Principal,
+        revision_id: str,
+        decision: InfrastructurePlanDecision,
+        provided_digest: str,
+        reason: str | None = None,
+    ) -> InfrastructurePlanRevision:
+        if not self._is_workspace_administrator(principal):
+            raise PermissionError("workspace administrator role required for a plan decision")
+        revision = self._locked_infrastructure_revision(principal, revision_id)
+        plan = self._infrastructure_plan(principal, revision.infrastructure_plan_id)
+        if revision.state != InfrastructurePlanState.SUBMITTED:
+            raise ValueError("only a submitted revision can be decided")
+        if revision.content_digest != provided_digest or plan_hash(revision.content) != provided_digest:
+            raise ValueError("stale decision: submitted plan digest changed")
+        if decision == InfrastructurePlanDecision.REJECTED and not (reason or "").strip():
+            raise ValueError("a rejection reason is required")
+        record = InfrastructurePlanDecisionRecord(
+            revision_id=revision.id,
+            organization_id=principal.organization_id,
+            decision=decision,
+            approver_subject=principal.subject,
+            creator_subject=plan.creator_subject,
+            is_self_approval=decision == InfrastructurePlanDecision.APPROVED
+            and principal.subject == plan.creator_subject,
+            approved_digest=provided_digest,
+            authorization_policy="workspace-administrator-self-approval-allowed"
+            if principal.subject == plan.creator_subject
+            else "workspace-administrator",
+            reason=reason.strip() if reason else None,
+        )
+        self.db.add(record)
+        revision.state = (
+            InfrastructurePlanState.APPROVED
+            if decision == InfrastructurePlanDecision.APPROVED
+            else InfrastructurePlanState.REJECTED
+        )
+        self.audit(
+            principal,
+            f"infrastructure_plan.{decision.lower()}",
+            "infrastructure_plan_revision",
+            revision.id,
+            {
+                "plan_id": plan.id,
+                "revision": revision.revision_number,
+                "digest": provided_digest,
+                "is_self_approval": record.is_self_approval,
+            },
+        )
+        self.db.commit()
+        return revision
+
+    def _infrastructure_plan(self, principal: Principal, plan_id: str) -> InfrastructurePlan:
+        plan = self.db.get(InfrastructurePlan, plan_id)
+        if not plan or plan.organization_id != principal.organization_id:
+            raise PermissionError("infrastructure plan not found in this organization")
+        return plan
+
+    def _infrastructure_revision(
+        self, principal: Principal, revision_id: str
+    ) -> InfrastructurePlanRevision:
+        revision = self.db.get(InfrastructurePlanRevision, revision_id)
+        if not revision or revision.organization_id != principal.organization_id:
+            raise PermissionError("infrastructure plan revision not found in this organization")
+        return revision
+
+    def _locked_infrastructure_revision(
+        self, principal: Principal, revision_id: str
+    ) -> InfrastructurePlanRevision:
+        """Use a row lock where supported so concurrent decisions cannot both win."""
+        revision = self.db.scalar(
+            select(InfrastructurePlanRevision)
+            .where(
+                InfrastructurePlanRevision.id == revision_id,
+                InfrastructurePlanRevision.organization_id == principal.organization_id,
+            )
+            .with_for_update()
+        )
+        if not revision:
+            raise PermissionError("infrastructure plan revision not found in this organization")
+        return revision
 
     def create_cloud_connection(
         self, principal: Principal, display_name: str, provider: str, connection_mode: str
