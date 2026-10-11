@@ -268,5 +268,17 @@ class ApprovalRequest(BaseModel):
     plan_hash: str = Field(min_length=64, max_length=64)
 
 
+class InfrastructurePlanDecisionRequest(BaseModel):
+    decision: InfrastructurePlanDecision
+    content_digest: str = Field(min_length=64, max_length=64)
+    reason: str | None = Field(default=None, max_length=2_000)
+
+
+class InfrastructurePlanRevisionRequest(BaseModel):
+    """New customer-plan draft content. The preceding revision is never edited."""
+
+    content: dict[str, Any]
+
+
 class LocalLoginRequest(BaseModel):
     username: str = Field(min_length=2, max_length=80)

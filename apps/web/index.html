@@ -32,7 +32,7 @@
           <div><strong>Projects</strong><p id="dashboard-projects" class="message">Loading…</p></div>
           <div><strong>AWS connections</strong><p id="dashboard-connections" class="message">Loading…</p></div>
           <div><strong>Your plan revisions</strong><p id="dashboard-plans" class="message">Loading…</p></div>
-          <div id="admin-dashboard" class="hidden"><strong>Pending administrator approvals</strong><p id="dashboard-pending" class="message">Loading…</p></div>
+          <div id="admin-dashboard" class="hidden"><strong>Pending administrator approvals</strong><p id="dashboard-pending" class="message">Loading…</p><div id="admin-pending-list"></div></div>
         </div>
       </section>
       <section id="describe" class="panel">
@@ -88,6 +88,16 @@
           <article><h3>Estimated monthly cost</h3><pre id="review-cost"></pre></article>
           <article><h3>Deployment strategy</h3><pre id="review-deployment"></pre></article>
           <article><h3>Risks and policy findings</h3><pre id="review-risks"></pre></article>
+        </div>
+        <div id="review-actions" class="connection-card">
+          <strong>Plan decision</strong>
+          <p id="review-action-message" class="message">Create a review draft before taking an action.</p>
+          <div class="connection-row"><button id="submit-review" type="button" class="hidden">Submit for approval</button><button id="revise-review" type="button" class="secondary hidden">Create revised draft</button></div>
+          <div id="administrator-decisions" class="hidden">
+            <p>Administrators decide the exact submitted digest. Self-approval is explicitly recorded when you created the plan.</p>
+            <div class="connection-row"><button id="approve-review" type="button">Approve plan</button><button id="reject-review" type="button" class="secondary">Reject plan</button></div>
+            <label for="rejection-reason">Rejection reason<textarea id="rejection-reason" rows="3" placeholder="Required when rejecting a submitted plan."></textarea></label>
+          </div>
         </div>
       </section>
       <section id="audit" class="panel">

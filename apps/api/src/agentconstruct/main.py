@@ -18,6 +18,8 @@ from agentconstruct.domain import (
     AwsQuickCreateRequest,
     CloudConnectionRequest,
     CloudInventorySnapshotRequest,
+    InfrastructurePlanDecisionRequest,
+    InfrastructurePlanRevisionRequest,
     IntentRequest,
     LocalLoginRequest,
     ProjectRequest,
@@ -455,15 +457,68 @@ def create_customer_plan_review(
         revision = service.create_customer_plan_review(principal, plan_id)
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
-    return {
-        "id": revision.id,
-        "plan_id": revision.infrastructure_plan_id,
-        "revision": revision.revision_number,
-        "state": revision.state,
-        "content_digest": revision.content_digest,
-        "content": revision.content,
-        "execution": "UNEXECUTED_REVIEW_ONLY",
-    }
+    review = service.infrastructure_plan_revision_detail(principal, revision.id)
+    review["execution"] = "UNEXECUTED_REVIEW_ONLY"
+    return review
+
+
+@app.get("/api/v1/customer-plan-revisions/{revision_id}")
+def get_customer_plan_revision(
+    revision_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("customer_plans.review_get").inc()
+    try:
+        return service.infrastructure_plan_revision_detail(principal, revision_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post("/api/v1/customer-plan-revisions/{revision_id}/submit")
+def submit_customer_plan_revision(
+    revision_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("customer_plans.submit").inc()
+    try:
+        revision = service.submit_infrastructure_plan(principal, revision_id)
+        return service.infrastructure_plan_revision_detail(principal, revision.id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post("/api/v1/customer-plan-revisions/{revision_id}/decisions")
+def decide_customer_plan_revision(
+    revision_id: str,
+    request: InfrastructurePlanDecisionRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("customer_plans.decision").inc()
+    try:
+        revision = service.decide_infrastructure_plan(
+            principal, revision_id, request.decision, request.content_digest, request.reason
+        )
+        return service.infrastructure_plan_revision_detail(principal, revision.id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post("/api/v1/customer-plans/{plan_id}/revisions", status_code=201)
+def revise_customer_plan(
+    plan_id: str,
+    request: InfrastructurePlanRevisionRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("customer_plans.revise").inc()
+    try:
+        revision = service.revise_infrastructure_plan(principal, plan_id, request.content)
+        return service.infrastructure_plan_revision_detail(principal, revision.id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
 
 
 @app.post("/api/v1/deployment-plans/{plan_id}/approve")

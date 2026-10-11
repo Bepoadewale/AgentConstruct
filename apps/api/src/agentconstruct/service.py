@@ -364,6 +364,7 @@ class ProductService:
             raise ValueError("only a draft revision can be submitted")
         if revision.content_digest != plan_hash(revision.content):
             raise ValueError("draft content integrity check failed")
+        self._validate_infrastructure_plan_submission(principal, plan, revision)
         revision.state = InfrastructurePlanState.SUBMITTED
         revision.submitted_by_subject = principal.subject
         revision.submitted_at = datetime.now(UTC)
@@ -376,6 +377,89 @@ class ProductService:
         )
         self.db.commit()
         return revision
+
+    def _validate_infrastructure_plan_submission(
+        self,
+        principal: Principal,
+        plan: InfrastructurePlan,
+        revision: InfrastructurePlanRevision,
+    ) -> None:
+        """Validate the review contract before it becomes an immutable submission.
+
+        This is deliberately a planning gate, not an AWS preflight or deployment action.
+        A local fixture target remains valid; selected real connections/repositories must
+        still belong to the same workspace.
+        """
+        content = revision.content
+        if content.get("kind") != "agentconstruct.aws.infrastructure-plan.review.v1":
+            raise ValueError("only a complete AWS customer-plan review can be submitted")
+        target = content.get("target") or {}
+        if target.get("provider") != "aws" or not target.get("region"):
+            raise ValueError("submitted plan needs an AWS target and region")
+        application = content.get("application_analysis") or {}
+        if not application.get("repository"):
+            raise ValueError("submitted plan needs a selected repository")
+        observability = content.get("observability") or {}
+        if not observability.get("metrics_backend") or not observability.get("dashboard"):
+            raise ValueError("submitted plan needs Prometheus-compatible metrics and Grafana")
+        policy = content.get("policy_findings") or {}
+        if policy.get("result") == PolicyResult.DENY:
+            raise ValueError("policy denied this infrastructure plan")
+        connection_id = target.get("connection_id")
+        if connection_id:
+            self._cloud_connection(principal, str(connection_id))
+        # Generated customer reviews carry their source deployment-plan ID. Those
+        # reviews must still point at a live project repository before submission.
+        # The lower-level lifecycle API remains usable for independently created
+        # typed plan fixtures and migration data.
+        if content.get("source_deployment_plan_id"):
+            repository = self.db.scalar(
+                select(RepositoryConnection).where(
+                    RepositoryConnection.organization_id == principal.organization_id,
+                    RepositoryConnection.project_id == plan.project_id,
+                    RepositoryConnection.repository_url == application["repository"],
+                )
+            )
+            if repository is None:
+                raise ValueError("selected repository is no longer connected to this project")
+
+    def infrastructure_plan_revision_detail(
+        self, principal: Principal, revision_id: str
+    ) -> dict[str, Any]:
+        revision = self._infrastructure_revision(principal, revision_id)
+        plan = self._infrastructure_plan(principal, revision.infrastructure_plan_id)
+        if not self._is_workspace_administrator(principal) and plan.creator_subject != principal.subject:
+            raise PermissionError("infrastructure plan revision is not visible to this user")
+        decision = self.db.scalar(
+            select(InfrastructurePlanDecisionRecord).where(
+                InfrastructurePlanDecisionRecord.revision_id == revision.id
+            )
+        )
+        return {
+            "id": revision.id,
+            "plan_id": plan.id,
+            "title": plan.title,
+            "creator_subject": plan.creator_subject,
+            "revision": revision.revision_number,
+            "state": revision.state,
+            "content_digest": revision.content_digest,
+            "content": revision.content,
+            "submitted_by_subject": revision.submitted_by_subject,
+            "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
+            "decision": None
+            if not decision
+            else {
+                "decision": decision.decision,
+                "approver_subject": decision.approver_subject,
+                "creator_subject": decision.creator_subject,
+                "is_self_approval": decision.is_self_approval,
+                "approved_digest": decision.approved_digest,
+                "authorization_policy": decision.authorization_policy,
+                "reason": decision.reason,
+                "decided_at": decision.decided_at.isoformat() if decision.decided_at else None,
+            },
+            "execution": "UNEXECUTED_APPROVAL_ONLY",
+        }
 
     def decide_infrastructure_plan(
         self,
