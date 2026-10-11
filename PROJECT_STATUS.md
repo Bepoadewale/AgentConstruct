@@ -24,12 +24,14 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - A customer decision view that makes the planner comparison visible, plus durable local incident and recommendation records for degraded and Day-2 evidence.
 - Terraform contracts for a separate state/lock/budget foundation and private VPC, EKS, ECR, RDS, Secrets Manager and IRSA runtime.
 - Hardened Kubernetes and Argo CD desired-state contracts, External Secrets and artifact-storage contracts, plus planned private observability/recovery controls.
+- Customer-facing infrastructure-plan records now have separate draft, submitted, approved and rejected revision states. They are distinct from bounded execution plans: approval never deploys. Workspace-administrator self-approval is explicitly recorded and tenant-scoped.
 
 ## Boundaries
 
 - This does **not** deploy a workload into AWS or a customer account. One customer-AWS discovery connection is live and read-only; it is not deployment permission. Cost Explorer values are delayed billing data, not settled cost evidence.
 - The local identity issuer, intent provider and execution target are fixtures. The JWKS adapter is implemented but not connected to an enterprise issuer.
 - GitHub webhooks/reviewed desired-state PRs, GitHub-hosted OIDC assumption, profile-specific deployment permission, GitOps/Argo execution, enterprise IdP, external agent-client installation and billing are next work, not evidence.
+- The new customer plan lifecycle is service-layer evidence only in this PR. Role-aware dashboards, submit/review APIs and the two-browser demonstration are next work.
 
 ## Next delivery sequence
 

@@ -123,6 +123,58 @@ class StoredArchitecturePlan(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class InfrastructurePlan(Base):
+    """Customer-facing plan container; it is separate from executable DeploymentPlan."""
+
+    __tablename__ = "infrastructure_plans"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    creator_subject: Mapped[str] = mapped_column(String(160), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class InfrastructurePlanRevision(Base):
+    """An immutable snapshot once submitted, approved, or rejected."""
+
+    __tablename__ = "infrastructure_plan_revisions"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    infrastructure_plan_id: Mapped[str] = mapped_column(
+        ForeignKey("infrastructure_plans.id"), index=True
+    )
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    revision_number: Mapped[int] = mapped_column()
+    state: Mapped[str] = mapped_column(String(32), default="DRAFT", index=True)
+    content: Mapped[dict] = mapped_column(JSON)
+    content_digest: Mapped[str] = mapped_column(String(64), index=True)
+    submitted_by_subject: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    __table_args__ = (
+        UniqueConstraint(
+            "infrastructure_plan_id", "revision_number", name="uq_infrastructure_plan_revision"
+        ),
+    )
+
+
+class InfrastructurePlanDecisionRecord(Base):
+    __tablename__ = "infrastructure_plan_decisions"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    revision_id: Mapped[str] = mapped_column(
+        ForeignKey("infrastructure_plan_revisions.id"), unique=True, index=True
+    )
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    decision: Mapped[str] = mapped_column(String(16))
+    approver_subject: Mapped[str] = mapped_column(String(160))
+    creator_subject: Mapped[str] = mapped_column(String(160))
+    is_self_approval: Mapped[bool] = mapped_column(default=False)
+    approved_digest: Mapped[str] = mapped_column(String(64))
+    authorization_policy: Mapped[str] = mapped_column(String(100))
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class DeploymentPlan(Base):
     __tablename__ = "deployment_plans"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

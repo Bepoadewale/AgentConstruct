@@ -1,6 +1,6 @@
 # AgentConstruct
 
-AgentConstruct turns an AI workload request into a governed infrastructure plan. A customer describes the outcome, reviews the design, cost and risks, approves the exact plan, and sees a safe local deployment result.
+AgentConstruct turns an AI workload request into a governed infrastructure plan. A developer describes the outcome, reviews one recommended AWS design, cost and risks, submits it, and a workspace administrator approves or rejects the exact revision. Approval never means deployment.
 
 **Delivery state: executable local V1 foundation; customer-AWS and GitHub App read-only discovery executed; workload runtime not executed.** The local workflow is real: FastAPI, PostgreSQL, OPA, a bounded execution fixture, Prometheus, Tempo and Grafana run in Docker Compose. Terraform created the customer discovery identity path and AgentConstruct recorded a live inventory snapshot. The GitHub App read real repository metadata through a short-lived installation token. No application, network, database, compute, GitHub write, or GitOps workload was deployed.
 
@@ -9,7 +9,7 @@ AgentConstruct turns an AI workload request into a governed infrastructure plan.
 ```text
 customer request → typed workload specification → reusable-cloud inventory fixture
 → simplest viable architecture and cost plan
-→ policy → immutable plan → independent approval → bounded executor
+→ policy → immutable customer plan revision → submit → administrator decision
 → observed READY/FAILED → audit → governed destroy
 
 For the first Day-2 loop, a bounded telemetry fixture can explain elevated latency, propose a replica change with a cost range and rollback, then send that exact change through the same policy, approval, worker and observation path. It never repairs a protected environment automatically.
@@ -23,8 +23,8 @@ Developers and AI clients can use the same governed product surface through the 
 
 | Role | Can do | Cannot do |
 | --- | --- | --- |
-| Developer/founder | Describe a workload, create a plan, inspect cost and request deployment | Choose another organisation, bypass policy, approve their own protected production plan |
-| Operator | Independently approve the exact protected plan | Approve a changed or stale plan |
+| Developer/founder | Describe a workload, create/revise/submit a plan and inspect cost | Choose another organisation, bypass policy, approve or reject a customer plan |
+| Workspace administrator | Create, submit, approve or reject exact customer plan revisions | Approve changed/stale revisions or bypass cloud controls |
 | Intent provider | Propose a typed requirement set | Run shell commands, Terraform, `kubectl`, or cloud mutations |
 
 ## Run it locally
@@ -64,3 +64,5 @@ The V1 browser is deliberately plain HTML/CSS/JavaScript; see [ADR-009](docs/dec
 See the [documentation map](docs/README.md), [minimum-necessary infrastructure](docs/product/minimum-necessary-infrastructure.md), [planner](docs/architecture/planner.md), [Day-2 operations](docs/architecture/day2.md), [agent interfaces](docs/architecture/agent-interfaces.md), [why AgentConstruct exists](docs/product/differentiation.md), [profile-aware execution](docs/architecture/profile-execution.md), [governed integrations](docs/architecture/governed-integrations.md), [AWS V1 families](docs/architecture/aws-v1.md), [provider model](docs/architecture/provider-model.md), [single-cloud default](docs/architecture/multicloud.md), [planned cloud-pilot architecture](docs/architecture/cloud-pilot.md), [security model](docs/security/security-model.md), and [validation evidence](docs/VALIDATION.md).
 
 AgentConstruct is private commercial product work. The public portfolio repositories remain independent technical evidence and are not copied wholesale into this product.
+
+See the [current-state audit](docs/product/CURRENT_STATE_AUDIT.md), [product flow](docs/product/PRODUCT_FLOW.md), [approval architecture](docs/architecture/PLAN_APPROVAL_ARCHITECTURE.md), [plan lifecycle](docs/architecture/PLAN_LIFECYCLE.md), and [two-user demo](docs/DEMO.md).
