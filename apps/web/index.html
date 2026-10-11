@@ -60,6 +60,9 @@
           <label for="region">Region<select id="region"><option>us-east-1</option><option>eu-west-1</option></select></label>
           <label for="data-classification">Data<select id="data-classification"><option value="restricted">Restricted</option><option value="internal">Internal</option></select></label>
           <label for="budget">Monthly budget (USD)<input id="budget" type="number" min="1" value="1500" /></label>
+          <label for="environment">Environment<select id="environment"><option value="staging and production">Staging and production</option><option value="production">Production</option><option value="staging">Staging</option></select></label>
+          <label for="availability">Availability target<select id="availability"><option>99.9%</option><option>99.99%</option></select></label>
+          <label for="workload-type">Workload<select id="workload-type"><option value="AI API">AI API</option><option value="event-driven document processor">Event-driven processor</option><option value="static AI application">Static application</option></select></label>
         </div>
         <label for="prompt">Deployment goal</label>
         <textarea id="prompt" rows="7">Deploy this AI API in AWS. Keep customer data private. Support 20 requests per second and peak at 100 requests per second. Create staging and production. Enable monitoring and Slack alerts.</textarea>
@@ -68,10 +71,24 @@
       </section>
       <section id="result" class="grid hidden">
         <article class="panel"><p class="eyebrow">2 · INTERPRETED REQUIREMENTS</p><h2>Workload specification</h2><pre id="spec"></pre></article>
-        <article class="panel"><p class="eyebrow">3 · RECOMMENDED ARCHITECTURE</p><h2 id="profile">Awaiting request</h2><div id="architecture"></div></article>
-        <article class="panel"><p class="eyebrow">4 · GOVERNANCE</p><h2 id="policy">Awaiting policy</h2><p id="risk"></p><button id="approve" class="hidden">Approve exact plan</button><button id="execute" class="hidden">Execute bounded local plan</button></article>
-        <article class="panel wide"><p class="eyebrow">WHY THIS OPTION</p><h2>Cheapest simple option that meets the request</h2><p id="recommendation-reason">Awaiting request</p><div id="alternatives" class="options"></div><p id="assumptions" class="message"></p><p id="upgrade-triggers" class="message"></p></article>
-        <article class="panel wide"><p class="eyebrow">5 · OBSERVED RESULT</p><h2>Environment status</h2><div id="environments">No local execution yet.</div><div id="day2" class="hidden"><h3>Day-2 recommendation</h3><p id="recommendation-summary">No recommendation yet.</p><button id="optimize" class="secondary">Diagnose latency and create governed change plan</button></div><button id="destroy" class="secondary hidden">Request governed production destroy</button></article>
+        <article class="panel"><p class="eyebrow">3 · SELECTED AWS DESIGN</p><h2 id="profile">Awaiting request</h2><div id="architecture"></div></article>
+        <article class="panel"><p class="eyebrow">4 · GOVERNANCE</p><h2 id="policy">Awaiting policy</h2><p id="risk"></p><p class="message">This creates a review draft only. It does not approve or deploy anything.</p></article>
+        <article class="panel wide"><p class="eyebrow">WHY THIS DESIGN</p><h2>The simplest AWS design that meets the request</h2><p id="recommendation-reason">Awaiting request</p><p id="assumptions" class="message"></p></article>
+      </section>
+      <section id="customer-review" class="panel hidden">
+        <p class="eyebrow">5 · CUSTOMER PLAN REVIEW</p><h2 id="review-title">AWS infrastructure plan</h2>
+        <p id="review-status" class="message"></p>
+        <div class="review-grid">
+          <article><h3>Summary</h3><p id="review-summary"></p></article>
+          <article><h3>Application analysis</h3><pre id="review-application"></pre></article>
+          <article><h3>AWS target</h3><pre id="review-target"></pre></article>
+          <article><h3>Resources</h3><div id="review-resources"></div></article>
+          <article><h3>Security</h3><div id="review-security"></div></article>
+          <article><h3>Prometheus and Grafana</h3><pre id="review-observability"></pre></article>
+          <article><h3>Estimated monthly cost</h3><pre id="review-cost"></pre></article>
+          <article><h3>Deployment strategy</h3><pre id="review-deployment"></pre></article>
+          <article><h3>Risks and policy findings</h3><pre id="review-risks"></pre></article>
+        </div>
       </section>
       <section id="audit" class="panel">
         <div class="panel-heading"><div><p class="eyebrow">AUDIT</p><h2>What happened</h2></div><button id="refresh-audit" class="secondary">Refresh</button></div>

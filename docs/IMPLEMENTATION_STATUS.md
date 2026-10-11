@@ -12,9 +12,10 @@
 | Customer AWS Quick Create | Implemented: UI target picker/account-ID flow, API setup contract, durable server-side STS verification jobs, encrypted local / Secrets Manager production ExternalId contract, and credential-free inventory storage. The CloudFormation template is authenticated-validated. Hosting the versioned public template, creating the separate runtime identity, and using this new UI path against a new account remain unexecuted. |
 | GitHub repository discovery | Executed: the selected GitHub App installation issued a short-lived token to read `Bepoadewale/ai-platform-control-plane` metadata. The live adapter refuses write, PR publication and webhook processing. |
 | Connection experience | Local UI/API lists deterministic GitHub App installations, permitted repositories and branches; it persists the selected branch with a project. The existing live adapter can list configured-installation repositories and branches using a short-lived token. AWS target detail/status and disconnect are tenant-scoped and credential-free. |
+| One AWS customer-plan review | A local typed review draft binds repository branch, AWS target/region, workload spec, cost, security and policy findings. It presents one selected AWS design, never a customer-facing alternatives list. Prometheus-compatible metrics and Amazon Managed Grafana are mandatory typed components with coverage, access boundary, limitations and estimated monitoring cost. |
 | Local execution | API persists a `QUEUED` job; a separate trusted worker invokes only the fixed fixture executor and records READY, FAILED or DESTROYED evidence |
 | Day-2 change loop | Deterministic latency evidence → explanation → immutable `CHANGE` plan → production approval → durable worker → observed recovery and audit |
-| Customer decision view | Browser renders viable leanest/scale-ready/specialised choices, fixture cost ranges, complexity, assumptions, rejected alternatives and upgrade triggers |
+| Customer decision view | Browser renders one selected AWS plan, with its fixture cost range, security, Prometheus/Grafana contract, assumptions, risks and deployment boundary; internal alternatives remain planner evidence only |
 | Incident evidence | PostgreSQL persists local degraded-health incidents and the recommendation lifecycle from proposed to applied/resolved |
 | Identity boundary | Local signed-token fixture plus an unconfigured JWT/JWKS verifier interface for a future trusted issuer |
 | Workspace views | Separate signed local developer and administrator fixture identities; backend-enforced current-user, tenant-scoped dashboard and administrator-only pending-approval API; browser sign-in/sign-out and role-aware dashboard |
@@ -26,6 +27,7 @@
 - Natural-language understanding uses deterministic parsing, not a paid model.
 - The default planner inventory and pricing remain local fixtures. The separately recorded customer discovery snapshot is live, read-only evidence; it does not grant deployment permission.
 - Deployment and Day-2 change application are bounded local fixtures, not AWS, Terraform, Docker or Kubernetes execution.
+- The selected AWS review, cost and monitoring configuration are deterministic local planning fixtures, not live AWS pricing, managed Prometheus/Grafana provisioned resources, or a deployed workload.
 - Local signed JWT, developer/administrator sign-in, and workspace dashboards are development fixtures. The JWKS verifier adapter is code, not enterprise OIDC execution evidence.
 
 ## Roadmap only
