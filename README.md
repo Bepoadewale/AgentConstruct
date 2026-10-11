@@ -42,6 +42,8 @@ make demo-day2
 make demo-degraded
 make demo-failure
 make demo-readiness-failure
+make customer-plan-e2e
+make customer-plan-persistence
 make trace-check
 make browser-contract
 make verify
