@@ -37,17 +37,23 @@
       </section>
       <section id="describe" class="panel">
         <div class="panel-heading"><div><p class="eyebrow">1 · CUSTOMER INTENT</p><h2>What should AgentConstruct build?</h2></div><span class="identity">Plan locally first</span></div>
+        <label for="github-installation">GitHub connection</label>
+        <div class="connection-row"><select id="github-installation" aria-label="GitHub installation"><option>Loading GitHub connection…</option></select><button id="refresh-github" type="button" class="secondary">Refresh GitHub</button></div>
+        <p id="github-message" class="message">GitHub is not connected yet.</p>
         <label for="repository">GitHub repository</label>
-        <input id="repository" value="https://github.com/example/support-rag-api" aria-label="GitHub repository" />
+        <select id="repository" aria-label="GitHub repository"><option value="">Choose an authorized repository</option></select>
+        <label for="repository-branch">Branch</label>
+        <div class="connection-row"><select id="repository-branch" aria-label="Repository branch"><option value="">Choose a branch</option></select><button id="disconnect-repository" type="button" class="secondary hidden">Disconnect repository</button></div>
         <label for="cloud-target">AWS target</label>
         <div class="connection-row"><select id="cloud-target" aria-label="AWS target"><option value="">Local demo target — no AWS account connected</option></select><button id="show-aws-connect" type="button" class="secondary">Connect AWS account</button></div>
         <p id="cloud-target-message" class="message">A connected account is optional for local planning. AgentConstruct never asks for AWS access keys.</p>
+        <div id="aws-target-detail" class="connection-card hidden"></div>
         <div id="aws-connect" class="connection-card hidden">
           <h3>Connect an AWS account</h3>
           <p>Enter the AWS account ID. AgentConstruct opens one AWS CloudFormation review page that creates a read-only discovery role. It creates no workload resources.</p>
           <label for="aws-account-id">AWS account ID</label>
           <input id="aws-account-id" inputmode="numeric" pattern="[0-9]{12}" maxlength="12" placeholder="123456789012" aria-label="AWS account ID" />
-          <div class="connection-row"><button id="open-aws-setup" type="button">Open AWS setup</button><button id="verify-aws" type="button" class="secondary hidden">Verify connection</button></div>
+          <div class="connection-row"><button id="open-aws-setup" type="button">Open AWS setup</button><button id="verify-aws" type="button" class="secondary hidden">Verify connection</button><button id="disconnect-aws" type="button" class="secondary hidden">Disconnect</button></div>
           <p id="aws-connect-message" class="message"></p>
         </div>
         <div class="grid controls">

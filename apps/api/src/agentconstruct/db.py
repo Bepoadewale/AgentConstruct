@@ -83,6 +83,14 @@ def run_migrations(target: Engine | None = None) -> None:
         if version < 7:
             Base.metadata.create_all(bind=connection)
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (7)"))
+            version = 7
+        if version < 8:
+            columns = {column["name"] for column in inspect(connection).get_columns("repository_connections")}
+            if "selected_branch" not in columns:
+                connection.execute(
+                    text("ALTER TABLE repository_connections ADD COLUMN selected_branch VARCHAR(255)")
+                )
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (8)"))
 
 
 def session() -> Generator[Session, None, None]:

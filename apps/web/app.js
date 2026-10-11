@@ -5,6 +5,8 @@ let day2Environment = null;
 let cloudConnections = [];
 let selectedCloudConnection = null;
 let currentUser = null;
+let githubConnection = null;
+let currentProject = null;
 
 function idempotencyKey() {
   return globalThis.crypto?.randomUUID?.() || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -12,6 +14,7 @@ function idempotencyKey() {
 
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { "content-type": "application/json", Authorization: `Bearer ${token}`, ...(options.headers || {}) } });
+  if (response.status === 204) return null;
   const body = await response.json();
   if (!response.ok) throw new Error(body.detail || "Request failed");
   return body;
@@ -36,7 +39,7 @@ async function startSession(username) {
     document.querySelector("#login").classList.add("hidden");
     document.querySelector("#product-app").classList.remove("hidden");
     document.querySelector("#logout").classList.remove("hidden");
-    await Promise.all([refreshDashboard(), refreshAudit(), refreshCloudConnections()]);
+    await Promise.all([refreshDashboard(), refreshAudit(), refreshCloudConnections(), refreshGitHubConnection()]);
   } catch (error) {
     document.querySelector("#login-message").textContent = error.message;
     document.querySelector("#login-message").className = "message failure";
@@ -82,6 +85,46 @@ function showAwsConnection(message, failure = false) {
   node.className = `message ${failure ? "failure" : "success"}`;
 }
 
+function showGitHub(message, failure = false) {
+  const node = document.querySelector("#github-message");
+  node.textContent = message;
+  node.className = `message ${failure ? "failure" : "success"}`;
+}
+
+async function refreshGitHubConnection() {
+  githubConnection = await api("/api/v1/github/connection");
+  const picker = document.querySelector("#github-installation");
+  picker.innerHTML = githubConnection.installations.length
+    ? githubConnection.installations.map((installation) => `<option value="${installation.id}">${installation.account_login} · ${installation.account_type}</option>`).join("")
+    : '<option value="">No accessible GitHub App installation</option>';
+  showGitHub(`GitHub App is ${githubConnection.execution === "SIMULATED" ? "a deterministic local fixture" : "connected in live read-only mode"}. Repository writes are disabled.`);
+  if (githubConnection.installations.length) await refreshGitHubRepositories();
+}
+
+async function refreshGitHubRepositories() {
+  const installationId = document.querySelector("#github-installation").value;
+  if (!installationId) return;
+  const repositories = await api(`/api/v1/github/installations/${encodeURIComponent(installationId)}/repositories`);
+  const picker = document.querySelector("#repository");
+  picker.innerHTML = '<option value="">Choose an authorized repository</option>' + repositories.map((repository) => `<option value="${repository.html_url}" data-repository="${repository.full_name}" data-default-branch="${repository.default_branch}">${repository.full_name}</option>`).join("");
+  if (repositories.length) {
+    picker.value = repositories[0].html_url;
+    await refreshGitHubBranches();
+  }
+}
+
+async function refreshGitHubBranches() {
+  const repository = document.querySelector("#repository");
+  const selected = repository.options[repository.selectedIndex];
+  const installationId = document.querySelector("#github-installation").value;
+  if (!selected?.dataset?.repository || !installationId) return;
+  const encodedRepository = selected.dataset.repository.split("/").map(encodeURIComponent).join("/");
+  const response = await api(`/api/v1/github/installations/${encodeURIComponent(installationId)}/repositories/${encodedRepository}/branches`);
+  const picker = document.querySelector("#repository-branch");
+  picker.innerHTML = response.branches.map((branch) => `<option value="${branch}">${branch}</option>`).join("");
+  picker.value = selected.dataset.defaultBranch || response.branches[0] || "";
+}
+
 function renderCloudConnections() {
   const picker = document.querySelector("#cloud-target");
   picker.innerHTML = `<option value="">Local demo target — no AWS account connected</option>${cloudConnections.map((connection) => `<option value="${connection.id}">${connection.display_name}${connection.account_id ? ` · ${connection.account_id}` : ""} · ${connection.setup_state}</option>`).join("")}`;
@@ -91,6 +134,14 @@ function renderCloudConnections() {
 async function refreshCloudConnections() {
   cloudConnections = await api("/api/v1/cloud-connections");
   renderCloudConnections();
+}
+
+async function showCloudConnectionDetail(connectionId) {
+  const detail = await api(`/api/v1/cloud-connections/${connectionId}`);
+  const node = document.querySelector("#aws-target-detail");
+  node.innerHTML = `<strong>${detail.display_name}</strong><p>Account: ${detail.account_id || "setup pending"}<br>Role: ${detail.role_arn || "created by AWS setup after customer review"}<br>Status: ${detail.setup_state}<br>Regions: ${detail.authorized_regions.join(", ") || "verified regions not available yet"}<br>Capabilities: ${detail.capabilities.join("; ")}<br>Last verified: ${detail.verified_at || "not verified"}<br>Deployment permission: ${detail.deployment_permission}</p>`;
+  node.classList.remove("hidden");
+  document.querySelector("#disconnect-aws").classList.remove("hidden");
 }
 
 function optionLabel(candidate, selectedId, index) {
@@ -137,10 +188,14 @@ document.querySelector("#create").addEventListener("click", async () => {
   try {
     show("Interpreting your request and building an auditable plan…");
     const repository = document.querySelector("#repository").value;
+    const branch = document.querySelector("#repository-branch").value;
+    if (!repository || !branch) throw new Error("Choose an authorized GitHub repository and branch.");
     const cloudTarget = document.querySelector("#cloud-target").value;
     const constraints = ` Use ${document.querySelector("#region").value}. Treat data as ${document.querySelector("#data-classification").value}. Keep monthly infrastructure under $${document.querySelector("#budget").value}.`;
     const cloud = cloudTarget ? { id: cloudTarget } : await api("/api/v1/cloud-connections", { method: "POST", body: JSON.stringify({ display_name: "Local demo target — BYOC role contract" }) });
-    const project = await api("/api/v1/projects", { method: "POST", body: JSON.stringify({ name: `support-rag-${Date.now().toString().slice(-6)}`, repository_url: repository }) });
+    const project = await api("/api/v1/projects", { method: "POST", body: JSON.stringify({ name: `support-rag-${Date.now().toString().slice(-6)}`, repository_url: repository, repository_branch: branch }) });
+    currentProject = project;
+    document.querySelector("#disconnect-repository").classList.remove("hidden");
     const repositoryDiscovery = await api(`/api/v1/projects/${project.id}/repository-discovery`);
     const intent = await api("/api/v1/intents", { method: "POST", body: JSON.stringify({ project_id: project.id, prompt: `${document.querySelector("#prompt").value}${constraints}`, source_repository: repository, cloud_connection_id: cloud.id, idempotency_key: idempotencyKey() }) });
     document.querySelector("#spec").textContent = JSON.stringify({ ...intent.spec, repository_discovery: repositoryDiscovery }, null, 2);
@@ -164,6 +219,8 @@ document.querySelector("#cloud-target").addEventListener("change", (event) => {
   document.querySelector("#cloud-target-message").textContent = selectedCloudConnection
     ? `Connected account ${selectedCloudConnection.account_id || "setup pending"}. Setup state: ${selectedCloudConnection.setup_state}. No browser-held AWS credentials.`
     : "A connected account is optional for local planning. AgentConstruct never asks for AWS access keys.";
+  if (selectedCloudConnection) showCloudConnectionDetail(selectedCloudConnection.id).catch((error) => showAwsConnection(error.message, true));
+  else document.querySelector("#aws-target-detail").classList.add("hidden");
 });
 
 document.querySelector("#show-aws-connect").addEventListener("click", () => {
@@ -182,6 +239,7 @@ document.querySelector("#open-aws-setup").addEventListener("click", async () => 
     document.querySelector("#cloud-target").value = connection.id;
     selectedCloudConnection = cloudConnections.find((item) => item.id === connection.id);
     document.querySelector("#verify-aws").classList.remove("hidden");
+    document.querySelector("#disconnect-aws").classList.remove("hidden");
     showAwsConnection("AWS will open a review page. Create the read-only role there, then return here and choose Verify connection.");
     window.open(setup.quick_create_url, "_blank", "noopener,noreferrer");
     await refreshAudit();
@@ -204,7 +262,20 @@ document.querySelector("#verify-aws").addEventListener("click", async () => {
     showAwsConnection(`Connected. Recorded a credential-free inventory snapshot from ${verified.region}.`);
     await refreshCloudConnections();
     document.querySelector("#cloud-target").value = selectedCloudConnection.id;
+    await showCloudConnectionDetail(selectedCloudConnection.id);
     await refreshAudit();
+  } catch (error) { showAwsConnection(error.message, true); }
+});
+
+document.querySelector("#disconnect-aws").addEventListener("click", async () => {
+  try {
+    if (!selectedCloudConnection) throw new Error("Choose an AWS connection to disconnect.");
+    await api(`/api/v1/cloud-connections/${selectedCloudConnection.id}`, { method: "DELETE" });
+    selectedCloudConnection = null;
+    document.querySelector("#aws-target-detail").classList.add("hidden");
+    document.querySelector("#disconnect-aws").classList.add("hidden");
+    await Promise.all([refreshCloudConnections(), refreshDashboard(), refreshAudit()]);
+    showAwsConnection("AWS connection metadata was disconnected. No customer credentials were stored.");
   } catch (error) { showAwsConnection(error.message, true); }
 });
 
@@ -257,6 +328,19 @@ document.querySelector("#optimize").addEventListener("click", async () => {
   } catch (error) { show(error.message, true); }
 });
 document.querySelector("#refresh-audit").addEventListener("click", () => refreshAudit().catch((error) => show(error.message, true)));
+document.querySelector("#refresh-github").addEventListener("click", () => refreshGitHubConnection().catch((error) => showGitHub(error.message, true)));
+document.querySelector("#github-installation").addEventListener("change", () => refreshGitHubRepositories().catch((error) => showGitHub(error.message, true)));
+document.querySelector("#repository").addEventListener("change", () => refreshGitHubBranches().catch((error) => showGitHub(error.message, true)));
+document.querySelector("#disconnect-repository").addEventListener("click", async () => {
+  try {
+    if (!currentProject) throw new Error("Create a project with this repository before disconnecting it.");
+    await api(`/api/v1/projects/${currentProject.id}/repository`, { method: "DELETE" });
+    currentProject = null;
+    document.querySelector("#disconnect-repository").classList.add("hidden");
+    showGitHub("Repository access was disconnected from this project. The GitHub App installation was not changed.");
+    await Promise.all([refreshDashboard(), refreshAudit()]);
+  } catch (error) { showGitHub(error.message, true); }
+});
 document.querySelector("#login-developer").addEventListener("click", () => startSession("founder"));
 document.querySelector("#login-administrator").addEventListener("click", () => startSession("administrator"));
 document.querySelector("#logout").addEventListener("click", logout);

@@ -26,6 +26,20 @@ class RepositoryMetadata:
 
 
 @dataclass(frozen=True)
+class GitHubInstallation:
+    id: str
+    account_login: str
+    account_type: str
+
+
+@dataclass(frozen=True)
+class GitHubRepository:
+    full_name: str
+    html_url: str
+    default_branch: str
+
+
+@dataclass(frozen=True)
 class GitHubWebhookContract:
     event: str
     delivery_id: str
@@ -59,6 +73,12 @@ class AssumedRoleSession:
 
 
 class GitHubConnection(Protocol):
+    def installations(self) -> list[GitHubInstallation]: ...
+
+    def repositories(self, installation_id: str) -> list[GitHubRepository]: ...
+
+    def branches(self, installation_id: str, repository: str) -> list[str]: ...
+
     def inspect_repository(self, installation_id: str, repository: str) -> RepositoryMetadata: ...
 
     def publish_desired_state(
@@ -94,6 +114,34 @@ class SlackNotifier(Protocol):
 
 class FixtureGitHubConnection:
     """Local deterministic fixture; it cannot reach GitHub or write a repository."""
+
+    def installations(self) -> list[GitHubInstallation]:
+        return [GitHubInstallation("fixture-installation", "demo-ai-startup", "Organization")]
+
+    def repositories(self, installation_id: str) -> list[GitHubRepository]:
+        if installation_id != "fixture-installation":
+            raise PermissionError("GitHub installation is not available to this workspace")
+        return [
+            GitHubRepository(
+                "example/support-rag-api", "https://github.com/example/support-rag-api", "main"
+            ),
+            GitHubRepository("example/fastapi-ai-api", "https://github.com/example/fastapi-ai-api", "main"),
+        ]
+
+    def branches(self, installation_id: str, repository: str) -> list[str]:
+        if installation_id != "fixture-installation":
+            raise PermissionError("GitHub installation is not available to this workspace")
+        self._repository_name(repository)
+        return ["main", "staging"]
+
+    @staticmethod
+    def _repository_name(repository: str) -> str:
+        parsed = urlparse(repository)
+        candidate = parsed.path.strip("/") if parsed.scheme else repository.strip("/")
+        candidate = candidate.removesuffix(".git")
+        if len(candidate.split("/")) != 2:
+            raise ValueError("repository must be an owner/name GitHub repository")
+        return candidate
 
     def inspect_repository(self, installation_id: str, repository: str) -> RepositoryMetadata:
         return RepositoryMetadata("fixture", installation_id, repository, "main")
@@ -162,6 +210,45 @@ class GitHubAppReadOnlyConnection:
         )
         response.raise_for_status()
         return str(response.json()["token"])
+
+    def installations(self) -> list[GitHubInstallation]:
+        # This product connection deliberately exposes only its configured installation.
+        return [GitHubInstallation(self.installation_id, "configured-github-app", "Installation")]
+
+    def repositories(self, installation_id: str) -> list[GitHubRepository]:
+        if installation_id != self.installation_id:
+            raise PermissionError("GitHub installation is not configured for this connection")
+        response = httpx.get(
+            f"{self.api_url}/installation/repositories",
+            headers={
+                "Authorization": f"Bearer {self._installation_token()}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        return [
+            GitHubRepository(item["full_name"], item["html_url"], item["default_branch"])
+            for item in response.json().get("repositories", [])
+        ]
+
+    def branches(self, installation_id: str, repository: str) -> list[str]:
+        if installation_id != self.installation_id:
+            raise PermissionError("GitHub installation is not configured for this connection")
+        name = self._repository_name(repository)
+        response = httpx.get(
+            f"{self.api_url}/repos/{name}/branches",
+            headers={
+                "Authorization": f"Bearer {self._installation_token()}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            params={"per_page": 100},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return [str(item["name"]) for item in response.json()]
 
     @staticmethod
     def _repository_name(repository: str) -> str:

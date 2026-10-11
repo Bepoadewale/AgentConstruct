@@ -124,11 +124,57 @@ def create_project(
     REQUESTS.labels("projects.create").inc()
     try:
         project = service.create_project(
-            principal, request.name, str(request.repository_url) if request.repository_url else None
+            principal,
+            request.name,
+            str(request.repository_url) if request.repository_url else None,
+            request.repository_branch,
         )
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
-    return {"id": project.id, "name": project.name, "repository_url": project.repository_url}
+    return {
+        "id": project.id,
+        "name": project.name,
+        "repository_url": project.repository_url,
+        "repository_branch": request.repository_branch,
+    }
+
+
+@app.get("/api/v1/github/connection")
+def github_connection_status(
+    principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)
+):
+    REQUESTS.labels("github.connection_status").inc()
+    try:
+        return service.github_connection_status(principal)
+    except ValueError as error:
+        translate(error)
+
+
+@app.get("/api/v1/github/installations/{installation_id}/repositories")
+def github_repositories(
+    installation_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("github.repositories").inc()
+    try:
+        return service.github_repositories(principal, installation_id)
+    except (PermissionError, ValueError) as error:
+        translate(error)
+
+
+@app.get("/api/v1/github/installations/{installation_id}/repositories/{repository:path}/branches")
+def github_branches(
+    installation_id: str,
+    repository: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("github.branches").inc()
+    try:
+        return {"branches": service.github_branches(principal, installation_id, repository)}
+    except (PermissionError, ValueError) as error:
+        translate(error)
 
 
 @app.post("/api/v1/cloud-connections", status_code=201)
@@ -168,6 +214,33 @@ def list_cloud_connections(
         }
         for item in service.cloud_connections(principal)
     ]
+
+
+@app.get("/api/v1/cloud-connections/{connection_id}")
+def get_cloud_connection(
+    connection_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("cloud_connections.get").inc()
+    try:
+        return service.cloud_connection_detail(principal, connection_id)
+    except PermissionError as error:
+        translate(error)
+
+
+@app.delete("/api/v1/cloud-connections/{connection_id}", status_code=204)
+def disconnect_cloud_connection(
+    connection_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("cloud_connections.disconnect").inc()
+    try:
+        service.disconnect_cloud_connection(principal, connection_id)
+    except PermissionError as error:
+        translate(error)
+    return Response(status_code=204)
 
 
 @app.get("/api/v1/cloud-connections/{connection_id}/role-contract")
@@ -299,6 +372,20 @@ def get_repository_discovery(
         return service.repository_discovery(principal, project_id)
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
+
+
+@app.delete("/api/v1/projects/{project_id}/repository", status_code=204)
+def disconnect_project_repository(
+    project_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("repositories.disconnect").inc()
+    try:
+        service.disconnect_project_repository(principal, project_id)
+    except PermissionError as error:
+        translate(error)
+    return Response(status_code=204)
 
 
 @app.post("/api/v1/projects/{project_id}/desired-state-publications/{plan_id}")

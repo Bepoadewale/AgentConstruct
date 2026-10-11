@@ -30,8 +30,9 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 
 - This does **not** deploy a workload into AWS or a customer account. One customer-AWS discovery connection is live and read-only; it is not deployment permission. Cost Explorer values are delayed billing data, not settled cost evidence.
 - The local identity issuer, intent provider and execution target are fixtures. The JWKS adapter is implemented but not connected to an enterprise issuer.
-- GitHub webhooks/reviewed desired-state PRs, GitHub-hosted OIDC assumption, profile-specific deployment permission, GitOps/Argo execution, enterprise IdP, external agent-client installation and billing are next work, not evidence.
+- GitHub OAuth/install initiation, webhooks/reviewed desired-state PRs, GitHub-hosted OIDC assumption, profile-specific deployment permission, GitOps/Argo execution, enterprise IdP, external agent-client installation and billing are next work, not evidence.
 - Role-aware local sign-in, `/me`, tenant-scoped workspace dashboards and an administrator-only pending-approval queue are implemented. They use separate signed local developer and administrator fixtures; they are not enterprise sign-in. Customer-plan submission/decision APIs and the two-browser approval demonstration remain next work.
+- The local product flow can list a GitHub App installation's authorized repositories and branches, preserve the selected branch with the project, and show/disconnect tenant-owned AWS connection metadata. Fixture mode is locally verified; the existing GitHub App adapter can perform the same repository/branch reads with a configured short-lived installation token. AWS remains read-only discovery only.
 
 ## Next delivery sequence
 
