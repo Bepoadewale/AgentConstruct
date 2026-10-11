@@ -10,6 +10,7 @@ from agentconstruct.domain import (
     CloudInventorySnapshot,
     CostComponent,
     CostRange,
+    MonitoringSpecification,
     WorkloadSpec,
 )
 
@@ -70,10 +71,49 @@ class AwsV1Planner:
             and candidate.operational_complexity <= selected.operational_complexity
         ]
         explanation = self._explanation(selected, simpler_failed)
+        monitoring_cost = CostComponent(
+            category="monitoring",
+            monthly_low=20,
+            monthly_high=50,
+            reason="Prometheus-compatible metrics storage and private Grafana access estimate.",
+        )
+        total_cost = CostRange(
+            currency=selected.cost_estimate.currency,
+            monthly_low=selected.cost_estimate.monthly_low + monitoring_cost.monthly_low,
+            monthly_high=selected.cost_estimate.monthly_high + monitoring_cost.monthly_high,
+            assumptions=[
+                *selected.cost_estimate.assumptions,
+                "Monitoring is estimated for Amazon Managed Service for Prometheus and Amazon Managed Grafana; actual usage and retention can change cost.",
+            ],
+            catalog_version=selected.cost_estimate.catalog_version,
+            estimated_at=selected.cost_estimate.estimated_at,
+        )
+        monitoring = MonitoringSpecification(
+            scrape_targets=["application /metrics endpoint", "selected AWS workload health metrics"],
+            baseline_dashboard="AgentConstruct workload health: availability, request rate, latency, error rate, CPU and memory where exposed.",
+            access_boundary="Grafana is private to the customer workspace; no public unauthenticated dashboard is planned.",
+            coverage=["metrics", "deployment health", "baseline workload capacity"],
+            limitations=["Logs and distributed traces are not included in this V1 selected-plan monitoring scope."],
+            cost_assumption="Estimated as a range, not an AWS bill. Retention, active series and viewer count materially affect cost.",
+        )
         return ArchitecturePlan(
             profile=selected.candidate_id,
             region=region,
-            components=selected.components,
+            components=[
+                *selected.components,
+                ArchitectureComponent(
+                    name="Prometheus-compatible metrics",
+                    purpose="Collect and retain required workload and deployment metrics.",
+                    service="Amazon Managed Service for Prometheus",
+                    private=True,
+                ),
+                ArchitectureComponent(
+                    name="Grafana dashboard",
+                    purpose="Show the baseline health and capacity dashboard to authorised users.",
+                    service="Amazon Managed Grafana",
+                    private=True,
+                ),
+            ],
             dependencies=[
                 "customer AWS account",
                 "GitHub repository connection",
@@ -81,7 +121,9 @@ class AwsV1Planner:
             ],
             assumptions=selected.cost_estimate.assumptions,
             security_controls=self._security_controls(spec),
-            cost_estimate=selected.cost_estimate,
+            cost_estimate=total_cost,
+            cost_components=[*selected.cost_components, monitoring_cost],
+            observability=monitoring,
             estimated_capacity=f"Designed for {spec.average_rps or 0} average RPS and {spec.peak_rps} peak RPS.",
             risks=selected.risks,
             alternatives=[self._alternative(candidate) for candidate in alternatives],
@@ -338,8 +380,10 @@ class AwsV1Planner:
             rejected.append(
                 "availability target needs a stronger multi-component resilience design"
             )
-        if candidate.cost_estimate.monthly_high > spec.monthly_budget_usd:
-            rejected.append("estimated upper cost exceeds the hard monthly budget")
+        if candidate.cost_estimate.monthly_high + 50 > spec.monthly_budget_usd:
+            rejected.append(
+                "estimated upper cost including required Prometheus/Grafana monitoring exceeds the hard monthly budget"
+            )
         reusable = self._reusable(candidate, inventory, spec)
         if reusable:
             candidate.existing_resources_reused = reusable

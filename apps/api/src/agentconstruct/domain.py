@@ -146,6 +146,17 @@ class CostComponent(BaseModel):
     reason: str
 
 
+class MonitoringSpecification(BaseModel):
+    metrics_backend: str = "Prometheus-compatible Amazon Managed Service for Prometheus"
+    dashboard: str = "Amazon Managed Grafana"
+    scrape_targets: list[str]
+    baseline_dashboard: str
+    access_boundary: str
+    coverage: list[str]
+    limitations: list[str]
+    cost_assumption: str
+
+
 class ArchitectureCandidate(BaseModel):
     candidate_id: str
     candidate_class: CandidateClass
@@ -175,6 +186,8 @@ class ArchitecturePlan(BaseModel):
     assumptions: list[str]
     security_controls: list[str]
     cost_estimate: CostRange
+    cost_components: list[CostComponent] = Field(default_factory=list)
+    observability: MonitoringSpecification
     estimated_capacity: str
     risks: list[str]
     alternatives: list[str]

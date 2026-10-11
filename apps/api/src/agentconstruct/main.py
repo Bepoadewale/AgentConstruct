@@ -444,6 +444,28 @@ def create_plan(
     }
 
 
+@app.post("/api/v1/deployment-plans/{plan_id}/customer-review", status_code=201)
+def create_customer_plan_review(
+    plan_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("customer_plans.review_create").inc()
+    try:
+        revision = service.create_customer_plan_review(principal, plan_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+    return {
+        "id": revision.id,
+        "plan_id": revision.infrastructure_plan_id,
+        "revision": revision.revision_number,
+        "state": revision.state,
+        "content_digest": revision.content_digest,
+        "content": revision.content,
+        "execution": "UNEXECUTED_REVIEW_ONLY",
+    }
+
+
 @app.post("/api/v1/deployment-plans/{plan_id}/approve")
 def approve_plan(
     plan_id: str,

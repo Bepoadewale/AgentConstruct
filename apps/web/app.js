@@ -144,20 +144,20 @@ async function showCloudConnectionDetail(connectionId) {
   document.querySelector("#disconnect-aws").classList.remove("hidden");
 }
 
-function optionLabel(candidate, selectedId, index) {
-  if (candidate.candidate_id === selectedId) return "Recommended";
-  if (candidate.candidate_class === "kubernetes" || candidate.candidate_class === "gpu_inference") return "Kubernetes / specialised";
-  return index === 0 ? "Leanest" : "Scale-ready";
-}
-
-function renderAlternatives(architecture) {
-  const ordered = architecture.candidates.filter((candidate) => candidate.valid).sort((left, right) => left.cost_estimate.monthly_low - right.cost_estimate.monthly_low);
-  const rejected = architecture.candidates.filter((candidate) => !candidate.valid);
-  document.querySelector("#recommendation-reason").textContent = architecture.recommendation_reason;
-  document.querySelector("#alternatives").innerHTML = ordered.map((candidate, index) => `<div class="option ${candidate.candidate_id === architecture.selected_candidate_id ? "selected" : ""}"><span class="option-label">${optionLabel(candidate, architecture.selected_candidate_id, index)}</span><strong>${candidate.display_name}</strong><span>$${candidate.cost_estimate.monthly_low}–$${candidate.cost_estimate.monthly_high}/month · complexity ${candidate.operational_complexity}/5</span><p>${candidate.candidate_id === architecture.selected_candidate_id ? "Selected because it meets the requirements with the lowest necessary complexity." : candidate.upgrade_triggers.join(" ")}</p></div>`).join("") + (rejected.length ? `<p class="message"><strong>Not selected:</strong> ${rejected.map((candidate) => `${candidate.display_name} — ${candidate.rejected_reasons.join(", ")}`).join("; ")}</p>` : "");
-  const selected = architecture.candidates.find((candidate) => candidate.candidate_id === architecture.selected_candidate_id);
-  document.querySelector("#assumptions").textContent = `Assumptions: ${architecture.assumptions.join(" ")}`;
-  document.querySelector("#upgrade-triggers").textContent = selected ? `Upgrade when: ${selected.upgrade_triggers.join(" ")}` : "";
+function renderCustomerReview(review) {
+  const content = review.content;
+  document.querySelector("#customer-review").classList.remove("hidden");
+  document.querySelector("#review-title").textContent = `AWS infrastructure plan · revision ${review.revision}`;
+  document.querySelector("#review-status").textContent = `${content.summary.status} Digest: ${review.content_digest}.`;
+  document.querySelector("#review-summary").textContent = `${content.summary.selected_profile}: ${content.summary.why}`;
+  document.querySelector("#review-application").textContent = JSON.stringify(content.application_analysis, null, 2);
+  document.querySelector("#review-target").textContent = JSON.stringify(content.target, null, 2);
+  document.querySelector("#review-resources").innerHTML = content.resource_breakdown.map((resource) => `<div class="component"><strong>${resource.name}</strong><span>${resource.service} · ${resource.purpose}</span></div>`).join("");
+  document.querySelector("#review-security").innerHTML = content.security.map((control) => `<div class="component">${control}</div>`).join("");
+  document.querySelector("#review-observability").textContent = JSON.stringify(content.observability, null, 2);
+  document.querySelector("#review-cost").textContent = JSON.stringify(content.cost_estimate, null, 2);
+  document.querySelector("#review-deployment").textContent = JSON.stringify(content.deployment_strategy, null, 2);
+  document.querySelector("#review-risks").textContent = JSON.stringify({ risks: content.risks_and_limitations, policy: content.policy_findings }, null, 2);
 }
 
 async function refreshAudit() {
@@ -191,7 +191,7 @@ document.querySelector("#create").addEventListener("click", async () => {
     const branch = document.querySelector("#repository-branch").value;
     if (!repository || !branch) throw new Error("Choose an authorized GitHub repository and branch.");
     const cloudTarget = document.querySelector("#cloud-target").value;
-    const constraints = ` Use ${document.querySelector("#region").value}. Treat data as ${document.querySelector("#data-classification").value}. Keep monthly infrastructure under $${document.querySelector("#budget").value}.`;
+    const constraints = ` Use ${document.querySelector("#region").value}. Treat data as ${document.querySelector("#data-classification").value}. Keep monthly infrastructure under $${document.querySelector("#budget").value}. Create ${document.querySelector("#environment").value}. Meet ${document.querySelector("#availability").value} availability. Workload type: ${document.querySelector("#workload-type").value}.`;
     const cloud = cloudTarget ? { id: cloudTarget } : await api("/api/v1/cloud-connections", { method: "POST", body: JSON.stringify({ display_name: "Local demo target — BYOC role contract" }) });
     const project = await api("/api/v1/projects", { method: "POST", body: JSON.stringify({ name: `support-rag-${Date.now().toString().slice(-6)}`, repository_url: repository, repository_branch: branch }) });
     currentProject = project;
@@ -202,14 +202,15 @@ document.querySelector("#create").addEventListener("click", async () => {
     plan = await api(`/api/v1/intents/${intent.id}/plans`, { method: "POST" });
     const architecture = plan.payload.architecture;
     document.querySelector("#profile").textContent = `${architecture.profile} · ${architecture.region}`;
-    document.querySelector("#architecture").innerHTML = architecture.components.map((item) => `<div class="component"><strong>${item.name}</strong><span>${item.service} · ${item.purpose}</span></div>`).join("") + `<p><strong>Estimated infrastructure:</strong> $${architecture.cost_estimate.monthly_low}–$${architecture.cost_estimate.monthly_high}/month</p>`;
-    renderAlternatives(architecture);
+    document.querySelector("#architecture").innerHTML = architecture.components.map((item) => `<div class="component"><strong>${item.name}</strong><span>${item.service} · ${item.purpose}</span></div>`).join("") + `<p><strong>Estimated monthly cost including Prometheus and Grafana:</strong> $${architecture.cost_estimate.monthly_low}–$${architecture.cost_estimate.monthly_high}/month</p>`;
+    document.querySelector("#recommendation-reason").textContent = architecture.recommendation_reason;
+    document.querySelector("#assumptions").textContent = `Assumptions: ${architecture.assumptions.join(" ")}`;
     document.querySelector("#policy").textContent = `${plan.policy_result.replaceAll("_", " ")} · immutable plan`;
     document.querySelector("#risk").textContent = architecture.risks.join(" ") || "No additional V1 planner risk was found. Review all assumptions before approval.";
     document.querySelector("#result").classList.remove("hidden");
-    document.querySelector("#approve").classList.toggle("hidden", plan.state !== "APPROVAL_REQUIRED");
-    document.querySelector("#execute").classList.toggle("hidden", plan.state === "APPROVAL_REQUIRED" || plan.state === "POLICY_DENIED");
-    show(`Plan created. Policy result: ${plan.policy_result}.`);
+    const review = await api(`/api/v1/deployment-plans/${plan.id}/customer-review`, { method: "POST" });
+    renderCustomerReview(review);
+    show(`One AWS review draft created. Policy result: ${plan.policy_result}. It has not been submitted, approved, or deployed.`);
     await Promise.all([refreshAudit(), refreshDashboard()]);
   } catch (error) { show(error.message, true); }
 });
@@ -279,54 +280,6 @@ document.querySelector("#disconnect-aws").addEventListener("click", async () => 
   } catch (error) { showAwsConnection(error.message, true); }
 });
 
-document.querySelector("#approve").addEventListener("click", async () => {
-  try {
-    if (!isAdministrator()) throw new Error("Sign in as a workspace administrator to approve this protected local execution plan.");
-    plan = await api(`/api/v1/deployment-plans/${plan.id}/approve`, { method: "POST", body: JSON.stringify({ plan_hash: plan.plan_hash }) });
-    document.querySelector("#approve").classList.add("hidden"); document.querySelector("#execute").classList.remove("hidden"); show("Workspace administrator approved the exact immutable plan."); await refreshAudit();
-  } catch (error) { show(error.message, true); }
-});
-
-document.querySelector("#execute").addEventListener("click", async () => {
-  try {
-    const result = await api(`/api/v1/deployment-plans/${plan.id}/execute`, { method: "POST" });
-    renderEnvironments(result.environments);
-    show("The durable worker is running the bounded local job…");
-    await waitForWorker(result.environments.map((environment) => environment.id));
-    show("The worker completed and the observer recorded the result."); await refreshAudit();
-  } catch (error) { show(error.message, true); }
-});
-
-document.querySelector("#destroy").addEventListener("click", async () => {
-  try {
-    if (!productionEnvironment) throw new Error("No ready production environment is available to destroy.");
-    if (!isAdministrator()) throw new Error("Sign in as a workspace administrator to approve protected destruction.");
-    let destroyPlan = await api(`/api/v1/environments/${productionEnvironment.id}/destroy-plan`, { method: "POST" });
-    if (destroyPlan.state === "DESTROY_APPROVAL_REQUIRED") {
-      destroyPlan = await api(`/api/v1/deployment-plans/${destroyPlan.id}/approve`, { method: "POST", body: JSON.stringify({ plan_hash: destroyPlan.plan_hash }) });
-    }
-    const result = await api(`/api/v1/deployment-plans/${destroyPlan.id}/execute`, { method: "POST" });
-    await waitForWorker(result.environments.map((environment) => environment.id));
-    show("The protected production environment was destroyed and cleanup was observed.");
-    await refreshAudit();
-  } catch (error) { show(error.message, true); }
-});
-document.querySelector("#optimize").addEventListener("click", async () => {
-  try {
-    if (!day2Environment) throw new Error("No ready production environment is available to diagnose.");
-    const recommendation = await api(`/api/v1/environments/${day2Environment.id}/recommendation`);
-    document.querySelector("#recommendation-summary").textContent = `${recommendation.diagnosis} Proposed change: minimum replicas ${recommendation.proposed_change.from} → ${recommendation.proposed_change.to}; estimated change: $${recommendation.estimated_monthly_cost_delta.monthly_low}–$${recommendation.estimated_monthly_cost_delta.monthly_high}/month. This is deterministic local telemetry, not AWS billing.`;
-    let changePlan = await api(`/api/v1/environments/${day2Environment.id}/change-plan`, { method: "POST" });
-    if (changePlan.state === "APPROVAL_REQUIRED") {
-      if (!isAdministrator()) throw new Error("Sign in as a workspace administrator to approve this protected change.");
-      changePlan = await api(`/api/v1/deployment-plans/${changePlan.id}/approve`, { method: "POST", body: JSON.stringify({ plan_hash: changePlan.plan_hash }) });
-    }
-    const result = await api(`/api/v1/deployment-plans/${changePlan.id}/execute`, { method: "POST" });
-    show("The approved bounded change is running through the durable local worker…");
-    await waitForWorker(result.environments.map((environment) => environment.id));
-    show("The change completed and the observer recorded its result."); await refreshAudit();
-  } catch (error) { show(error.message, true); }
-});
 document.querySelector("#refresh-audit").addEventListener("click", () => refreshAudit().catch((error) => show(error.message, true)));
 document.querySelector("#refresh-github").addEventListener("click", () => refreshGitHubConnection().catch((error) => showGitHub(error.message, true)));
 document.querySelector("#github-installation").addEventListener("change", () => refreshGitHubRepositories().catch((error) => showGitHub(error.message, true)));

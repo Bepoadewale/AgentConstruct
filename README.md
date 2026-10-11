@@ -1,6 +1,6 @@
 # AgentConstruct
 
-AgentConstruct turns an AI workload request into a governed infrastructure plan. A developer describes the outcome, reviews one recommended AWS design, cost and risks, submits it, and a workspace administrator approves or rejects the exact revision. Approval never means deployment.
+AgentConstruct turns an AI workload request into a governed infrastructure plan. A developer describes the outcome and reviews one recommended AWS design, its cost and risks. Submission and administrator decisions are the next product slice; approval will never mean deployment.
 
 **Delivery state: executable local V1 foundation; customer-AWS and GitHub App read-only discovery executed; workload runtime not executed.** The local workflow is real: FastAPI, PostgreSQL, OPA, a bounded execution fixture, Prometheus, Tempo and Grafana run in Docker Compose. Terraform created the customer discovery identity path and AgentConstruct recorded a live inventory snapshot. The GitHub App read real repository metadata through a short-lived installation token. No application, network, database, compute, GitHub write, or GitOps workload was deployed.
 
@@ -9,12 +9,13 @@ AgentConstruct turns an AI workload request into a governed infrastructure plan.
 ```text
 customer request → typed workload specification → reusable-cloud inventory fixture
 → simplest viable architecture and cost plan
-→ policy → immutable customer plan revision → submit → administrator decision
-→ observed READY/FAILED → audit → governed destroy
+→ policy → immutable customer-plan review draft
+
+The separate execution lifecycle remains available only through the bounded local fixture.
 
 For the first Day-2 loop, a bounded telemetry fixture can explain elevated latency, propose a replica change with a cost range and rollback, then send that exact change through the same policy, approval, worker and observation path. It never repairs a protected environment automatically.
 
-The browser also compares the viable choices in plain language: the leanest option, a scale-ready option when one is viable, and Kubernetes or specialised infrastructure only when the request proves it is needed. It shows cost ranges, complexity, assumptions, rejected options and upgrade triggers before approval.
+The planner evaluates viable choices internally, including why simpler options were rejected. The browser presents only the selected AWS design, with its cost range, security controls, observability contract and stated limits.
 ```
 
 Customers do not have to choose subnets, Helm values or Kubernetes internals to use the demo. They can inspect those decisions and set important constraints.
@@ -23,8 +24,8 @@ Developers and AI clients can use the same governed product surface through the 
 
 | Role | Can do | Cannot do |
 | --- | --- | --- |
-| Developer/founder | Describe a workload, create/revise/submit a plan and inspect cost | Choose another organisation, bypass policy, approve or reject a customer plan |
-| Workspace administrator | Create, submit, approve or reject exact customer plan revisions | Approve changed/stale revisions or bypass cloud controls |
+| Developer/founder | Describe a workload, create a customer-plan review draft and inspect cost | Choose another organisation, bypass policy, approve or reject a customer plan |
+| Workspace administrator | Create and inspect a customer-plan review draft | Approve changed/stale revisions or bypass cloud controls |
 | Intent provider | Propose a typed requirement set | Run shell commands, Terraform, `kubectl`, or cloud mutations |
 
 ## Run it locally

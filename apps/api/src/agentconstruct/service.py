@@ -1040,6 +1040,128 @@ class ProductService:
     def get_plan(self, principal: Principal, plan_id: str) -> DeploymentPlan:
         return self._plan(principal, plan_id)
 
+    def create_customer_plan_review(
+        self, principal: Principal, deployment_plan_id: str
+    ) -> InfrastructurePlanRevision:
+        """Create the customer-facing DRAFT review from one validated AWS recommendation.
+
+        The source deployment plan remains an execution contract. This separate business
+        plan is intentionally DRAFT and cannot cause any cloud mutation.
+        """
+        deployment = self._plan(principal, deployment_plan_id)
+        if deployment.action != PlanAction.DEPLOY:
+            raise ValueError("only an AWS deployment recommendation can create a customer review")
+        intent = self._intent(principal, str(deployment.intent_id))
+        project = self._project(principal, intent.project_id)
+        architecture = deployment.payload["architecture"]
+        repository = self.db.scalar(
+            select(RepositoryConnection).where(
+                RepositoryConnection.organization_id == principal.organization_id,
+                RepositoryConnection.project_id == project.id,
+            )
+        )
+        connection_id = deployment.payload.get("cloud_connection_id")
+        target: dict[str, Any] = {
+            "provider": "aws",
+            "region": architecture["region"],
+            "connection_id": connection_id,
+            "account_id": None,
+            "connection_status": "local planning fixture" if not connection_id else "selected",
+        }
+        inventory_snapshot: dict[str, Any] | None = None
+        if connection_id:
+            connection = self._cloud_connection(principal, str(connection_id))
+            target.update(
+                {
+                    "account_id": connection.account_id,
+                    "connection_status": connection.setup_state,
+                    "discovery_role": connection.discovery_role_arn,
+                }
+            )
+            snapshot = self.db.scalar(
+                select(StoredCloudInventorySnapshot)
+                .where(
+                    StoredCloudInventorySnapshot.organization_id == principal.organization_id,
+                    StoredCloudInventorySnapshot.cloud_connection_id == connection.id,
+                )
+                .order_by(StoredCloudInventorySnapshot.captured_at.desc())
+                .limit(1)
+            )
+            if snapshot:
+                inventory_snapshot = {
+                    "id": snapshot.id,
+                    "captured_at": snapshot.captured_at.isoformat(),
+                    "provenance": snapshot.provenance,
+                    "resources": snapshot.snapshot.get("approved_resources", []),
+                }
+        content = {
+            "kind": "agentconstruct.aws.infrastructure-plan.review.v1",
+            "source_deployment_plan_id": deployment.id,
+            "summary": {
+                "selected_profile": architecture["profile"],
+                "why": architecture["recommendation_reason"],
+                "status": "DRAFT — review only; not submitted, approved, or deployed",
+            },
+            "application_analysis": {
+                "project": project.name,
+                "repository": project.repository_url,
+                "branch": repository.selected_branch if repository else None,
+                "request": intent.prompt,
+                "workload_spec": deployment.payload["spec"],
+            },
+            "target": target,
+            "inventory_snapshot": inventory_snapshot,
+            "architecture": {
+                "components": architecture["components"],
+                "dependencies": architecture["dependencies"],
+                "capacity": architecture["estimated_capacity"],
+                "operational_characteristics": architecture["operational_characteristics"],
+                "existing_resources_reused": architecture["existing_resources_reused"],
+                "new_resources_required": architecture["new_resources_required"],
+            },
+            "resource_breakdown": architecture["components"],
+            "security": deployment.payload["architecture"]["security_controls"],
+            "observability": architecture["observability"],
+            "cost_estimate": {
+                "range": architecture["cost_estimate"],
+                "components": architecture["cost_components"],
+                "label": "Estimated monthly AWS cost; not an actual AWS bill.",
+            },
+            "deployment_strategy": {
+                "steps": architecture["execution_steps"],
+                "rollback": architecture["rollback_strategy"],
+                "boundary": "Submission and approval make this review eligible for a later explicit execution action. This review does not deploy AWS infrastructure.",
+            },
+            "risks_and_limitations": architecture["risks"],
+            "policy_findings": deployment.payload["policy"],
+            "evidence": {
+                "planner": "deterministic local fixture pricing and capability catalogue",
+                "cloud": "read-only discovery snapshot when one is selected; no deployment permission",
+                "execution": "unexecuted customer plan review",
+            },
+        }
+        drafts = self.db.scalars(
+            select(InfrastructurePlanRevision)
+            .where(
+                InfrastructurePlanRevision.organization_id == principal.organization_id,
+                InfrastructurePlanRevision.state == InfrastructurePlanState.DRAFT,
+            )
+            .order_by(InfrastructurePlanRevision.created_at.desc())
+        ).all()
+        existing = next(
+            (
+                draft
+                for draft in drafts
+                if draft.content.get("source_deployment_plan_id") == deployment.id
+            ),
+            None,
+        )
+        if existing is not None:
+            return existing
+        return self.create_infrastructure_plan(
+            principal, project.id, f"AWS plan for {project.name}", content
+        )
+
     def approve(self, principal: Principal, plan_id: str, provided_hash: str) -> DeploymentPlan:
         with self._trace("agentconstruct.plan.approve"):
             return self._approve(principal, plan_id, provided_hash)
