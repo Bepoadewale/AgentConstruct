@@ -42,6 +42,7 @@ from agentconstruct.models import (
     CloudConnection,
     CloudDiscoveryJob,
     DeploymentPlan,
+    DesiredStatePublication,
     Environment,
     ExecutionJob,
     GitHubAppInstallationState,
@@ -613,6 +614,17 @@ class ProductService:
         policy = content.get("policy_findings") or {}
         risks = content.get("risks_and_limitations") or []
         local_executions = self._customer_plan_environment_summaries(principal, revision.id)
+        desired_state_publications = [
+            self._desired_state_publication_payload(publication)
+            for publication in self.db.scalars(
+                select(DesiredStatePublication)
+                .where(
+                    DesiredStatePublication.organization_id == principal.organization_id,
+                    DesiredStatePublication.revision_id == revision.id,
+                )
+                .order_by(DesiredStatePublication.created_at.desc())
+            )
+        ]
         return {
             "id": revision.id,
             "plan_id": plan.id,
@@ -637,6 +649,7 @@ class ProductService:
                 "execution_boundary": "Approval records a decision only. It does not deploy or mutate AWS resources.",
             },
             "local_executions": local_executions,
+            "desired_state_publications": desired_state_publications,
             "submitted_by_subject": revision.submitted_by_subject,
             "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
             "decision": None
@@ -1560,6 +1573,239 @@ class ProductService:
         return publication.__dict__ | {
             "execution": "SIMULATED",
             "profile": plan.payload["architecture"]["profile"],
+        }
+
+    def create_desired_state_publication_for_revision(
+        self, principal: Principal, revision_id: str, provided_digest: str
+    ) -> dict[str, Any]:
+        """Create a fixture reviewed-PR publication for an approved customer plan.
+
+        This is the product contract for later GitHub writes. It persists the
+        package and PR state locally, but the current adapter still returns a
+        fixture URL and never contacts GitHub.
+        """
+        revision, infrastructure_plan, source_deployment = self._approved_customer_revision(
+            principal, revision_id
+        )
+        if revision.content_digest != provided_digest or plan_hash(revision.content) != provided_digest:
+            raise ValueError("stale desired-state publication: approved digest changed")
+        project = self._project(principal, infrastructure_plan.project_id)
+        content = revision.content
+        application = content.get("application_analysis") or {}
+        repository_url = application.get("repository")
+        branch = application.get("branch")
+        if not repository_url or not branch:
+            raise ValueError("approved plan has no selected repository and branch")
+        repository_connection = self.db.scalar(
+            select(RepositoryConnection).where(
+                RepositoryConnection.organization_id == principal.organization_id,
+                RepositoryConnection.project_id == project.id,
+                RepositoryConnection.repository_url == repository_url,
+            )
+        )
+        if repository_connection is None:
+            raise ValueError("selected repository is no longer connected to this project")
+        if repository_connection.selected_branch and repository_connection.selected_branch != branch:
+            raise ValueError("selected repository branch changed after approval")
+        self._assert_github_installation_publishable(principal)
+        existing = self.db.scalar(
+            select(DesiredStatePublication).where(
+                DesiredStatePublication.organization_id == principal.organization_id,
+                DesiredStatePublication.revision_id == revision.id,
+                DesiredStatePublication.content_digest == revision.content_digest,
+            )
+        )
+        if existing:
+            return self._desired_state_publication_payload(existing)
+        package = self._desired_state_package(
+            revision=revision,
+            infrastructure_plan=infrastructure_plan,
+            source_deployment=source_deployment,
+            repository_url=str(repository_url),
+            branch=str(branch),
+        )
+        publication = self.github.publish_reviewed_desired_state(
+            "fixture-installation",
+            str(repository_url),
+            f"agentconstruct/{revision.id}/desired-state-package.json",
+            json.dumps(package, sort_keys=True),
+        )
+        stored = DesiredStatePublication(
+            organization_id=principal.organization_id,
+            revision_id=revision.id,
+            project_id=project.id,
+            repository_url=str(repository_url),
+            branch=str(branch),
+            state="PUBLISHED",
+            publication_url=publication.pull_request_url,
+            required_checks={"checks": list(publication.required_checks)},
+            package=package,
+            content_digest=revision.content_digest,
+            created_by_subject=principal.subject,
+        )
+        self.db.add(stored)
+        self.db.flush()
+        self.audit(
+            principal,
+            "desired_state.fixture_pr_published",
+            "desired_state_publication",
+            stored.id,
+            {
+                "revision_id": revision.id,
+                "digest": revision.content_digest,
+                "profile": package["profile"],
+                "state": stored.state,
+                "boundary": "fixture PR only; AgentConstruct cannot merge or write live GitHub content",
+            },
+        )
+        self.db.commit()
+        return self._desired_state_publication_payload(stored)
+
+    def _assert_github_installation_publishable(self, principal: Principal) -> None:
+        blocked_states = {"REVOKED", "SUSPENDED", "MISSING_PERMISSION", "REPOSITORY_INACCESSIBLE"}
+        state = self.db.scalar(
+            select(GitHubAppInstallationState)
+            .where(GitHubAppInstallationState.organization_id == principal.organization_id)
+            .order_by(GitHubAppInstallationState.updated_at.desc())
+            .limit(1)
+        )
+        if state and state.state in blocked_states:
+            raise PermissionError(f"GitHub App installation is not publishable: {state.state}")
+
+    def _desired_state_package(
+        self,
+        *,
+        revision: InfrastructurePlanRevision,
+        infrastructure_plan: InfrastructurePlan,
+        source_deployment: DeploymentPlan,
+        repository_url: str,
+        branch: str,
+    ) -> dict[str, Any]:
+        content = revision.content
+        profile_name = content["summary"]["selected_profile"]
+        profile = execution_profile(profile_name)
+        target = content.get("target") or {}
+        observability = content.get("observability") or {}
+        common = {
+            "revision_id": revision.id,
+            "plan_id": infrastructure_plan.id,
+            "source_deployment_plan_id": source_deployment.id,
+            "approved_digest": revision.content_digest,
+            "profile": profile_name,
+            "repository": repository_url,
+            "branch": branch,
+            "target": target,
+            "required_tags": {
+                "ManagedBy": "AgentConstruct",
+                "AgentConstructPlanDigest": revision.content_digest,
+                "AgentConstructProjectId": infrastructure_plan.project_id,
+            },
+            "observability": observability,
+            "execution_boundary": (
+                "Desired-state fixture only. It requires human PR review and does not apply "
+                "Terraform, merge GitHub changes or deploy cloud resources."
+            ),
+        }
+        contract = {
+            "kind": "agentconstruct.desired-state-package.v1",
+            **common,
+            "delivery": {
+                "kind": profile.delivery_kind,
+                "terraform_boundary": profile.terraform_boundary,
+                "gitops_boundary": profile.gitops_boundary,
+                "kubernetes_boundary": profile.kubernetes_boundary,
+            },
+            "files": [
+                {
+                    "path": "agentconstruct/approved-plan.json",
+                    "purpose": "Exact approved customer-plan revision and digest binding.",
+                    "content": {
+                        "revision_id": revision.id,
+                        "digest": revision.content_digest,
+                        "content": content,
+                    },
+                },
+                {
+                    "path": f"infrastructure/{profile_name}/contract.json",
+                    "purpose": f"Profile-specific {profile.delivery_kind} deployment contract.",
+                    "content": self._profile_desired_state_contract(profile_name, common),
+                },
+                {
+                    "path": "agentconstruct/README.md",
+                    "purpose": "Human review note for the fixture PR.",
+                    "content": (
+                        "# AgentConstruct desired state\n\n"
+                        "This fixture package is generated from an approved plan. "
+                        "It is not applied, merged, or executed by AgentConstruct."
+                    ),
+                },
+            ],
+            "pr_state_model": [
+                "NOT_CREATED",
+                "READY_TO_PUBLISH",
+                "PUBLISHED",
+                "CHECKS_PENDING",
+                "CHECKS_PASSED",
+                "MERGED",
+                "CLOSED",
+            ],
+            "merge_boundary": "AgentConstruct records PR state but never merges customer code or desired state.",
+        }
+        return contract
+
+    @staticmethod
+    def _profile_desired_state_contract(profile_name: str, common: dict[str, Any]) -> dict[str, Any]:
+        if profile_name == "aws-app-runner":
+            return {
+                "profile": profile_name,
+                "resources": ["aws_apprunner_service", "aws_iam_role", "aws_secretsmanager_secret_reference"],
+                "source": "container image or repository source resolved by a later reviewed pipeline",
+                "networking": "managed HTTPS ingress with private data/service boundaries where supported",
+                "monitoring": common["observability"],
+                "tags": common["required_tags"],
+            }
+        if profile_name == "aws-ecs-fargate":
+            return {
+                "profile": profile_name,
+                "resources": ["aws_ecs_service", "aws_ecs_task_definition", "aws_lb", "aws_iam_role"],
+                "source": "immutable image digest from an approved build",
+                "networking": "private subnets with narrowly scoped load balancer ingress when required",
+                "monitoring": common["observability"],
+                "tags": common["required_tags"],
+            }
+        if profile_name == "aws-eks-governed":
+            return {
+                "profile": profile_name,
+                "resources": ["helm_release", "kubernetes_namespace", "argocd_application"],
+                "gitops": "reviewed desired state only; Argo observes after human merge",
+                "kubernetes_required": True,
+                "monitoring": common["observability"],
+                "tags": common["required_tags"],
+            }
+        return {
+            "profile": profile_name,
+            "resources": ["profile_specific_contract_pending"],
+            "monitoring": common["observability"],
+            "tags": common["required_tags"],
+            "boundary": "Profile is recognized by the planner but cloud rendering remains plan-only.",
+        }
+
+    @staticmethod
+    def _desired_state_publication_payload(publication: DesiredStatePublication) -> dict[str, Any]:
+        return {
+            "id": publication.id,
+            "revision_id": publication.revision_id,
+            "repository_url": publication.repository_url,
+            "branch": publication.branch,
+            "state": publication.state,
+            "publication_url": publication.publication_url,
+            "required_checks": publication.required_checks.get("checks", []),
+            "package": publication.package,
+            "content_digest": publication.content_digest,
+            "created_by_subject": publication.created_by_subject,
+            "created_at": publication.created_at.isoformat() if publication.created_at else None,
+            "execution": "SIMULATED_FIXTURE_PR",
+            "merge_boundary": "AgentConstruct never merges the desired-state PR itself.",
         }
 
     def cloud_role_contract(self, principal: Principal, connection_id: str) -> dict[str, str | int]:

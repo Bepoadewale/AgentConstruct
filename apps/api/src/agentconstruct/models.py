@@ -230,6 +230,31 @@ class InfrastructurePlanDecisionRecord(Base):
     decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class DesiredStatePublication(Base):
+    """Fixture PR publication for an approved customer-plan revision."""
+
+    __tablename__ = "desired_state_publications"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    revision_id: Mapped[str] = mapped_column(ForeignKey("infrastructure_plan_revisions.id"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    repository_url: Mapped[str] = mapped_column(Text)
+    branch: Mapped[str] = mapped_column(String(255))
+    state: Mapped[str] = mapped_column(String(40), default="NOT_CREATED", index=True)
+    publication_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    required_checks: Mapped[dict] = mapped_column(JSON, default=dict)
+    package: Mapped[dict] = mapped_column(JSON, default=dict)
+    content_digest: Mapped[str] = mapped_column(String(64), index=True)
+    created_by_subject: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    __table_args__ = (
+        UniqueConstraint("revision_id", "content_digest", name="uq_desired_state_revision_digest"),
+    )
+
+
 class DeploymentPlan(Base):
     __tablename__ = "deployment_plans"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

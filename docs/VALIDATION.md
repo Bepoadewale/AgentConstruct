@@ -369,3 +369,32 @@ Results:
 - Tested webhook states include connected installation, revoked installation, repository access change, branch update and missing permission.
 
 This is local fixture evidence. It does not prove that GitHub delivered a public webhook, create a pull request, write a branch, publish checks, merge code, or deploy infrastructure.
+
+## Fixture desired-state PR publication
+
+Date: 2026-10-12. Environment: macOS, Docker Desktop, Python 3.12 and local fixture identities.
+
+This validation added a persisted fixture desired-state PR publication path for approved customer-plan revisions.
+
+```bash
+.venv/bin/python -m ruff check apps/api/src tests scripts
+.venv/bin/python -m pytest tests/test_customer_plan_review.py tests/test_product.py::test_approved_plan_can_only_shape_a_simulated_reviewed_desired_state_pull_request -q
+node --check apps/web/app.js
+.venv/bin/python -m pytest -q
+docker compose up -d --build
+make smoke
+make browser-contract
+docker compose config --quiet
+git diff --check
+```
+
+Results:
+
+- Focused customer-plan/publication tests passed: **12 passed**.
+- Full pytest suite passed: **90 passed**.
+- Browser contract passed against the rebuilt local UI.
+- The desired-state publication path requires an approved customer-plan revision, exact digest, connected repository branch, and publishable GitHub App state.
+- The generated fixture package includes App Runner/ECS/EKS-aware delivery contracts, required checks, the approved digest and the rule that AgentConstruct never merges customer code or desired state.
+- Failure fixtures passed for stale digest, changed branch and revoked GitHub App installation.
+
+This is local fixture evidence only. It did not create a GitHub branch, pull request, check run, merge, GitOps sync, Terraform plan/apply, AWS resource, or production deployment.

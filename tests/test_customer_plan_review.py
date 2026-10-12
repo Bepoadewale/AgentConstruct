@@ -6,6 +6,8 @@ from agentconstruct.domain import (
     InfrastructurePlanState,
     LifecycleState,
 )
+from agentconstruct.models import GitHubAppInstallationState, RepositoryConnection
+from sqlalchemy import select
 from test_product import complete_prompt, founder, make_service, operator
 
 
@@ -191,3 +193,90 @@ def test_customer_review_local_destroy_is_tied_to_revision_and_observed():
     )
     assert production_execution["state"] == LifecycleState.DESTROYED
     assert any(event.action == "customer_plan.local_destroy_requested" for event in service.audits(founder()))
+
+
+def test_approved_customer_review_publishes_fixture_desired_state_pr_contract():
+    service, _ = make_service()
+    approved = approved_customer_review(service)
+
+    publication = service.create_desired_state_publication_for_revision(
+        founder(), approved.id, approved.content_digest
+    )
+    detail = service.infrastructure_plan_revision_detail(founder(), approved.id)
+
+    assert publication["state"] == "PUBLISHED"
+    assert publication["publication_url"].startswith("fixture-pr://")
+    assert publication["required_checks"] == ["agentconstruct-plan", "agentconstruct-policy"]
+    assert publication["package"]["kind"] == "agentconstruct.desired-state-package.v1"
+    assert publication["package"]["profile"] == "aws-ecs-fargate"
+    assert "infrastructure/aws-ecs-fargate/contract.json" in [
+        file["path"] for file in publication["package"]["files"]
+    ]
+    assert publication["merge_boundary"] == "AgentConstruct never merges the desired-state PR itself."
+    assert detail["desired_state_publications"][0]["id"] == publication["id"]
+    assert any(
+        event.action == "desired_state.fixture_pr_published"
+        for event in service.audits(founder())
+    )
+
+
+def test_desired_state_publication_requires_exact_approved_digest():
+    service, _ = make_service()
+    approved = approved_customer_review(service)
+
+    with pytest.raises(ValueError, match="stale desired-state publication"):
+        service.create_desired_state_publication_for_revision(founder(), approved.id, "0" * 64)
+
+
+def test_desired_state_publication_rejects_changed_repository_branch():
+    service, db = make_service()
+    approved = approved_customer_review(service)
+    plan = service._infrastructure_plan(founder(), approved.infrastructure_plan_id)
+    connection = db.scalar(
+        select(RepositoryConnection).where(RepositoryConnection.project_id == plan.project_id)
+    )
+    connection.selected_branch = "release"
+    db.commit()
+
+    with pytest.raises(ValueError, match="branch changed"):
+        service.create_desired_state_publication_for_revision(
+            founder(), approved.id, approved.content_digest
+        )
+
+
+def test_desired_state_publication_rejects_revoked_github_installation():
+    service, db = make_service()
+    approved = approved_customer_review(service)
+    db.add(
+        GitHubAppInstallationState(
+            organization_id=founder().organization_id,
+            installation_id="fixture-installation",
+            account_login="demo-ai-startup",
+            state="REVOKED",
+        )
+    )
+    db.commit()
+
+    with pytest.raises(PermissionError, match="REVOKED"):
+        service.create_desired_state_publication_for_revision(
+            founder(), approved.id, approved.content_digest
+        )
+
+
+def test_eks_desired_state_package_contains_gitops_contract_only_when_profile_requires_it():
+    service, _ = make_service()
+    approved = approved_customer_review(
+        service,
+        "Deploy this multi-service AI inference API in AWS. GPU acceleration is required. Kubernetes is required for GPU scheduling, isolation and controlled rollouts. Support 20 requests per second and peak at 100 requests per second. Keep monthly infrastructure under $1500. Create staging and production.",
+    )
+
+    publication = service.create_desired_state_publication_for_revision(
+        founder(), approved.id, approved.content_digest
+    )
+    contract_file = next(
+        file for file in publication["package"]["files"] if file["path"].endswith("/contract.json")
+    )
+
+    assert publication["package"]["profile"] == "aws-eks-governed"
+    assert contract_file["content"]["kubernetes_required"] is True
+    assert "argocd_application" in contract_file["content"]["resources"]
