@@ -18,6 +18,7 @@ from agentconstruct.domain import (
     AwsQuickCreateRequest,
     CloudConnectionRequest,
     CloudInventorySnapshotRequest,
+    DesiredStatePublicationRequest,
     InfrastructurePlanConstraintUpdateRequest,
     InfrastructurePlanDecisionRequest,
     InfrastructurePlanRevisionRequest,
@@ -435,6 +436,22 @@ def create_desired_state_publication(
     REQUESTS.labels("gitops.desired_state_contract").inc()
     try:
         return service.desired_state_publication(principal, project_id, plan_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post("/api/v1/customer-plan-revisions/{revision_id}/desired-state-publications")
+def create_customer_plan_desired_state_publication(
+    revision_id: str,
+    request: DesiredStatePublicationRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("desired_state.customer_plan_fixture_pr").inc()
+    try:
+        return service.create_desired_state_publication_for_revision(
+            principal, revision_id, request.content_digest
+        )
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
 

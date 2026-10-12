@@ -15,6 +15,7 @@
 | One AWS customer-plan review | A local typed review draft binds repository branch, AWS target/region, workload spec, cost, security and policy findings. It presents one selected AWS design, never a customer-facing alternatives list. Draft and rejected reviews can create new edited constraint revisions with visible diffs before submission. Prometheus-compatible metrics and Amazon Managed Grafana are mandatory typed components with coverage, access boundary, limitations and estimated monitoring cost. |
 | Customer-plan decision workflow | Creator-only submission validates the typed AWS review and freezes its digest. Workspace administrators approve or reject only the submitted digest; rejection requires a reason; rejected plans can create a new immutable draft revision from explicit user constraints. Administrator self-approval is explicitly recorded. Filtered review queues cover pending, approved, rejected and self-approved revisions. Every path is approval-only and never deploys. |
 | Customer-plan local dry run | Approved customer-plan revisions can be explicitly queued into the bounded local fixture executor. Environments record the originating revision/digest, execution mode, estimated cost and observed READY/FAILED/DEGRADED state. Production destroy uses the existing destroy plan, administrator approval and observed DESTROYED path. No AWS resources are created or deleted. |
+| Desired-state PR publication | Approved customer-plan revisions can create a persisted fixture PR publication. The package binds the exact approved digest, repository/branch, selected AWS profile and profile-specific delivery contract. States and checks are modeled locally; AgentConstruct cannot merge and the live GitHub adapter still refuses writes. |
 | Customer-plan E2E proof | Separate local developer and administrator HTTP sessions prove submission, administrator approval, self-approval, rejection/revision, stale-digest rejection, developer/tenant denial, approved-plan local dry-run execution, readiness failure, governed local destroy, audit evidence and persistence after API restart. Browser controls are contract-checked against the served UI. |
 | Local execution | API persists a `QUEUED` job; a separate trusted worker invokes only the fixed fixture executor and records READY, FAILED or DESTROYED evidence |
 | Day-2 change loop | Deterministic latency evidence → explanation → immutable `CHANGE` plan → production approval → durable worker → observed recovery and audit |
@@ -36,7 +37,7 @@
 
 ## Roadmap only
 
-GitHub OAuth/install initiation, GitHub-hosted control-plane OIDC assumption, GitHub webhooks/reviewed PR publication, profile-specific Terraform rendering/deployment, real GitOps/Argo execution, enterprise identity, external agent-client installation, subscription billing, model runtime controls and automated remediation.
+GitHub OAuth/install initiation, GitHub-hosted control-plane OIDC assumption, live GitHub webhooks/reviewed PR writes/checks, profile-specific Terraform rendering/deployment, real GitOps/Argo execution, enterprise identity, external agent-client installation, subscription billing, model runtime controls and automated remediation.
 
 ## Statically validated cloud contract
 

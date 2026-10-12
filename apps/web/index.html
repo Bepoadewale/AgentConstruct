@@ -123,6 +123,12 @@
           <div class="connection-row"><button id="execute-review-dry-run" type="button">Execute local dry run</button><button id="destroy-review-dry-run" type="button" class="secondary hidden">Request/execute local destroy</button></div>
           <div id="review-environments">No local dry-run execution yet.</div>
         </div>
+        <div id="desired-state-pr" class="connection-card hidden">
+          <strong>Review PR required before cloud execution</strong>
+          <p class="message">This creates a fixture desired-state pull request record from the approved digest. AgentConstruct never merges customer code or desired state itself.</p>
+          <div class="connection-row"><button id="publish-desired-state" type="button">Create fixture desired-state PR</button></div>
+          <div id="desired-state-publication">No desired-state publication yet.</div>
+        </div>
       </section>
       <section id="audit" class="panel">
         <div class="panel-heading"><div><p class="eyebrow">AUDIT</p><h2>What happened</h2></div><button id="refresh-audit" class="secondary">Refresh</button></div>

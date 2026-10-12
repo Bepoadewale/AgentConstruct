@@ -53,6 +53,7 @@
 - [ ] Implement the live AWS STS role-assumption adapter with least privilege after the discovery-role pilot.
 - [x] GitHub App installation/repository/branch discovery and safe manifest intelligence.
 - [x] Local GitHub webhook receiver contract with signature verification, delivery dedupe, replay protection, persisted installation states and UI visibility.
+- [x] Fixture desired-state PR publisher for approved customer-plan revisions with exact-digest, branch, GitHub-state and profile-contract guardrails.
 - [ ] Scoped GitHub desired-state publication through reviewed pull requests.
 - [ ] Real GitOps/Argo observer and customer-cloud workload agent.
 - [ ] Enterprise OIDC/JWKS adapter and organisation lifecycle.
