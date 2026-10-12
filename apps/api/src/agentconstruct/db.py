@@ -42,7 +42,7 @@ def run_migrations(target: Engine | None = None) -> None:
         ).scalar_one()
         if version < 1:
             Base.metadata.create_all(bind=connection)
-            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (9)"))
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (10)"))
             return
         if version < 2:
             connection.execute(
@@ -95,6 +95,10 @@ def run_migrations(target: Engine | None = None) -> None:
         if version < 9:
             Base.metadata.create_all(bind=connection)
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (9)"))
+            version = 9
+        if version < 10:
+            Base.metadata.create_all(bind=connection)
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (10)"))
 
 
 def session() -> Generator[Session, None, None]:

@@ -33,6 +33,7 @@ from agentconstruct.integrations import (
     FixtureAwsDiscovery,
     StsAwsDiscovery,
     configured_github_connection,
+    verify_github_webhook_signature,
 )
 from agentconstruct.intent import DeterministicIntentProvider, IntentProvider
 from agentconstruct.models import (
@@ -43,6 +44,8 @@ from agentconstruct.models import (
     DeploymentPlan,
     Environment,
     ExecutionJob,
+    GitHubAppInstallationState,
+    GitHubWebhookDelivery,
     Incident,
     InfrastructurePlan,
     InfrastructurePlanDecisionRecord,
@@ -1230,7 +1233,21 @@ class ProductService:
         )
 
     def github_connection_status(self, principal: Principal) -> dict[str, Any]:
-        del principal
+        states = list(
+            self.db.scalars(
+                select(GitHubAppInstallationState)
+                .where(GitHubAppInstallationState.organization_id == principal.organization_id)
+                .order_by(GitHubAppInstallationState.updated_at.desc())
+            )
+        )
+        recent_deliveries = list(
+            self.db.scalars(
+                select(GitHubWebhookDelivery)
+                .where(GitHubWebhookDelivery.organization_id == principal.organization_id)
+                .order_by(GitHubWebhookDelivery.received_at.desc())
+                .limit(5)
+            )
+        )
         execution = getattr(self.github, "execution", "SIMULATED")
         try:
             installations = [item.__dict__ for item in self.github.installations()]
@@ -1245,7 +1262,178 @@ class ProductService:
             "install_url": os.getenv("AGENTCONSTRUCT_GITHUB_APP_INSTALL_URL"),
             "writes_enabled": False,
             "credentials_stored": False,
+            "webhooks_enabled": bool(os.getenv("AGENTCONSTRUCT_GITHUB_WEBHOOK_SECRET"))
+            or execution == "SIMULATED",
+            "installation_states": [
+                {
+                    "installation_id": item.installation_id,
+                    "account_login": item.account_login,
+                    "account_type": item.account_type,
+                    "state": item.state,
+                    "repository_selection": item.repository_selection,
+                    "permissions": item.permissions,
+                    "last_event": item.last_event,
+                    "updated_at": item.updated_at,
+                }
+                for item in states
+            ],
+            "recent_webhook_deliveries": [
+                {
+                    "delivery_id": item.delivery_id,
+                    "event": item.event,
+                    "action": item.action,
+                    "installation_id": item.installation_id,
+                    "repository": item.repository,
+                    "status": item.status,
+                    "received_at": item.received_at,
+                }
+                for item in recent_deliveries
+            ],
         }
+
+    def receive_github_webhook(
+        self,
+        *,
+        event: str,
+        delivery_id: str,
+        signature: str,
+        body: bytes,
+    ) -> dict[str, Any]:
+        """Process a signed GitHub App webhook without exposing repository credentials.
+
+        In local fixture mode, ``fixture-sha256=valid`` is accepted so tests can
+        exercise product state transitions without a public callback URL.
+        In configured mode, the standard GitHub HMAC signature is required.
+        """
+        if not event or not delivery_id:
+            raise ValueError("GitHub event and delivery ID are required")
+        execution = getattr(self.github, "execution", "SIMULATED")
+        secret = os.getenv("AGENTCONSTRUCT_GITHUB_WEBHOOK_SECRET", "")
+        fixture_signature = execution == "SIMULATED" and signature == "fixture-sha256=valid"
+        if not fixture_signature and not verify_github_webhook_signature(secret, body, signature):
+            raise PermissionError("GitHub webhook signature is invalid")
+        duplicate = self.db.scalar(
+            select(GitHubWebhookDelivery).where(GitHubWebhookDelivery.delivery_id == delivery_id)
+        )
+        if duplicate:
+            return {
+                "status": "DUPLICATE",
+                "delivery_id": duplicate.delivery_id,
+                "event": duplicate.event,
+                "installation_id": duplicate.installation_id,
+                "state": "UNCHANGED",
+            }
+        try:
+            payload = json.loads(body.decode() or "{}")
+        except json.JSONDecodeError as error:
+            raise ValueError("GitHub webhook payload must be valid JSON") from error
+        organization_id = self._github_webhook_organization_id(payload)
+        installation = payload.get("installation") or {}
+        account = installation.get("account") or payload.get("sender") or {}
+        repository = payload.get("repository") or {}
+        installation_id = str(installation.get("id") or "fixture-installation")
+        account_login = str(account.get("login") or "unknown-github-account")
+        account_type = str(account.get("type") or "Organization")
+        action = payload.get("action")
+        repository_name = repository.get("full_name")
+        state = self._github_installation_state(event, action, payload)
+        permissions = installation.get("permissions") or payload.get("permissions") or {}
+        repository_selection = str(installation.get("repository_selection") or "selected")
+        install_state = self.db.scalar(
+            select(GitHubAppInstallationState).where(
+                GitHubAppInstallationState.organization_id == organization_id,
+                GitHubAppInstallationState.installation_id == installation_id,
+            )
+        )
+        last_event = {
+            "event": event,
+            "action": action,
+            "repository": repository_name,
+            "delivery_id": delivery_id,
+            "execution": execution,
+        }
+        if install_state:
+            install_state.account_login = account_login
+            install_state.account_type = account_type
+            install_state.state = state
+            install_state.repository_selection = repository_selection
+            install_state.permissions = permissions
+            install_state.last_event = last_event
+        else:
+            install_state = GitHubAppInstallationState(
+                organization_id=organization_id,
+                installation_id=installation_id,
+                account_login=account_login,
+                account_type=account_type,
+                state=state,
+                repository_selection=repository_selection,
+                permissions=permissions,
+                last_event=last_event,
+            )
+            self.db.add(install_state)
+        delivery = GitHubWebhookDelivery(
+            organization_id=organization_id,
+            delivery_id=delivery_id,
+            event=event,
+            action=action,
+            installation_id=installation_id,
+            repository=repository_name,
+            status="PROCESSED",
+            detail=last_event,
+        )
+        self.db.add(delivery)
+        self.db.flush()
+        self.db.add(
+            AuditEvent(
+                organization_id=organization_id,
+                actor_subject="github-app",
+                action=f"github.webhook.{event}",
+                entity_type="github_app_installation",
+                entity_id=install_state.id,
+                detail=last_event | {"state": state},
+            )
+        )
+        self.db.commit()
+        return {
+            "status": "PROCESSED",
+            "delivery_id": delivery_id,
+            "event": event,
+            "action": action,
+            "installation_id": installation_id,
+            "repository": repository_name,
+            "state": state,
+            "execution": execution,
+        }
+
+    def _github_webhook_organization_id(self, payload: dict[str, Any]) -> str:
+        requested = (payload.get("agentconstruct") or {}).get("organization_id")
+        organization_id = str(requested or os.getenv("AGENTCONSTRUCT_DEFAULT_WEBHOOK_ORG", "org-demo"))
+        if not self.db.get(Organization, organization_id):
+            raise PermissionError("GitHub webhook installation is not mapped to a workspace")
+        return organization_id
+
+    @staticmethod
+    def _github_installation_state(
+        event: str, action: str | None, payload: dict[str, Any]
+    ) -> str:
+        permissions = (
+            (payload.get("installation") or {}).get("permissions")
+            or payload.get("permissions")
+            or {}
+        )
+        if permissions and permissions.get("metadata") not in {None, "read"}:
+            return "MISSING_PERMISSION"
+        if event == "installation" and action == "deleted":
+            return "REVOKED"
+        if event == "installation" and action == "suspend":
+            return "SUSPENDED"
+        if event == "repository" and action in {"deleted", "transferred"}:
+            return "REPOSITORY_INACCESSIBLE"
+        if event == "installation_repositories":
+            return "REPOSITORY_ACCESS_CHANGED"
+        if event == "push":
+            return "BRANCH_UPDATED"
+        return "CONNECTED"
 
     def github_repositories(self, principal: Principal, installation_id: str) -> list[dict[str, str]]:
         del principal  # The configured adapter independently scopes access to installation repositories.

@@ -4,7 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_client import Counter, generate_latest
@@ -163,6 +163,27 @@ def github_connection_status(
     try:
         return service.github_connection_status(principal)
     except ValueError as error:
+        translate(error)
+
+
+@app.post("/api/v1/github/webhooks")
+async def github_webhook(
+    request: Request,
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("github.webhook").inc()
+    event = request.headers.get("X-GitHub-Event", "")
+    delivery_id = request.headers.get("X-GitHub-Delivery", "")
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    body = await request.body()
+    try:
+        return service.receive_github_webhook(
+            event=event,
+            delivery_id=delivery_id,
+            signature=signature,
+            body=body,
+        )
+    except (PermissionError, ValueError) as error:
         translate(error)
 
 

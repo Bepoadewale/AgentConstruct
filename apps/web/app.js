@@ -111,7 +111,19 @@ async function refreshGitHubConnection() {
   picker.innerHTML = githubConnection.installations.length
     ? githubConnection.installations.map((installation) => `<option value="${installation.id}">${installation.account_login} · ${installation.account_type}</option>`).join("")
     : '<option value="">No accessible GitHub App installation</option>';
-  showGitHub(`GitHub App is ${githubConnection.execution === "SIMULATED" ? "a deterministic local fixture" : "connected in live read-only mode"}. Repository writes are disabled.`);
+  const installLink = githubConnection.install_url ? ` <a href="${githubConnection.install_url}" target="_blank" rel="noreferrer">Open GitHub App install</a>.` : "";
+  showGitHub(`GitHub App is ${githubConnection.execution === "SIMULATED" ? "a deterministic local fixture" : "connected in live read-only mode"}. Repository writes are disabled.${installLink}`);
+  const detail = document.querySelector("#github-status-detail");
+  const states = githubConnection.installation_states || [];
+  const deliveries = githubConnection.recent_webhook_deliveries || [];
+  if (states.length || deliveries.length) {
+    detail.innerHTML = `<strong>GitHub App state</strong><p>Webhook receiver: ${githubConnection.webhooks_enabled ? "enabled" : "not configured"}<br>Writes: disabled until reviewed publication is approved.</p>` +
+      states.map((state) => `<div class="component"><strong>${state.account_login}</strong><span>${state.installation_id} · ${state.state} · ${state.repository_selection}</span></div>`).join("") +
+      deliveries.map((delivery) => `<div class="component"><strong>${delivery.event}</strong><span>${delivery.status} · ${delivery.repository || "installation"} · ${delivery.delivery_id}</span></div>`).join("");
+    detail.classList.remove("hidden");
+  } else {
+    detail.classList.add("hidden");
+  }
   if (githubConnection.installations.length) await refreshGitHubRepositories();
 }
 

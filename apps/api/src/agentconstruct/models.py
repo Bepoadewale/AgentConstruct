@@ -64,6 +64,46 @@ class StoredRepositoryAnalysis(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class GitHubAppInstallationState(Base):
+    """Tenant-scoped GitHub App installation state derived from signed webhooks."""
+
+    __tablename__ = "github_app_installations"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    installation_id: Mapped[str] = mapped_column(String(80), index=True)
+    account_login: Mapped[str] = mapped_column(String(160))
+    account_type: Mapped[str] = mapped_column(String(40), default="Organization")
+    state: Mapped[str] = mapped_column(String(40), default="CONNECTED", index=True)
+    repository_selection: Mapped[str] = mapped_column(String(40), default="selected")
+    permissions: Mapped[dict] = mapped_column(JSON, default=dict)
+    last_event: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "installation_id", name="uq_github_installation_org"
+        ),
+    )
+
+
+class GitHubWebhookDelivery(Base):
+    """Deduplicated GitHub webhook delivery audit; payloads never store secrets."""
+
+    __tablename__ = "github_webhook_deliveries"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    delivery_id: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    event: Mapped[str] = mapped_column(String(80))
+    action: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    installation_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    repository: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="PROCESSED")
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class CloudConnection(Base):
     __tablename__ = "cloud_connections"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

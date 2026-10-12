@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -62,6 +64,14 @@ class GitHubWebhookContract:
     installation_id: str
     repository: str
     verification: str
+
+
+def verify_github_webhook_signature(secret: str, body: bytes, signature: str) -> bool:
+    """Verify GitHub's X-Hub-Signature-256 value without logging the secret or body."""
+    if not secret or not signature.startswith("sha256="):
+        return False
+    expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
 
 
 @dataclass(frozen=True)

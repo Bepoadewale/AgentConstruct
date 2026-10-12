@@ -1,7 +1,16 @@
 from __future__ import annotations
 
+import json
+
+from agentconstruct.db import make_engine, run_migrations
+from agentconstruct.main import app, product_service
+from agentconstruct.models import GitHubWebhookDelivery
+from agentconstruct.policy import PolicyClient
 from agentconstruct.security import LOCAL_USERS, Principal
-from test_product import founder, make_service
+from agentconstruct.service import ProductService
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import sessionmaker
+from test_product import LocalExecutor, founder, make_service
 
 
 def other_tenant() -> Principal:
@@ -75,3 +84,130 @@ def test_aws_connection_detail_and_disconnect_are_tenant_scoped_and_credential_f
         raise AssertionError("other tenant read an AWS connection")
     service.disconnect_cloud_connection(founder(), connection.id)
     assert service.cloud_connections(founder()) == []
+
+
+def signed_fixture_webhook(service, event: str, delivery_id: str, payload: dict):
+    return service.receive_github_webhook(
+        event=event,
+        delivery_id=delivery_id,
+        signature="fixture-sha256=valid",
+        body=json.dumps(payload).encode(),
+    )
+
+
+def test_github_webhook_installation_states_are_persisted_and_visible():
+    service, _ = make_service()
+    payload = {
+        "action": "created",
+        "installation": {
+            "id": 5159790,
+            "account": {"login": "Bepoadewale", "type": "User"},
+            "repository_selection": "selected",
+            "permissions": {"metadata": "read", "contents": "read"},
+        },
+        "agentconstruct": {"organization_id": founder().organization_id},
+    }
+
+    processed = signed_fixture_webhook(service, "installation", "delivery-install", payload)
+
+    assert processed["state"] == "CONNECTED"
+    status = service.github_connection_status(founder())
+    assert status["installation_states"][0]["installation_id"] == "5159790"
+    assert status["installation_states"][0]["state"] == "CONNECTED"
+    assert status["recent_webhook_deliveries"][0]["delivery_id"] == "delivery-install"
+
+
+def test_github_webhook_duplicate_delivery_is_replay_protected():
+    service, db = make_service()
+    payload = {
+        "action": "created",
+        "installation": {"id": 5159790, "account": {"login": "Bepoadewale"}},
+        "agentconstruct": {"organization_id": founder().organization_id},
+    }
+
+    first = signed_fixture_webhook(service, "installation", "delivery-replay", payload)
+    second = signed_fixture_webhook(service, "installation", "delivery-replay", payload)
+
+    assert first["status"] == "PROCESSED"
+    assert second["status"] == "DUPLICATE"
+    assert db.query(GitHubWebhookDelivery).filter_by(delivery_id="delivery-replay").count() == 1
+
+
+def test_github_webhook_records_revoked_repository_and_branch_states():
+    service, _ = make_service()
+    base = {
+        "installation": {"id": 5159790, "account": {"login": "Bepoadewale"}},
+        "repository": {"full_name": "Bepoadewale/ai-platform-control-plane"},
+        "agentconstruct": {"organization_id": founder().organization_id},
+    }
+
+    repo_change = signed_fixture_webhook(
+        service,
+        "installation_repositories",
+        "delivery-repository-change",
+        base | {"action": "removed"},
+    )
+    branch_change = signed_fixture_webhook(service, "push", "delivery-push", base | {"ref": "refs/heads/main"})
+    revoked = signed_fixture_webhook(service, "installation", "delivery-revoked", base | {"action": "deleted"})
+
+    assert repo_change["state"] == "REPOSITORY_ACCESS_CHANGED"
+    assert branch_change["state"] == "BRANCH_UPDATED"
+    assert revoked["state"] == "REVOKED"
+    status = service.github_connection_status(founder())
+    assert status["installation_states"][0]["state"] == "REVOKED"
+
+
+def test_github_webhook_missing_permission_and_bad_signature_fail_closed():
+    service, _ = make_service()
+    payload = {
+        "action": "created",
+        "installation": {
+            "id": 5159790,
+            "account": {"login": "Bepoadewale"},
+            "permissions": {"metadata": "none"},
+        },
+        "agentconstruct": {"organization_id": founder().organization_id},
+    }
+    processed = signed_fixture_webhook(service, "installation", "delivery-missing-permission", payload)
+    assert processed["state"] == "MISSING_PERMISSION"
+
+    try:
+        service.receive_github_webhook(
+            event="installation",
+            delivery_id="delivery-bad-signature",
+            signature="fixture-sha256=bad",
+            body=json.dumps(payload).encode(),
+        )
+    except PermissionError as error:
+        assert "signature" in str(error)
+    else:
+        raise AssertionError("invalid GitHub webhook signature was accepted")
+
+
+def test_github_webhook_endpoint_records_signed_fixture_delivery(tmp_path):
+    engine = make_engine(f"sqlite+pysqlite:///{tmp_path / 'webhook.db'}")
+    run_migrations(engine)
+    db = sessionmaker(bind=engine, expire_on_commit=False)()
+    service = ProductService(db, policy=PolicyClient(fixture=True), executor=LocalExecutor())
+    service.seed_local_identity()
+    app.dependency_overrides[product_service] = lambda: service
+    try:
+        response = TestClient(app).post(
+            "/api/v1/github/webhooks",
+            headers={
+                "X-GitHub-Event": "installation",
+                "X-GitHub-Delivery": "delivery-endpoint",
+                "X-Hub-Signature-256": "fixture-sha256=valid",
+            },
+            json={
+                "action": "created",
+                "installation": {"id": 5159790, "account": {"login": "Bepoadewale"}},
+                "agentconstruct": {"organization_id": founder().organization_id},
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "PROCESSED"
+    assert service.github_connection_status(founder())["installation_states"][0]["state"] == "CONNECTED"
