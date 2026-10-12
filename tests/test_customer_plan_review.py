@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from agentconstruct.domain import InfrastructurePlanDecision, InfrastructurePlanState
+import pytest
+from agentconstruct.domain import (
+    InfrastructurePlanDecision,
+    InfrastructurePlanState,
+    LifecycleState,
+)
 from test_product import complete_prompt, founder, make_service, operator
 
 
@@ -75,3 +80,114 @@ def test_customer_review_submits_then_administrator_approves_without_deploying()
     assert approved.state == InfrastructurePlanState.APPROVED
     assert decision["is_self_approval"] is False
     assert deployment.state != "READY"
+
+
+def approved_customer_review(service, prompt: str | None = None):
+    project = service.create_project(
+        founder(), "review-dry-run", "https://github.com/example/review-dry-run", "main"
+    )
+    intent = service.create_intent(
+        founder(),
+        project.id,
+        prompt or complete_prompt(500),
+        project.repository_url,
+        None,
+        "review-dry-run-001",
+    )
+    deployment = service.plan_intent(founder(), intent.id)
+    review = service.create_customer_plan_review(founder(), deployment.id)
+    service.submit_infrastructure_plan(founder(), review.id)
+    return service.decide_infrastructure_plan(
+        operator(), review.id, InfrastructurePlanDecision.APPROVED, review.content_digest
+    )
+
+
+def test_approved_customer_review_executes_bounded_local_dry_run_and_observes_ready():
+    service, _ = make_service()
+    approved = approved_customer_review(service)
+    detail = service.infrastructure_plan_revision_detail(founder(), approved.id)
+    assert detail["local_executions"] == []
+    assert detail["execution"] == "UNEXECUTED_APPROVAL_ONLY"
+
+    environments = service.execute_customer_plan_dry_run(founder(), approved.id)
+    assert {environment.state for environment in environments} == {LifecycleState.QUEUED}
+    assert all(
+        environment.desired_state["customer_plan_revision_id"] == approved.id
+        for environment in environments
+    )
+    assert all(environment.desired_state["execution_mode"] == "LOCAL_DRY_RUN" for environment in environments)
+
+    while service.run_next_job():
+        pass
+
+    refreshed = service.infrastructure_plan_revision_detail(founder(), approved.id)
+    states = {environment["state"] for environment in refreshed["local_executions"]}
+    assert states == {LifecycleState.READY}
+    assert all(environment["cost_estimate"] for environment in refreshed["local_executions"])
+    assert any(
+        event.action == "customer_plan.local_dry_run_queued"
+        for event in service.audits(founder())
+    )
+
+
+def test_customer_review_cannot_execute_before_approval_and_can_observe_failure():
+    service, _ = make_service()
+    project = service.create_project(
+        founder(), "review-failure", "https://github.com/example/review-failure", "main"
+    )
+    intent = service.create_intent(
+        founder(),
+        project.id,
+        f"{complete_prompt(500)} Force failure local readiness evidence.",
+        project.repository_url,
+        None,
+        "review-failure-001",
+    )
+    deployment = service.plan_intent(founder(), intent.id)
+    review = service.create_customer_plan_review(founder(), deployment.id)
+    with pytest.raises(ValueError, match="must be approved"):
+        service.execute_customer_plan_dry_run(founder(), review.id)
+
+    service.submit_infrastructure_plan(founder(), review.id)
+    approved = service.decide_infrastructure_plan(
+        operator(), review.id, InfrastructurePlanDecision.APPROVED, review.content_digest
+    )
+    service.execute_customer_plan_dry_run(founder(), approved.id)
+    while service.run_next_job():
+        pass
+    refreshed = service.infrastructure_plan_revision_detail(founder(), approved.id)
+    assert {environment["state"] for environment in refreshed["local_executions"]} == {
+        LifecycleState.FAILED
+    }
+
+
+def test_customer_review_local_destroy_is_tied_to_revision_and_observed():
+    service, _ = make_service()
+    approved = approved_customer_review(service)
+    environments = service.execute_customer_plan_dry_run(founder(), approved.id)
+    while service.run_next_job():
+        pass
+    production = next(
+        environment
+        for environment in environments
+        if environment.environment_type == "production"
+    )
+
+    destroy = service.customer_plan_destroy_plan(founder(), approved.id, production.id)
+    assert destroy.state == LifecycleState.DESTROY_APPROVAL_REQUIRED
+    assert destroy.payload["customer_plan_revision_id"] == approved.id
+    with pytest.raises(PermissionError):
+        service.approve(founder(), destroy.id, destroy.plan_hash)
+
+    service.approve(operator(), destroy.id, destroy.plan_hash)
+    service.execute(operator(), destroy.id)
+    while service.run_next_job():
+        pass
+    refreshed = service.infrastructure_plan_revision_detail(founder(), approved.id)
+    production_execution = next(
+        environment
+        for environment in refreshed["local_executions"]
+        if environment["id"] == production.id
+    )
+    assert production_execution["state"] == LifecycleState.DESTROYED
+    assert any(event.action == "customer_plan.local_destroy_requested" for event in service.audits(founder()))

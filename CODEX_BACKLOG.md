@@ -12,6 +12,7 @@
 - [x] Add editable draft/rejected plan constraints, assumption decisions and revision diffs before approval submission.
 - [x] Add submit, administrator approval/rejection, self-approval and revision UI/API flows.
 - [x] Add administrator queue filters, richer review evidence, approved-not-deployed banners and export-ready audit evidence.
+- [x] Add explicit approved-plan local dry-run execution, observed health/cost state, readiness-failure evidence and governed local destroy.
 - [x] Prove the two-session developer/admin journey with browser controls, deterministic API E2E, restart persistence and security-boundary checks.
 
 ### Completed hardening — local commercial V1

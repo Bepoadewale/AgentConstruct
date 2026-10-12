@@ -609,6 +609,7 @@ class ProductService:
         cost = content.get("cost_estimate") or {}
         policy = content.get("policy_findings") or {}
         risks = content.get("risks_and_limitations") or []
+        local_executions = self._customer_plan_environment_summaries(principal, revision.id)
         return {
             "id": revision.id,
             "plan_id": plan.id,
@@ -632,6 +633,7 @@ class ProductService:
                 "approved_not_deployed": revision.state == InfrastructurePlanState.APPROVED,
                 "execution_boundary": "Approval records a decision only. It does not deploy or mutate AWS resources.",
             },
+            "local_executions": local_executions,
             "submitted_by_subject": revision.submitted_by_subject,
             "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
             "decision": None
@@ -648,6 +650,186 @@ class ProductService:
             },
             "execution": "UNEXECUTED_APPROVAL_ONLY",
         }
+
+    def execute_customer_plan_dry_run(
+        self, principal: Principal, revision_id: str
+    ) -> list[Environment]:
+        """Queue a bounded local fixture run for an approved customer-plan revision.
+
+        This is deliberately separate from approval and never assumes AWS credentials.
+        """
+        revision, plan, source_deployment = self._approved_customer_revision(principal, revision_id)
+        if not self._is_workspace_administrator(principal) and plan.creator_subject != principal.subject:
+            raise PermissionError("only the plan creator or a workspace administrator can execute the local dry run")
+        existing = self._customer_plan_environments(principal, revision.id)
+        active = [
+            environment
+            for environment in existing
+            if LifecycleState(environment.state) != LifecycleState.DESTROYED
+        ]
+        if active:
+            return active
+        payload = {
+            **source_deployment.payload,
+            "execution_mode": "LOCAL_DRY_RUN",
+            "customer_plan_revision_id": revision.id,
+            "customer_plan_digest": revision.content_digest,
+            "customer_plan_approved": True,
+            "execution_boundary": "bounded local fixture execution only; no AWS resources are created",
+        }
+        digest = plan_hash(
+            {
+                "action": PlanAction.DEPLOY,
+                "execution_mode": "LOCAL_DRY_RUN",
+                "revision_id": revision.id,
+                "digest": revision.content_digest,
+                "payload": payload,
+            }
+        )
+        dry_run = self.db.scalar(select(DeploymentPlan).where(DeploymentPlan.plan_hash == digest))
+        if not dry_run:
+            dry_run = DeploymentPlan(
+                organization_id=principal.organization_id,
+                intent_id=source_deployment.intent_id,
+                requester_subject=principal.subject,
+                action=PlanAction.DEPLOY,
+                state=LifecycleState.PLANNED,
+                plan_hash=digest,
+                policy_result=PolicyResult.ALLOW,
+                payload=payload,
+            )
+            self.db.add(dry_run)
+            self.db.flush()
+            self.audit(
+                principal,
+                "customer_plan.local_dry_run_plan_created",
+                "deployment_plan",
+                dry_run.id,
+                {"revision_id": revision.id, "digest": revision.content_digest},
+            )
+        environments = self.execute(principal, dry_run.id)
+        self.audit(
+            principal,
+            "customer_plan.local_dry_run_queued",
+            "infrastructure_plan_revision",
+            revision.id,
+            {
+                "deployment_plan_id": dry_run.id,
+                "environment_ids": [environment.id for environment in environments],
+                "digest": revision.content_digest,
+            },
+        )
+        self.db.commit()
+        return environments
+
+    def customer_plan_destroy_plan(
+        self, principal: Principal, revision_id: str, environment_id: str
+    ) -> DeploymentPlan:
+        revision, _, _ = self._approved_customer_revision(principal, revision_id)
+        environment = self._environment(principal, environment_id)
+        if environment.desired_state.get("customer_plan_revision_id") != revision.id:
+            raise PermissionError("environment is not tied to this customer-plan revision")
+        if LifecycleState(environment.state) not in {
+            LifecycleState.READY,
+            LifecycleState.FAILED,
+            LifecycleState.DEGRADED,
+        }:
+            raise ValueError("environment cannot be destroyed in its current state")
+        environment.state = LifecycleState.DESTROY_REQUESTED
+        requires_approval = environment.environment_type == EnvironmentName.PRODUCTION
+        payload = {
+            "action": PlanAction.DESTROY,
+            "environment_id": environment.id,
+            "observed_state": environment.observed_state,
+            "customer_plan_revision_id": revision.id,
+            "customer_plan_digest": revision.content_digest,
+            "execution_mode": "LOCAL_DRY_RUN_DESTROY",
+        }
+        digest = plan_hash(payload)
+        plan = DeploymentPlan(
+            organization_id=principal.organization_id,
+            environment_id=environment.id,
+            requester_subject=principal.subject,
+            action=PlanAction.DESTROY,
+            state=LifecycleState.DESTROY_APPROVAL_REQUIRED
+            if requires_approval
+            else LifecycleState.PLANNED,
+            plan_hash=digest,
+            policy_result=PolicyResult.APPROVAL_REQUIRED
+            if requires_approval
+            else PolicyResult.ALLOW,
+            payload=payload,
+        )
+        self.db.add(plan)
+        self.db.flush()
+        self.audit(
+            principal,
+            "customer_plan.local_destroy_requested",
+            "infrastructure_plan_revision",
+            revision.id,
+            {
+                "environment_id": environment.id,
+                "deployment_plan_id": plan.id,
+                "hash": digest,
+                "approval_required": requires_approval,
+            },
+        )
+        self.db.commit()
+        return plan
+
+    def _approved_customer_revision(
+        self, principal: Principal, revision_id: str
+    ) -> tuple[InfrastructurePlanRevision, InfrastructurePlan, DeploymentPlan]:
+        revision = self._infrastructure_revision(principal, revision_id)
+        plan = self._infrastructure_plan(principal, revision.infrastructure_plan_id)
+        if not self._is_workspace_administrator(principal) and plan.creator_subject != principal.subject:
+            raise PermissionError("infrastructure plan revision is not visible to this user")
+        if revision.state != InfrastructurePlanState.APPROVED:
+            raise ValueError("customer-plan revision must be approved before local dry-run execution")
+        decision = self.db.scalar(
+            select(InfrastructurePlanDecisionRecord).where(
+                InfrastructurePlanDecisionRecord.revision_id == revision.id
+            )
+        )
+        if not decision or decision.decision != InfrastructurePlanDecision.APPROVED:
+            raise ValueError("approved customer-plan revision has no durable approval decision")
+        if decision.approved_digest != revision.content_digest:
+            raise ValueError("approved customer-plan digest no longer matches the revision")
+        source_id = revision.content.get("source_deployment_plan_id")
+        if not source_id:
+            raise ValueError("customer-plan revision has no source execution contract")
+        source = self._plan(principal, str(source_id))
+        return revision, plan, source
+
+    def _customer_plan_environments(
+        self, principal: Principal, revision_id: str
+    ) -> list[Environment]:
+        return [
+            environment
+            for environment in self.db.scalars(
+                select(Environment)
+                .where(Environment.organization_id == principal.organization_id)
+                .order_by(Environment.created_at)
+            )
+            if environment.desired_state.get("customer_plan_revision_id") == revision_id
+        ]
+
+    def _customer_plan_environment_summaries(
+        self, principal: Principal, revision_id: str
+    ) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": environment.id,
+                "name": environment.name,
+                "type": environment.environment_type,
+                "state": environment.state,
+                "execution_mode": environment.desired_state.get("execution_mode"),
+                "plan_hash": environment.desired_state.get("plan_hash"),
+                "cost_estimate": environment.desired_state.get("cost_estimate"),
+                "observed_state": environment.observed_state,
+            }
+            for environment in self._customer_plan_environments(principal, revision_id)
+        ]
 
     def decide_infrastructure_plan(
         self,
@@ -1580,6 +1762,10 @@ class ProductService:
                         plan.payload["architecture"]["profile"]
                     ).__dict__,
                     "plan_hash": plan.plan_hash,
+                    "execution_mode": plan.payload.get("execution_mode", "LOCAL_FIXTURE"),
+                    "customer_plan_revision_id": plan.payload.get("customer_plan_revision_id"),
+                    "customer_plan_digest": plan.payload.get("customer_plan_digest"),
+                    "cost_estimate": plan.payload["architecture"].get("cost_estimate"),
                     "should_fail": "force failure" in intent.prompt.lower(),
                     "should_degrade": "force degraded" in intent.prompt.lower(),
                     "spec": plan.payload["spec"],
@@ -2041,6 +2227,12 @@ class ProductService:
             "infrastructure_plan.approved": "Plan approved",
             "infrastructure_plan.rejected": "Plan rejected",
             "infrastructure_plan.revised": "Plan revised",
+            "customer_plan.local_dry_run_plan_created": "Local dry-run plan created",
+            "customer_plan.local_dry_run_queued": "Local dry-run queued",
+            "customer_plan.local_destroy_requested": "Local destroy requested",
+            "environment.observed": "Environment observed",
+            "environment.degraded": "Environment degraded",
+            "environment.destroyed": "Environment destroyed",
         }
         return {
             "id": event.id,
