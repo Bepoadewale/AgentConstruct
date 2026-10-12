@@ -335,6 +335,121 @@ class ProductService:
         self.db.commit()
         return revision
 
+    def revise_infrastructure_plan_constraints(
+        self,
+        principal: Principal,
+        plan_id: str,
+        constraints: dict[str, Any],
+    ) -> InfrastructurePlanRevision:
+        plan = self._infrastructure_plan(principal, plan_id)
+        if plan.creator_subject != principal.subject:
+            raise PermissionError("only the plan creator can create a revised draft")
+        previous = self.db.scalar(
+            select(InfrastructurePlanRevision)
+            .where(InfrastructurePlanRevision.infrastructure_plan_id == plan.id)
+            .order_by(InfrastructurePlanRevision.revision_number.desc())
+            .limit(1)
+        )
+        if not previous:
+            raise ValueError("plan has no revision to update")
+        if previous.state not in {
+            InfrastructurePlanState.DRAFT,
+            InfrastructurePlanState.REJECTED,
+        }:
+            raise ValueError("a revision can be created only from a draft or rejected plan")
+        updated = self._content_with_constraint_updates(previous.content, constraints)
+        revision = self.revise_infrastructure_plan(principal, plan_id, updated)
+        self.audit(
+            principal,
+            "infrastructure_plan.constraints_updated",
+            "infrastructure_plan_revision",
+            revision.id,
+            {
+                "plan_id": plan.id,
+                "revision": revision.revision_number,
+                "changed": sorted(
+                    key
+                    for key, value in constraints.items()
+                    if value not in (None, [], {})
+                ),
+            },
+        )
+        self.db.commit()
+        return revision
+
+    @staticmethod
+    def _content_with_constraint_updates(
+        content: dict[str, Any], constraints: dict[str, Any]
+    ) -> dict[str, Any]:
+        updated = json.loads(json.dumps(content))
+        workload = updated.setdefault("application_analysis", {}).setdefault(
+            "workload_spec", {}
+        )
+        target = updated.setdefault("target", {})
+        summary = updated.setdefault("summary", {})
+        previous_constraints = updated.get("user_constraints", {})
+        next_constraints = {**previous_constraints}
+
+        if constraints.get("monthly_budget_usd") is not None:
+            workload["monthly_budget_usd"] = constraints["monthly_budget_usd"]
+            next_constraints["monthly_budget_usd"] = constraints["monthly_budget_usd"]
+        if constraints.get("region"):
+            workload["region_constraints"] = [constraints["region"]]
+            target["region"] = constraints["region"]
+            next_constraints["region"] = constraints["region"]
+        if constraints.get("environment"):
+            environments = [str(item) for item in constraints["environment"]]
+            workload["environments"] = environments
+            next_constraints["environment"] = environments
+        if constraints.get("data_classification"):
+            workload["data_classification"] = constraints["data_classification"]
+            next_constraints["data_classification"] = constraints["data_classification"]
+        if constraints.get("availability_target"):
+            workload["availability_target"] = constraints["availability_target"]
+            next_constraints["availability_target"] = constraints["availability_target"]
+        if constraints.get("workload_type"):
+            workload["workload_type"] = constraints["workload_type"]
+            next_constraints["workload_type"] = constraints["workload_type"]
+        if constraints.get("public_access") is not None:
+            workload["requires_private_connectivity"] = not bool(constraints["public_access"])
+            next_constraints["public_access"] = bool(constraints["public_access"])
+
+        accepted = constraints.get("accepted_assumptions") or []
+        rejected = constraints.get("rejected_assumptions") or []
+        updated["assumption_decisions"] = {
+            "accepted": accepted,
+            "rejected": rejected,
+            "note": "Assumption decisions are review inputs; they do not bypass policy or cloud permissions.",
+        }
+        updated["user_constraints"] = next_constraints
+        updated["revision_diff"] = ProductService._revision_diff(content, updated)
+        summary["status"] = "DRAFT - revised constraints; not submitted, approved, or deployed"
+        return updated
+
+    @staticmethod
+    def _revision_diff(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+        before_spec = before.get("application_analysis", {}).get("workload_spec", {})
+        after_spec = after.get("application_analysis", {}).get("workload_spec", {})
+        before_target = before.get("target", {})
+        after_target = after.get("target", {})
+        fields = {
+            "monthly_budget_usd": (before_spec.get("monthly_budget_usd"), after_spec.get("monthly_budget_usd")),
+            "region": (before_target.get("region"), after_target.get("region")),
+            "environments": (before_spec.get("environments"), after_spec.get("environments")),
+            "data_classification": (before_spec.get("data_classification"), after_spec.get("data_classification")),
+            "availability_target": (before_spec.get("availability_target"), after_spec.get("availability_target")),
+            "workload_type": (before_spec.get("workload_type"), after_spec.get("workload_type")),
+            "requires_private_connectivity": (
+                before_spec.get("requires_private_connectivity"),
+                after_spec.get("requires_private_connectivity"),
+            ),
+        }
+        return {
+            field: {"before": old, "after": new}
+            for field, (old, new) in fields.items()
+            if old != new
+        }
+
     def _new_infrastructure_plan_revision(
         self,
         plan: InfrastructurePlan,

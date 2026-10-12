@@ -93,7 +93,21 @@
         <div id="review-actions" class="connection-card">
           <strong>Plan decision</strong>
           <p id="review-action-message" class="message">Create a review draft before taking an action.</p>
-          <div class="connection-row"><button id="submit-review" type="button" class="hidden">Submit for approval</button><button id="revise-review" type="button" class="secondary hidden">Create revised draft</button></div>
+          <div id="revision-controls" class="hidden">
+            <div class="grid controls">
+              <label for="review-budget">Budget (USD)<input id="review-budget" type="number" min="1" /></label>
+              <label for="review-region">Region<select id="review-region"><option>us-east-1</option><option>eu-west-1</option></select></label>
+              <label for="review-data-classification">Data<select id="review-data-classification"><option value="restricted">Restricted</option><option value="internal">Internal</option><option value="public">Public</option></select></label>
+              <label for="review-environment">Environment<select id="review-environment"><option value="staging,production">Staging and production</option><option value="production">Production</option><option value="staging">Staging</option></select></label>
+              <label for="review-availability">Availability<select id="review-availability"><option>99.9%</option><option>99.99%</option></select></label>
+              <label for="review-workload-type">Workload<input id="review-workload-type" /></label>
+            </div>
+            <label><input id="review-public-access" type="checkbox" /> Allow public HTTPS access where the selected AWS profile requires it</label>
+            <label for="accepted-assumptions">Accepted assumptions<textarea id="accepted-assumptions" rows="2" placeholder="One assumption per line"></textarea></label>
+            <label for="rejected-assumptions">Rejected assumptions<textarea id="rejected-assumptions" rows="2" placeholder="One assumption per line"></textarea></label>
+          </div>
+          <pre id="review-diff" class="message"></pre>
+          <div class="connection-row"><button id="submit-review" type="button" class="hidden">Submit for approval</button><button id="revise-review" type="button" class="secondary hidden">Create revised draft</button><button id="regenerate-review" type="button" class="secondary hidden">Regenerate draft from edits</button></div>
           <div id="administrator-decisions" class="hidden">
             <p>Administrators decide the exact submitted digest. Self-approval is explicitly recorded when you created the plan.</p>
             <div class="connection-row"><button id="approve-review" type="button">Approve plan</button><button id="reject-review" type="button" class="secondary">Reject plan</button></div>

@@ -4,7 +4,7 @@ The local product demo has separate signed `founder` developer and `administrato
 
 1. In Browser A, sign in as **developer**, select fixture or authorised read-only GitHub/AWS connections, create one plan, and select **Submit for approval**.
 2. In Browser B, sign in as **administrator**, open the pending plan from the dashboard, then approve or reject the exact submitted digest. Rejection requires a reason.
-3. Return to Browser A, refresh the dashboard or reopen the revision, and see the persisted result. A rejected plan can create a new immutable draft revision.
+3. Return to Browser A, refresh the dashboard or reopen the revision, and see the persisted result. A draft or rejected plan can create a new immutable draft revision from edited budget, region, environment, data, availability, workload, access and assumption controls.
 4. In Browser B, create, submit and approve an administrator-owned plan. Its audit event and decision record identify `is_self_approval: true`.
 
 This demo never creates AWS infrastructure. Real GitHub/AWS modes remain explicit opt-in integrations.

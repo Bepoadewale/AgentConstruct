@@ -9,6 +9,7 @@
 - [x] Add GitHub installation/repository/branch and AWS connected-account selection experiences.
 - [x] Add GitHub repository intelligence for safe manifest analysis, persisted runtime/framework/data/deployment hints, and planner/review binding.
 - [x] Render one AWS plan with required Prometheus/Grafana details and cost estimate.
+- [x] Add editable draft/rejected plan constraints, assumption decisions and revision diffs before approval submission.
 - [x] Add submit, administrator approval/rejection, self-approval and revision UI/API flows.
 - [x] Prove the two-session developer/admin journey with browser controls, deterministic API E2E, restart persistence and security-boundary checks.
 

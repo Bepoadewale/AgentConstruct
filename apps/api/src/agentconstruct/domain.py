@@ -281,5 +281,21 @@ class InfrastructurePlanRevisionRequest(BaseModel):
     content: dict[str, Any]
 
 
+class InfrastructurePlanConstraintUpdateRequest(BaseModel):
+    """User-editable planning constraints for a new draft revision."""
+
+    monthly_budget_usd: int | None = Field(default=None, ge=1)
+    region: str | None = Field(default=None, pattern=r"^[a-z]{2}-[a-z]+-\d$")
+    environment: list[EnvironmentName] | None = None
+    data_classification: str | None = Field(
+        default=None, pattern=r"^(public|internal|restricted)$"
+    )
+    availability_target: str | None = Field(default=None, pattern=r"^99\\.(9|99)%$")
+    workload_type: str | None = Field(default=None, min_length=2, max_length=80)
+    public_access: bool | None = None
+    accepted_assumptions: list[str] = Field(default_factory=list, max_length=20)
+    rejected_assumptions: list[str] = Field(default_factory=list, max_length=20)
+
+
 class LocalLoginRequest(BaseModel):
     username: str = Field(min_length=2, max_length=80)

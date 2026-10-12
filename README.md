@@ -19,7 +19,7 @@ For the first Day-2 loop, a bounded telemetry fixture can explain elevated laten
 The planner evaluates viable choices internally, including why simpler options were rejected. The browser presents only the selected AWS design, with its cost range, security controls, observability contract and stated limits.
 ```
 
-Customers do not have to choose subnets, Helm values or Kubernetes internals to use the demo. They can inspect those decisions and set important constraints.
+Customers do not have to choose subnets, Helm values or Kubernetes internals to use the demo. They can inspect those decisions, edit important constraints, record assumption decisions and create a new draft revision before submitting for approval.
 
 Developers and AI clients can use the same governed product surface through the REST API, `agentconstruct` CLI, or `agentconstruct-mcp` stdio server. See [agent client strategy](docs/product/agent-client-strategy.md). The approved architecture profile chooses a matching delivery contract: EKS/GitOps is used only when EKS is the selected profile.
 
