@@ -8,6 +8,8 @@ The production design uses a GitHub App installation, not a personal access toke
 
 The local fixture returns repository metadata, validates only a fixture signature, and creates a `fixture-pr://` reference. It cannot contact or write to GitHub.
 
+The local webhook receiver is now implemented as a product contract. It accepts signed fixture events, persists the installation state, records deduplicated delivery IDs, rejects invalid signatures, and exposes revoked, missing-permission, repository-access-change and branch-update states in the UI. This proves the state machine locally. It is not evidence that GitHub has delivered a public webhook to AgentConstruct.
+
 ## Bring your own AWS account
 
 The production design uses a customer-approved IAM role with OIDC and short-lived STS credentials. The role contract states its audience, maximum session length, and credential boundary. It is not an AWS administrator credential and it is never sent to a browser or agent client.

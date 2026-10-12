@@ -341,3 +341,31 @@ Results:
 An initial seed prompt containing the phrase `no GPU requirement` exposed a deterministic keyword ambiguity in the local fixture parser. The seed prompt was rewritten before final validation so the simple demo remains a non-GPU, non-EKS plan.
 
 This is local fixture evidence only. No AWS resources, Terraform apply, Kubernetes apply, GitHub write, pull request, GitOps sync, or production deployment occurred.
+
+## Local GitHub App workflow contract
+
+Date: 2026-10-12. Environment: macOS, Docker Desktop, Python 3.12 and local fixture identities.
+
+This validation added a local GitHub App webhook workflow contract without enabling repository writes or public GitHub callback delivery.
+
+```bash
+.venv/bin/python -m ruff check apps/api/src tests scripts
+.venv/bin/python -m pytest tests/test_connection_experience.py tests/test_integration_contracts.py -q
+node --check apps/web/app.js
+.venv/bin/python -m pytest -q
+docker compose up -d --build
+make smoke
+make browser-contract
+docker compose config --quiet
+git diff --check
+```
+
+Results:
+
+- Focused GitHub/integration tests passed: **13 passed**.
+- Full pytest suite passed: **85 passed**.
+- Browser contract passed against the rebuilt local UI.
+- The local webhook endpoint verifies fixture signatures, rejects invalid signatures, deduplicates delivery IDs, records replay attempts as duplicates, persists installation state, and exposes installation/repository/branch status in the UI.
+- Tested webhook states include connected installation, revoked installation, repository access change, branch update and missing permission.
+
+This is local fixture evidence. It does not prove that GitHub delivered a public webhook, create a pull request, write a branch, publish checks, merge code, or deploy infrastructure.
