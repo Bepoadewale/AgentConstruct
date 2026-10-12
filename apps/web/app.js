@@ -71,9 +71,10 @@ async function refreshDashboard() {
     ? dashboard.plans.map((item) => `${item.title} · ${item.state}`).join("; ") : "No customer plan revisions yet.";
   document.querySelector("#admin-dashboard").classList.toggle("hidden", !isAdministrator());
   if (isAdministrator()) {
-    const pending = await api("/api/v1/admin/pending-approvals");
+    const filter = document.querySelector("#admin-plan-filter").value;
+    const pending = await api(`/api/v1/admin/customer-plan-revisions?state=${encodeURIComponent(filter)}`);
     document.querySelector("#dashboard-pending").textContent = pending.length
-      ? pending.map((item) => `${item.title} · revision ${item.revision}`).join("; ")
+      ? pending.map((item) => `${item.title} · revision ${item.revision} · ${item.state}${item.is_self_approval ? " · self-approved" : ""}`).join("; ")
       : "No pending plan approvals.";
     const list = document.querySelector("#admin-pending-list");
     list.replaceChildren();
@@ -81,7 +82,7 @@ async function refreshDashboard() {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "secondary";
-      button.textContent = `Review ${item.title} · revision ${item.revision}`;
+      button.textContent = `Review ${item.title} · ${item.state} · ${item.region || "region pending"}`;
       button.addEventListener("click", () => openCustomerReview(item.id).catch((error) => show(error.message, true)));
       list.append(button);
     });
@@ -165,6 +166,11 @@ function renderCustomerReview(review) {
   document.querySelector("#review-title").textContent = `AWS infrastructure plan · revision ${review.revision}`;
   const reviewBoundary = review.state === "DRAFT" ? content.summary.status : "immutable review; not deployed";
   document.querySelector("#review-status").textContent = `${review.state} · ${reviewBoundary} Digest: ${review.content_digest}.`;
+  const summary = review.review_summary || {};
+  document.querySelector("#approval-boundary").classList.toggle("hidden", review.state !== "APPROVED");
+  const adminSummary = document.querySelector("#admin-review-summary");
+  adminSummary.classList.toggle("hidden", !isAdministrator());
+  adminSummary.innerHTML = `<strong>Review evidence</strong><p>Requester: ${summary.requester || review.creator_subject}<br>Repository: ${summary.repository || "unknown"} · ${summary.branch || "branch unknown"}<br>AWS target: ${summary.aws_account_id || "local fixture"} · ${summary.region || "region unknown"}<br>Policy: ${summary.policy_result || "unknown"}<br>Monitoring: ${summary.prometheus || "Prometheus-compatible metrics"} + ${summary.grafana || "Grafana"}<br>Digest: ${review.content_digest}<br>Boundary: ${summary.execution_boundary || "Approval does not deploy."}</p>`;
   document.querySelector("#review-summary").textContent = `${content.summary.selected_profile}: ${content.summary.why}`;
   document.querySelector("#review-application").textContent = JSON.stringify(content.application_analysis, null, 2);
   document.querySelector("#review-target").textContent = JSON.stringify(content.target, null, 2);
@@ -212,8 +218,8 @@ async function openCustomerReview(revisionId) {
 }
 
 async function refreshAudit() {
-  const events = await api("/api/v1/audit-events");
-  document.querySelector("#audit-events").innerHTML = events.length ? events.reverse().map((event) => `<div class="event"><time>${new Date(event.at).toLocaleString()}</time><div><strong>${event.action}</strong><br><span>${event.entity_type} · ${event.detail ? JSON.stringify(event.detail) : ""}</span></div></div>`).join("") : "No events yet.";
+  const events = await api("/api/v1/audit-evidence");
+  document.querySelector("#audit-events").innerHTML = events.length ? events.reverse().map((event) => `<div class="event"><time>${new Date(event.at).toLocaleString()}</time><div><strong>${event.label}</strong><br><span>${event.actor_subject} · ${event.actor_role} · ${event.entity_type}${event.revision ? ` · revision ${event.revision}` : ""}${event.plan_digest ? ` · ${event.plan_digest}` : ""}${event.decision_reason ? ` · reason: ${event.decision_reason}` : ""}</span></div></div>`).join("") : "No events yet.";
 }
 
 function renderEnvironments(environments) {
@@ -407,6 +413,7 @@ document.querySelector("#disconnect-aws").addEventListener("click", async () => 
 });
 
 document.querySelector("#refresh-audit").addEventListener("click", () => refreshAudit().catch((error) => show(error.message, true)));
+document.querySelector("#admin-plan-filter").addEventListener("change", () => refreshDashboard().catch((error) => show(error.message, true)));
 document.querySelector("#refresh-github").addEventListener("click", () => refreshGitHubConnection().catch((error) => showGitHub(error.message, true)));
 document.querySelector("#github-installation").addEventListener("change", () => refreshGitHubRepositories().catch((error) => showGitHub(error.message, true)));
 document.querySelector("#repository").addEventListener("change", () => refreshGitHubBranches().catch((error) => showGitHub(error.message, true)));
