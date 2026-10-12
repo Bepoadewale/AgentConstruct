@@ -200,6 +200,7 @@ function renderCustomerReview(review) {
   const actionMessage = document.querySelector("#review-action-message");
   const localExecution = document.querySelector("#local-execution");
   const desiredStatePr = document.querySelector("#desired-state-pr");
+  const terraformPlanContract = document.querySelector("#terraform-plan-contract");
   const isCreator = currentUser?.user?.subject === review.creator_subject;
   const editable = ["DRAFT", "REJECTED"].includes(review.state) && isCreator;
   submit.classList.toggle("hidden", !(review.state === "DRAFT" && isCreator));
@@ -209,8 +210,10 @@ function renderCustomerReview(review) {
   decisions.classList.toggle("hidden", !(review.state === "SUBMITTED" && isAdministrator()));
   localExecution.classList.toggle("hidden", review.state !== "APPROVED");
   desiredStatePr.classList.toggle("hidden", review.state !== "APPROVED");
+  terraformPlanContract.classList.toggle("hidden", review.state !== "APPROVED");
   renderReviewEnvironments(review.local_executions || []);
   renderDesiredStatePublications(review.desired_state_publications || []);
+  renderTerraformPlanRenders(review.terraform_plan_renders || []);
   document.querySelector("#review-budget").value = workloadSpec.monthly_budget_usd || "";
   document.querySelector("#review-region").value = content.target?.region || "us-east-1";
   document.querySelector("#review-data-classification").value = workloadSpec.data_classification || "restricted";
@@ -227,6 +230,28 @@ function renderCustomerReview(review) {
   else if (review.state === "SUBMITTED") actionMessage.textContent = isAdministrator() ? "This submitted plan is ready for an administrator decision. It is not deployed." : "Submitted for administrator review. It is not deployed.";
   else if (review.state === "REJECTED") actionMessage.textContent = `Rejected: ${review.decision?.reason || "reason unavailable"}. The creator can make a new draft revision.`;
   else if (review.state === "APPROVED") actionMessage.textContent = `Approved by ${review.decision?.approver_subject || "administrator"}${review.decision?.is_self_approval ? " (self-approval recorded)" : ""}. Approved does not mean deployed.`;
+}
+
+function renderTerraformPlanRenders(renders) {
+  const node = document.querySelector("#terraform-render");
+  if (!renders.length) {
+    node.textContent = "No generated deployment contract yet. App Runner contracts are PLAN_ONLY_NOT_APPLIED and cannot apply AWS changes.";
+    return;
+  }
+  node.innerHTML = renders.map((item) => {
+    const render = item.render || {};
+    const inputs = render.module_inputs || {};
+    return `<div class="component"><strong>${item.state}</strong><span>${item.profile} · ${item.terraform_root} · digest ${item.content_digest}</span></div><pre>${JSON.stringify({
+      execution_boundary: render.execution_boundary || item.boundary,
+      service_name: inputs.service_name,
+      aws_region: inputs.aws_region,
+      image_repository: inputs.image_repository,
+      module_path: item.module_path,
+      commands: render.commands,
+      apply_command_available: render.apply_command_available,
+      tags: inputs.tags,
+    }, null, 2)}</pre>`;
+  }).join("");
 }
 
 function renderDesiredStatePublications(publications) {
@@ -422,6 +447,21 @@ document.querySelector("#publish-desired-state").addEventListener("click", async
     await refreshOpenCustomerReview();
     await refreshAudit();
     show("Fixture desired-state PR contract created. Human review remains required before any future cloud execution.");
+  } catch (error) { show(error.message, true); }
+});
+
+document.querySelector("#render-terraform-contract").addEventListener("click", async () => {
+  try {
+    if (!customerReview || customerReview.state !== "APPROVED") throw new Error("Approve the customer plan before generating a Terraform contract.");
+    show("Generating plan-only App Runner Terraform contract. No Terraform plan/apply/destroy or AWS call will occur…");
+    const render = await api(`/api/v1/customer-plan-revisions/${customerReview.id}/terraform-plan-renders`, {
+      method: "POST",
+      body: JSON.stringify({ content_digest: customerReview.content_digest }),
+    });
+    renderTerraformPlanRenders([render]);
+    await refreshOpenCustomerReview();
+    await refreshAudit();
+    show("Plan-only Terraform contract generated. It is not applied and cannot deploy AWS resources.");
   } catch (error) { show(error.message, true); }
 });
 

@@ -255,6 +255,30 @@ class DesiredStatePublication(Base):
     )
 
 
+class TerraformPlanRender(Base):
+    """Plan-only Terraform contract generated from an approved customer-plan revision."""
+
+    __tablename__ = "terraform_plan_renders"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    revision_id: Mapped[str] = mapped_column(ForeignKey("infrastructure_plan_revisions.id"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    profile: Mapped[str] = mapped_column(String(80), index=True)
+    state: Mapped[str] = mapped_column(String(40), default="PLAN_ONLY_NOT_APPLIED", index=True)
+    terraform_root: Mapped[str] = mapped_column(Text)
+    module_path: Mapped[str] = mapped_column(Text)
+    render: Mapped[dict] = mapped_column(JSON, default=dict)
+    content_digest: Mapped[str] = mapped_column(String(64), index=True)
+    created_by_subject: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    __table_args__ = (
+        UniqueConstraint("revision_id", "content_digest", "profile", name="uq_terraform_render_revision_digest_profile"),
+    )
+
+
 class DeploymentPlan(Base):
     __tablename__ = "deployment_plans"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

@@ -24,6 +24,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - One selected AWS customer-plan review with durable submit, administrator approval/rejection, editable draft/rejected constraint revisions, filtered administrator review queues, rich review evidence and explicit self-approval audit paths. Approval remains separate from execution.
 - Approved customer-plan revisions can be explicitly executed as bounded local dry runs. The trusted worker independently observes READY, FAILED or DEGRADED evidence, ties each local environment back to the approved revision/digest, and supports a governed local destroy request/approval/observed-destroy path. This is local fixture execution only and does not create or delete AWS resources.
 - Approved customer-plan revisions can also create a persisted fixture desired-state PR publication. The package binds the exact approved digest, selected repository/branch, selected architecture profile and profile-specific delivery contract. It records the PR-state model and required checks, but does not write GitHub, publish real checks, merge code or deploy infrastructure.
+- Approved `aws-app-runner` customer-plan revisions can render a plan-only Terraform deployment contract. The UI/API preview includes service, source/ECR boundary, IAM, environment variables, secret references, HTTPS assumptions, Prometheus/Grafana monitoring, required tags, account, region and exact plan digest. It is offline validation only: no authenticated Terraform plan, apply, destroy, AWS API call or workload deployment occurs.
 - Terraform contracts for a separate state/lock/budget foundation and private VPC, EKS, ECR, RDS, Secrets Manager and IRSA runtime.
 - Hardened Kubernetes and Argo CD desired-state contracts, External Secrets and artifact-storage contracts, plus planned private observability/recovery controls.
 - Customer-facing infrastructure-plan records now have separate draft, submitted, approved and rejected revision states. They are distinct from bounded execution plans: approval never deploys. Workspace-administrator self-approval is explicitly recorded and tenant-scoped.
@@ -37,10 +38,12 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - The local product flow can list a GitHub App installation's authorized repositories and branches, preserve the selected branch with the project, analyze safe repository manifests, and show/disconnect tenant-owned AWS connection metadata. Fixture mode is locally verified; the existing GitHub App adapter can perform the same repository/branch/manifest reads with a configured short-lived installation token. AWS remains read-only discovery only.
 - The create-plan screen produces exactly one selected AWS customer-plan review draft. It binds the selected GitHub branch, AWS target, region, typed workload specification and available inventory snapshot. The creator can revise editable constraints before submission or after rejection, with a new digest and visible diff. Prometheus-compatible metrics and Amazon Managed Grafana are required typed review components with private-access, coverage, limitation and estimated-cost information. The creator can submit the immutable review; an administrator can inspect requester/repository/AWS target/digest/policy/monitoring/cost/risk evidence and approve or reject the exact digest, including self-approval. After approval, a separate local dry-run button queues the fixture executor and shows observed environment health, estimate and destroy state. None of those decisions or dry runs deploy cloud resources.
 - `make seed-demo-data` can populate a fresh local workspace with realistic draft, submitted, approved, rejected, self-approved and dry-run records for hand demos. It uses only the local API and fixture executor.
+- The generated App Runner Terraform contract preview appears only after approval and remains labeled `PLAN_ONLY_NOT_APPLIED`.
 
 ## Next delivery sequence
 
-1. Run a separately authorised cloud pilot: plan, create, smoke, failure proof, observability, cost query, destroy and absence verification.
+1. Add cloud-readiness guardrails/operator UX before any real apply path.
+2. Run a separately authorised cloud pilot: plan, create, smoke, failure proof, observability, cost query, destroy and absence verification.
 
 ## Clean-room reproducibility
 

@@ -279,6 +279,10 @@ class DesiredStatePublicationRequest(BaseModel):
     content_digest: str = Field(min_length=64, max_length=64)
 
 
+class TerraformPlanRenderRequest(BaseModel):
+    content_digest: str = Field(min_length=64, max_length=64)
+
+
 class InfrastructurePlanRevisionRequest(BaseModel):
     """New customer-plan draft content. The preceding revision is never edited."""
 

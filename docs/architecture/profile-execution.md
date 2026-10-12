@@ -16,6 +16,8 @@ This prevents a request that needs a simple managed application from accidentall
 
 **Executed locally:** the planner stores the selected profile in the immutable plan; the local worker passes that profile to the bounded executor; tests prove that an App Runner recommendation has no Kubernetes contract and an EKS recommendation does.
 
-**Simulated:** the executor reports a deterministic local result. It does not run Terraform, create cloud resources, open a pull request, call Argo, or call Kubernetes.
+**Implemented / unexecuted:** approved `aws-app-runner` customer-plan revisions can now render a plan-only Terraform contract. The rendered contract includes module inputs for the service, repository/branch, ECR/source boundary, IAM boundary, secret references, HTTPS assumptions, Prometheus/Grafana monitoring contract, required tags, selected account/region, revision ID and exact approved digest. The renderer persists the preview and exposes only offline validation commands. It does not expose `terraform apply`.
 
-**Planned cloud pilot:** profile-specific Terraform rendering, reviewed desired-state publication, and independent cloud observation.
+**Simulated:** the executor reports a deterministic local result. Fixture desired-state PR publication records a reviewed-PR contract without writing GitHub.
+
+**Planned cloud pilot:** actual GitHub PR writes, authenticated AWS Terraform plan, apply, independent cloud observation and destroy remain separate, explicit future work.

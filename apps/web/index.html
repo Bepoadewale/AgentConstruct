@@ -129,6 +129,12 @@
           <div class="connection-row"><button id="publish-desired-state" type="button">Create fixture desired-state PR</button></div>
           <div id="desired-state-publication">No desired-state publication yet.</div>
         </div>
+        <div id="terraform-plan-contract" class="connection-card hidden">
+          <strong>Generated deployment contract</strong>
+          <p class="message">Available for approved App Runner plans only. This is a plan-only Terraform contract preview; it is not a Terraform plan, apply, destroy, AWS API call, GitHub write or deployment.</p>
+          <div class="connection-row"><button id="render-terraform-contract" type="button">Generate plan-only Terraform contract</button></div>
+          <div id="terraform-render">No Terraform contract yet.</div>
+        </div>
       </section>
       <section id="audit" class="panel">
         <div class="panel-heading"><div><p class="eyebrow">AUDIT</p><h2>What happened</h2></div><button id="refresh-audit" class="secondary">Refresh</button></div>
