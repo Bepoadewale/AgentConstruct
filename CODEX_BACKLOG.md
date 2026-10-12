@@ -54,12 +54,14 @@
 - [x] GitHub App installation/repository/branch discovery and safe manifest intelligence.
 - [x] Local GitHub webhook receiver contract with signature verification, delivery dedupe, replay protection, persisted installation states and UI visibility.
 - [x] Fixture desired-state PR publisher for approved customer-plan revisions with exact-digest, branch, GitHub-state and profile-contract guardrails.
+- [x] Plan-only App Runner Terraform renderer for approved customer-plan revisions, including digest-bound module inputs, UI preview, offline validation and fail-closed tests. No apply path exists.
 - [ ] Scoped GitHub desired-state publication through reviewed pull requests.
 - [ ] Real GitOps/Argo observer and customer-cloud workload agent.
 - [ ] Enterprise OIDC/JWKS adapter and organisation lifecycle.
 - [ ] Replace the fixture inventory and pricing catalogue with customer-approved AWS discovery and timestamped pricing sources.
 - [ ] Replace deterministic Day-2 telemetry and the fixed change endpoint with tenant-authorised telemetry, policy-bounded execution and independently observed customer-cloud changes.
-- [ ] Render Terraform only for the selected architecture family; do not send every plan to the EKS reference stack.
+- [ ] Add cloud-readiness guardrails/operator UX before introducing any authenticated Terraform plan/apply route.
+- [ ] Add authenticated Terraform plan-only review for the selected App Runner contract. Do not add apply until separately authorised.
 
 ## P1 — First cloud pilot prerequisites
 

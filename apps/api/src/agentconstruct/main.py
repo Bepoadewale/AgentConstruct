@@ -25,6 +25,7 @@ from agentconstruct.domain import (
     IntentRequest,
     LocalLoginRequest,
     ProjectRequest,
+    TerraformPlanRenderRequest,
 )
 from agentconstruct.models import Environment
 from agentconstruct.security import Principal, issue_local_token, verify_token
@@ -450,6 +451,22 @@ def create_customer_plan_desired_state_publication(
     REQUESTS.labels("desired_state.customer_plan_fixture_pr").inc()
     try:
         return service.create_desired_state_publication_for_revision(
+            principal, revision_id, request.content_digest
+        )
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post("/api/v1/customer-plan-revisions/{revision_id}/terraform-plan-renders")
+def create_customer_plan_terraform_render(
+    revision_id: str,
+    request: TerraformPlanRenderRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("terraform.customer_plan_render").inc()
+    try:
+        return service.create_terraform_plan_render_for_revision(
             principal, revision_id, request.content_digest
         )
     except (PermissionError, ValueError, KeyError) as error:

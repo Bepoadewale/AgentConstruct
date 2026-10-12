@@ -398,3 +398,46 @@ Results:
 - Failure fixtures passed for stale digest, changed branch and revoked GitHub App installation.
 
 This is local fixture evidence only. It did not create a GitHub branch, pull request, check run, merge, GitOps sync, Terraform plan/apply, AWS resource, or production deployment.
+
+## App Runner plan-only Terraform renderer
+
+Date: 2026-10-12. Environment: macOS, Python 3.12, local fixture identities and Terraform CLI.
+
+This validation added an approved-plan to Terraform-contract renderer for the first real profile: `aws-app-runner`.
+
+```bash
+.venv/bin/python -m pytest tests/test_customer_plan_review.py -q
+terraform fmt -recursive infrastructure/terraform
+node --check apps/web/app.js
+.venv/bin/python -m ruff check apps/api/src tests scripts
+TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-apprunner-renderer terraform -chdir=infrastructure/terraform/renderers/app-runner-plan init -backend=false -input=false
+TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-apprunner-renderer terraform -chdir=infrastructure/terraform/renderers/app-runner-plan validate
+.venv/bin/python -m pytest -q
+make terraform-validate
+docker compose up -d --build
+make smoke
+make browser-contract
+make verify
+make opa-test
+git diff --check
+```
+
+Results:
+
+- Focused customer-plan tests passed: **15 passed**.
+- Full pytest suite passed: **94 passed**.
+- JavaScript syntax check passed.
+- Ruff passed.
+- App Runner renderer Terraform root initialized with `-backend=false` and validated successfully.
+- `make terraform-validate` passed across the existing Terraform contracts plus the new App Runner renderer.
+- Rebuilt Docker Compose services passed smoke and browser-contract checks.
+- `make verify` passed: Ruff, **94 pytest tests**, and Compose config validation.
+- OPA policy tests passed: **3/3**.
+- `git diff --check` passed.
+- The renderer requires an approved customer-plan revision and exact approved digest.
+- A simple FastAPI plan renders an `aws-app-runner` contract, not an EKS contract.
+- An EKS plan is rejected by the App Runner renderer.
+- The approved digest is embedded in module inputs, environment variables, tags and file previews.
+- The render payload exposes no apply command and is labeled `PLAN_ONLY_NOT_APPLIED`.
+
+This is local/offline evidence only. It did not run authenticated `terraform plan`, `terraform apply`, `terraform destroy`, AWS APIs, GitHub writes, GitOps sync, Kubernetes commands, or production deployment.

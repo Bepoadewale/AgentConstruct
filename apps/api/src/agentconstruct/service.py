@@ -59,6 +59,7 @@ from agentconstruct.models import (
     StoredArchitecturePlan,
     StoredCloudInventorySnapshot,
     StoredRepositoryAnalysis,
+    TerraformPlanRender,
     WorkloadIntent,
 )
 from agentconstruct.planner import AwsV1Planner
@@ -625,6 +626,17 @@ class ProductService:
                 .order_by(DesiredStatePublication.created_at.desc())
             )
         ]
+        terraform_plan_renders = [
+            self._terraform_plan_render_payload(render)
+            for render in self.db.scalars(
+                select(TerraformPlanRender)
+                .where(
+                    TerraformPlanRender.organization_id == principal.organization_id,
+                    TerraformPlanRender.revision_id == revision.id,
+                )
+                .order_by(TerraformPlanRender.created_at.desc())
+            )
+        ]
         return {
             "id": revision.id,
             "plan_id": plan.id,
@@ -650,6 +662,7 @@ class ProductService:
             },
             "local_executions": local_executions,
             "desired_state_publications": desired_state_publications,
+            "terraform_plan_renders": terraform_plan_renders,
             "submitted_by_subject": revision.submitted_by_subject,
             "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
             "decision": None
@@ -1806,6 +1819,235 @@ class ProductService:
             "created_at": publication.created_at.isoformat() if publication.created_at else None,
             "execution": "SIMULATED_FIXTURE_PR",
             "merge_boundary": "AgentConstruct never merges the desired-state PR itself.",
+        }
+
+    def create_terraform_plan_render_for_revision(
+        self, principal: Principal, revision_id: str, provided_digest: str
+    ) -> dict[str, Any]:
+        """Generate a plan-only App Runner Terraform contract.
+
+        This is a renderer, not an executor. It persists deterministic module
+        inputs and file previews for human review and offline validation. It
+        never returns an apply command and it never calls AWS.
+        """
+        revision, infrastructure_plan, source_deployment = self._approved_customer_revision(
+            principal, revision_id
+        )
+        if revision.content_digest != provided_digest or plan_hash(revision.content) != provided_digest:
+            raise ValueError("stale Terraform render request: approved digest changed")
+        content = revision.content
+        profile_name = str(content.get("summary", {}).get("selected_profile") or "")
+        if profile_name != "aws-app-runner":
+            raise ValueError("App Runner Terraform renderer only supports aws-app-runner approved plans")
+        project = self._project(principal, infrastructure_plan.project_id)
+        application = content.get("application_analysis") or {}
+        target = content.get("target") or {}
+        repository_url = application.get("repository")
+        branch = application.get("branch")
+        if not repository_url or not branch:
+            raise ValueError("approved plan has no selected repository and branch")
+        if target.get("provider") != "aws" or not target.get("region"):
+            raise ValueError("approved plan has no AWS target region")
+        repository_connection = self.db.scalar(
+            select(RepositoryConnection).where(
+                RepositoryConnection.organization_id == principal.organization_id,
+                RepositoryConnection.project_id == project.id,
+                RepositoryConnection.repository_url == repository_url,
+            )
+        )
+        if repository_connection is None:
+            raise ValueError("selected repository is no longer connected to this project")
+        if repository_connection.selected_branch and repository_connection.selected_branch != branch:
+            raise ValueError("selected repository branch changed after approval")
+        existing = self.db.scalar(
+            select(TerraformPlanRender).where(
+                TerraformPlanRender.organization_id == principal.organization_id,
+                TerraformPlanRender.revision_id == revision.id,
+                TerraformPlanRender.content_digest == revision.content_digest,
+                TerraformPlanRender.profile == profile_name,
+            )
+        )
+        if existing:
+            return self._terraform_plan_render_payload(existing)
+        render = self._app_runner_terraform_contract(
+            revision=revision,
+            infrastructure_plan=infrastructure_plan,
+            source_deployment=source_deployment,
+            repository_url=str(repository_url),
+            branch=str(branch),
+        )
+        stored = TerraformPlanRender(
+            organization_id=principal.organization_id,
+            revision_id=revision.id,
+            project_id=project.id,
+            profile=profile_name,
+            state="PLAN_ONLY_NOT_APPLIED",
+            terraform_root=render["terraform_root"],
+            module_path=render["module_path"],
+            render=render,
+            content_digest=revision.content_digest,
+            created_by_subject=principal.subject,
+        )
+        self.db.add(stored)
+        self.db.flush()
+        self.audit(
+            principal,
+            "terraform.plan_only_contract_rendered",
+            "terraform_plan_render",
+            stored.id,
+            {
+                "revision_id": revision.id,
+                "digest": revision.content_digest,
+                "profile": profile_name,
+                "status": stored.state,
+                "boundary": "plan-only Terraform contract; no plan/apply/destroy command executed",
+            },
+        )
+        self.db.commit()
+        return self._terraform_plan_render_payload(stored)
+
+    def _app_runner_terraform_contract(
+        self,
+        *,
+        revision: InfrastructurePlanRevision,
+        infrastructure_plan: InfrastructurePlan,
+        source_deployment: DeploymentPlan,
+        repository_url: str,
+        branch: str,
+    ) -> dict[str, Any]:
+        content = revision.content
+        profile = execution_profile("aws-app-runner")
+        target = content.get("target") or {}
+        observability = content.get("observability") or {}
+        workload = content.get("application_analysis", {}).get("workload_spec", {})
+        resource_names = [
+            resource.get("name", "")
+            for resource in content.get("resource_breakdown", [])
+        ]
+        if any("eks" in name.lower() or "kubernetes" in name.lower() for name in resource_names):
+            raise ValueError("unsupported resources for App Runner renderer")
+        service_name = self._terraform_safe_name(infrastructure_plan.title)
+        digest = revision.content_digest
+        account_id = target.get("account_id") or "customer-account-selected-at-apply-time"
+        module_inputs = {
+            "project_id": infrastructure_plan.project_id,
+            "revision_id": revision.id,
+            "source_deployment_plan_id": source_deployment.id,
+            "plan_digest": digest,
+            "profile": "aws-app-runner",
+            "service_name": service_name,
+            "repository_url": repository_url,
+            "repository_branch": branch,
+            "aws_account_id": account_id,
+            "aws_region": target["region"],
+            "source_boundary": (
+                "Plan-only contract expects a later reviewed build to publish an immutable image "
+                "to ECR or an explicitly approved App Runner source. This renderer does not build, "
+                "push, deploy or grant GitHub write access."
+            ),
+            "image_repository": f"{account_id}.dkr.ecr.{target['region']}.amazonaws.com/{service_name}",
+            "environment_variables": {
+                "AGENTCONSTRUCT_PLAN_DIGEST": digest,
+                "AGENTCONSTRUCT_PROFILE": "aws-app-runner",
+                "APP_ENVIRONMENTS": ",".join(workload.get("environments") or []),
+            },
+            "secret_references": {
+                "application": "aws-secretsmanager://agentconstruct/app-runner/application",
+            },
+            "https_access": {
+                "ingress": "managed App Runner HTTPS endpoint",
+                "custom_domain": "optional later Route 53/ACM contract",
+                "private_data_boundary": "customer data remains in the selected AWS account",
+            },
+            "iam": {
+                "runtime_role": "least-privilege App Runner instance role",
+                "deployment_role": "future explicit execution role; unavailable in this local renderer",
+            },
+            "observability": {
+                "metrics_backend": observability.get("metrics_backend"),
+                "grafana": observability.get("dashboard"),
+                "scrape_targets": observability.get("scrape_targets", []),
+                "baseline_dashboard": observability.get("baseline_dashboard", {}),
+                "access_boundary": observability.get("access_boundary"),
+                "limitations": observability.get("limitations", []),
+                "cost_assumption": observability.get("cost_assumption"),
+            },
+            "tags": {
+                "ManagedBy": "AgentConstruct",
+                "AgentConstructPlanDigest": digest,
+                "AgentConstructProjectId": infrastructure_plan.project_id,
+                "AgentConstructRevisionId": revision.id,
+                "AgentConstructProfile": "aws-app-runner",
+            },
+        }
+        return {
+            "kind": "agentconstruct.terraform.plan-only-render.v1",
+            "profile": profile.profile,
+            "delivery_kind": profile.delivery_kind,
+            "status": "PLAN_ONLY_NOT_APPLIED",
+            "execution_boundary": (
+                "Generated deployment contract only. It is not a Terraform plan, apply, destroy, "
+                "AWS API call, GitHub write, Kubernetes action or production deployment."
+            ),
+            "terraform_root": "infrastructure/terraform/renderers/app-runner-plan",
+            "module_path": "infrastructure/terraform/modules/app-runner-plan-contract",
+            "commands": [
+                "terraform fmt -check -recursive infrastructure/terraform",
+                "terraform -chdir=infrastructure/terraform/renderers/app-runner-plan init -backend=false -input=false",
+                "terraform -chdir=infrastructure/terraform/renderers/app-runner-plan validate",
+            ],
+            "apply_command_available": False,
+            "module_inputs": module_inputs,
+            "files": [
+                {
+                    "path": "main.tf.json",
+                    "purpose": "Root module wrapper for offline validation.",
+                    "content": {
+                        "module": {
+                            "agentconstruct_app_runner_plan_contract": {
+                                "source": "../../modules/app-runner-plan-contract",
+                                **module_inputs,
+                            }
+                        }
+                    },
+                },
+                {
+                    "path": "terraform.tfvars.json",
+                    "purpose": "Human-readable exact inputs generated from the approved digest.",
+                    "content": module_inputs,
+                },
+                {
+                    "path": "README.md",
+                    "purpose": "Operator boundary note.",
+                    "content": (
+                        "# AgentConstruct App Runner plan-only Terraform contract\n\n"
+                        "Generated from an approved customer-plan revision. Validate only; do not apply."
+                    ),
+                },
+            ],
+        }
+
+    @staticmethod
+    def _terraform_safe_name(value: str) -> str:
+        safe = "".join(character.lower() if character.isalnum() else "-" for character in value)
+        safe = "-".join(part for part in safe.split("-") if part)
+        return safe[:48] or "agentconstruct-app"
+
+    @staticmethod
+    def _terraform_plan_render_payload(render: TerraformPlanRender) -> dict[str, Any]:
+        return {
+            "id": render.id,
+            "revision_id": render.revision_id,
+            "profile": render.profile,
+            "state": render.state,
+            "terraform_root": render.terraform_root,
+            "module_path": render.module_path,
+            "render": render.render,
+            "content_digest": render.content_digest,
+            "created_by_subject": render.created_by_subject,
+            "created_at": render.created_at.isoformat() if render.created_at else None,
+            "execution": "IMPLEMENTED_UNEXECUTED_PLAN_ONLY",
+            "boundary": "No Terraform plan/apply/destroy or AWS mutation is reachable from this renderer.",
         }
 
     def cloud_role_contract(self, principal: Principal, connection_id: str) -> dict[str, str | int]:

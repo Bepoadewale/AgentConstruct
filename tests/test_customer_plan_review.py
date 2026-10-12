@@ -104,6 +104,18 @@ def approved_customer_review(service, prompt: str | None = None):
     )
 
 
+def approved_app_runner_customer_review(service):
+    return approved_customer_review(
+        service,
+        (
+            "Deploy this small FastAPI AI application in AWS. It receives about 2 requests per "
+            "second and may peak at 10 requests per second. Use normal CPU web serving. Keep it "
+            "private where practical. Keep infrastructure below $700/month. Create staging and "
+            "production. Enable monitoring."
+        ),
+    )
+
+
 def test_approved_customer_review_executes_bounded_local_dry_run_and_observes_ready():
     service, _ = make_service()
     approved = approved_customer_review(service)
@@ -280,3 +292,77 @@ def test_eks_desired_state_package_contains_gitops_contract_only_when_profile_re
     assert publication["package"]["profile"] == "aws-eks-governed"
     assert contract_file["content"]["kubernetes_required"] is True
     assert "argocd_application" in contract_file["content"]["resources"]
+
+
+def test_simple_fastapi_approved_plan_renders_app_runner_terraform_contract_not_eks():
+    service, _ = make_service()
+    approved = approved_app_runner_customer_review(service)
+
+    render = service.create_terraform_plan_render_for_revision(
+        founder(), approved.id, approved.content_digest
+    )
+    detail = service.infrastructure_plan_revision_detail(founder(), approved.id)
+
+    assert approved.content["summary"]["selected_profile"] == "aws-app-runner"
+    assert render["profile"] == "aws-app-runner"
+    assert render["state"] == "PLAN_ONLY_NOT_APPLIED"
+    assert render["render"]["module_path"] == "infrastructure/terraform/modules/app-runner-plan-contract"
+    assert render["render"]["module_inputs"]["profile"] == "aws-app-runner"
+    assert render["render"]["module_inputs"]["service_name"] != "aws-eks-governed"
+    assert render["render"]["apply_command_available"] is False
+    assert all("apply" not in command for command in render["render"]["commands"])
+    assert detail["terraform_plan_renders"][0]["id"] == render["id"]
+
+
+def test_app_runner_terraform_contract_embeds_exact_approved_hash_and_tags():
+    service, _ = make_service()
+    approved = approved_app_runner_customer_review(service)
+
+    render = service.create_terraform_plan_render_for_revision(
+        founder(), approved.id, approved.content_digest
+    )
+    inputs = render["render"]["module_inputs"]
+    files = render["render"]["files"]
+
+    assert inputs["plan_digest"] == approved.content_digest
+    assert inputs["environment_variables"]["AGENTCONSTRUCT_PLAN_DIGEST"] == approved.content_digest
+    assert inputs["tags"]["AgentConstructPlanDigest"] == approved.content_digest
+    assert approved.content_digest in str(files)
+
+
+def test_eks_plan_does_not_use_app_runner_terraform_renderer():
+    service, _ = make_service()
+    approved = approved_customer_review(
+        service,
+        "Deploy this multi-service AI inference API in AWS. GPU acceleration is required. Kubernetes is required for GPU scheduling, isolation and controlled rollouts. Support 20 requests per second and peak at 100 requests per second. Keep monthly infrastructure under $1500. Create staging and production.",
+    )
+
+    assert approved.content["summary"]["selected_profile"] == "aws-eks-governed"
+    with pytest.raises(ValueError, match="only supports aws-app-runner"):
+        service.create_terraform_plan_render_for_revision(
+            founder(), approved.id, approved.content_digest
+        )
+
+
+def test_terraform_renderer_fails_closed_for_stale_digest_and_unapproved_revision():
+    service, _ = make_service()
+    approved = approved_app_runner_customer_review(service)
+
+    with pytest.raises(ValueError, match="stale Terraform render"):
+        service.create_terraform_plan_render_for_revision(founder(), approved.id, "0" * 64)
+
+    project = service.create_project(
+        founder(), "unapproved-render", "https://github.com/example/unapproved-render", "main"
+    )
+    intent = service.create_intent(
+        founder(),
+        project.id,
+        "Deploy this small FastAPI AI application in AWS. It receives about 2 requests per second and may peak at 10. Keep infrastructure below $700/month. Create staging and production. Enable monitoring.",
+        project.repository_url,
+        None,
+        "unapproved-render-001",
+    )
+    deployment = service.plan_intent(founder(), intent.id)
+    draft = service.create_customer_plan_review(founder(), deployment.id)
+    with pytest.raises(ValueError, match="must be approved"):
+        service.create_terraform_plan_render_for_revision(founder(), draft.id, draft.content_digest)
