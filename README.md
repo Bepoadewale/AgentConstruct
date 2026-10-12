@@ -11,13 +11,13 @@ customer request → typed workload specification → reusable-cloud inventory f
 → simplest viable architecture and cost plan
 → policy → immutable customer-plan review draft
 → submission → administrator decision
+```
 
 After approval, a separate explicit **Execute local dry run** action can queue the bounded fixture worker, observe READY/FAILED/DEGRADED, show health/cost evidence, and create a governed local destroy plan. This remains local execution evidence only.
 
 For the first Day-2 loop, a bounded telemetry fixture can explain elevated latency, propose a replica change with a cost range and rollback, then send that exact change through the same policy, approval, worker and observation path. It never repairs a protected environment automatically.
 
 The planner evaluates viable choices internally, including why simpler options were rejected. The browser presents only the selected AWS design, with its cost range, security controls, observability contract and stated limits.
-```
 
 Customers do not have to choose subnets, Helm values or Kubernetes internals to use the demo. They can inspect those decisions, edit important constraints, record assumption decisions and create a new draft revision before submitting for approval.
 
@@ -27,9 +27,9 @@ Developers and AI clients can use the same governed product surface through the 
 | --- | --- | --- |
 | Developer/founder | Describe a workload, create/revise/submit a customer-plan review and inspect cost | Choose another organisation, bypass policy, approve or reject a customer plan |
 | Workspace administrator | Create and submit a plan; approve or reject submitted workspace plans, including their own | Approve changed/stale revisions or bypass cloud controls |
+| Intent provider | Propose a typed requirement set | Run shell commands, Terraform, `kubectl`, or cloud mutations |
 
 The local administrator experience includes filtered queues for pending, approved, rejected and self-approved plan revisions, a richer review detail with requester/repository/AWS target/digest/policy/monitoring/cost/risk evidence, an explicit **approved, not deployed** boundary, and a human-readable audit timeline.
-| Intent provider | Propose a typed requirement set | Run shell commands, Terraform, `kubectl`, or cloud mutations |
 
 ## Run it locally
 
@@ -37,6 +37,7 @@ The local administrator experience includes filtered queues for pending, approve
 make install
 make bootstrap-local
 make smoke
+make seed-demo-data
 make demo
 make demo-simple
 make demo-complex

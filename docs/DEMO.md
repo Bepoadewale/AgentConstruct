@@ -13,18 +13,27 @@ This demo never creates AWS infrastructure. Real GitHub/AWS modes remain explici
 
 The administrator detail view shows requester, repository/branch, AWS target, policy result, Prometheus/Grafana evidence, estimated cost/risk context, exact digest and a clear **approved, not deployed** boundary. After approval, the local dry-run panel shows observed environment health and destroy state. The audit tab shows actor, role, action, digest and rejection reason in an export-ready structure.
 
+To pre-populate a fresh local workspace for a fast walkthrough, run:
+
+```bash
+make seed-demo-data
+```
+
+It creates a demo AWS fixture connection plus draft, submitted, approved, rejected, administrator self-approved and locally dry-run plan records. It uses only the local API and fixture executor.
+
 ## Deterministic proof
 
 The same two-session workflow is exercised without manual browser state by:
 
 ```bash
 make customer-plan-e2e
+make seed-demo-data
 docker compose restart api
 make smoke
 make customer-plan-persistence
 ```
 
-It proves developer submission, developer decision denial, stale-digest rejection, administrator approval, rejection with a reason, immutable revision creation, cross-tenant denial, administrator self-approval, and persistence after the API restarts. It only calls planning and decision endpoints; it never calls an execution endpoint.
+It proves developer submission, developer decision denial, stale-digest rejection, administrator approval, rejection with a reason, immutable revision creation, cross-tenant denial, administrator self-approval, approved-plan local dry-run execution, observed readiness failure, governed local destroy, audit evidence and persistence after the API restarts. It never calls AWS, Terraform, Kubernetes or GitHub writes.
 
 ## Connection flow available now
 

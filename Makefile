@@ -3,7 +3,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export PYTHONPATH := apps/api/src
 
-.PHONY: install lint test bootstrap-local smoke demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check browser-contract customer-plan-e2e customer-plan-persistence verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy customer-aws-template-host-plan customer-aws-template-host-apply customer-aws-template-host-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
+.PHONY: install lint test bootstrap-local smoke seed-demo-data demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check browser-contract customer-plan-e2e customer-plan-persistence verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy customer-aws-template-host-plan customer-aws-template-host-apply customer-aws-template-host-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
 
 install:
 	command -v $(PYTHON) >/dev/null || { echo "Python 3.12 is required"; exit 1; }
@@ -22,6 +22,9 @@ bootstrap-local: install
 
 smoke:
 	./scripts/smoke.sh
+
+seed-demo-data:
+	$(PY) scripts/seed_demo_data.py
 
 demo:
 	$(PY) scripts/demo.py

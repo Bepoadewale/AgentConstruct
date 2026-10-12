@@ -62,6 +62,7 @@ jobs:
           make smoke && make browser-contract && make demo-simple && make demo-complex
           && make demo-degraded && make demo-day2 && make demo && make demo-failure
           && make demo-readiness-failure && make customer-plan-e2e
+          && make seed-demo-data
           && docker compose restart api && make smoke && make customer-plan-persistence
           && sleep 10 && make trace-check && make verify
       - run: >-
