@@ -118,6 +118,19 @@ def pending_approvals(
         translate(error)
 
 
+@app.get("/api/v1/admin/customer-plan-revisions")
+def admin_customer_plan_revisions(
+    state: str | None = None,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("admin.customer_plan_revisions").inc()
+    try:
+        return service.admin_infrastructure_plan_revisions(principal, state)
+    except (PermissionError, ValueError) as error:
+        translate(error)
+
+
 @app.post("/api/v1/projects", status_code=201)
 def create_project(
     request: ProjectRequest,
@@ -727,6 +740,7 @@ def audit_events(
     REQUESTS.labels("audit.list").inc()
     return [
         {
+            "actor_subject": item.actor_subject,
             "action": item.action,
             "entity_type": item.entity_type,
             "entity_id": item.entity_id,
@@ -735,6 +749,16 @@ def audit_events(
         }
         for item in service.audits(principal, environment_id)
     ]
+
+
+@app.get("/api/v1/audit-evidence")
+def audit_evidence(
+    entity_id: str | None = None,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("audit.evidence").inc()
+    return service.audit_evidence(principal, entity_id)
 
 
 web_root = Path(os.getenv("AGENTCONSTRUCT_WEB_ROOT", str(Path(__file__).parents[3] / "web")))

@@ -3,11 +3,13 @@
 The local product demo has separate signed `founder` developer and `administrator` workspace-administrator sign-in choices, dashboard views, a server-side administrator-only pending-approval queue, and persisted customer-plan decisions. This is a local fixture identity flow, not enterprise sign-in.
 
 1. In Browser A, sign in as **developer**, select fixture or authorised read-only GitHub/AWS connections, create one plan, and select **Submit for approval**.
-2. In Browser B, sign in as **administrator**, open the pending plan from the dashboard, then approve or reject the exact submitted digest. Rejection requires a reason.
+2. In Browser B, sign in as **administrator**, use the review queue filters for pending, approved, rejected or self-approved revisions, open the submitted plan, then approve or reject the exact submitted digest. Rejection requires a reason.
 3. Return to Browser A, refresh the dashboard or reopen the revision, and see the persisted result. A draft or rejected plan can create a new immutable draft revision from edited budget, region, environment, data, availability, workload, access and assumption controls.
 4. In Browser B, create, submit and approve an administrator-owned plan. Its audit event and decision record identify `is_self_approval: true`.
 
 This demo never creates AWS infrastructure. Real GitHub/AWS modes remain explicit opt-in integrations.
+
+The administrator detail view shows requester, repository/branch, AWS target, policy result, Prometheus/Grafana evidence, estimated cost/risk context, exact digest and a clear **approved, not deployed** boundary. The audit tab shows actor, role, action, digest and rejection reason in an export-ready structure.
 
 ## Deterministic proof
 

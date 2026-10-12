@@ -27,6 +27,8 @@ Developers and AI clients can use the same governed product surface through the 
 | --- | --- | --- |
 | Developer/founder | Describe a workload, create/revise/submit a customer-plan review and inspect cost | Choose another organisation, bypass policy, approve or reject a customer plan |
 | Workspace administrator | Create and submit a plan; approve or reject submitted workspace plans, including their own | Approve changed/stale revisions or bypass cloud controls |
+
+The local administrator experience includes filtered queues for pending, approved, rejected and self-approved plan revisions, a richer review detail with requester/repository/AWS target/digest/policy/monitoring/cost/risk evidence, an explicit **approved, not deployed** boundary, and a human-readable audit timeline.
 | Intent provider | Propose a typed requirement set | Run shell commands, Terraform, `kubectl`, or cloud mutations |
 
 ## Run it locally

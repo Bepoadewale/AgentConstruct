@@ -224,27 +224,78 @@ class ProductService:
     def pending_infrastructure_plan_revisions(self, principal: Principal) -> list[dict[str, Any]]:
         if not self._is_workspace_administrator(principal):
             raise PermissionError("workspace administrator role required for pending approvals")
-        rows = self.db.execute(
-            select(InfrastructurePlanRevision, InfrastructurePlan)
-            .join(InfrastructurePlan, InfrastructurePlan.id == InfrastructurePlanRevision.infrastructure_plan_id)
-            .where(
-                InfrastructurePlanRevision.organization_id == principal.organization_id,
-                InfrastructurePlanRevision.state == InfrastructurePlanState.SUBMITTED,
-            )
-            .order_by(InfrastructurePlanRevision.submitted_at.desc())
-        ).all()
+        rows = self._admin_infrastructure_revision_rows(
+            principal, InfrastructurePlanState.SUBMITTED
+        )
         return [
-            {
-                "id": revision.id,
-                "plan_id": plan.id,
-                "title": plan.title,
-                "revision": revision.revision_number,
-                "creator_subject": plan.creator_subject,
-                "content_digest": revision.content_digest,
-                "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
-            }
+            self._admin_plan_queue_item(revision, plan)
             for revision, plan in rows
         ]
+
+    def admin_infrastructure_plan_revisions(
+        self, principal: Principal, state: str | None = None
+    ) -> list[dict[str, Any]]:
+        if not self._is_workspace_administrator(principal):
+            raise PermissionError("workspace administrator role required for plan review")
+        normalized: InfrastructurePlanState | None = None
+        self_approved_only = False
+        if state:
+            state_key = state.upper()
+            if state_key == "SELF_APPROVED":
+                normalized = InfrastructurePlanState.APPROVED
+                self_approved_only = True
+            else:
+                normalized = InfrastructurePlanState(state_key)
+        rows = self._admin_infrastructure_revision_rows(principal, normalized)
+        items = [self._admin_plan_queue_item(revision, plan) for revision, plan in rows]
+        if self_approved_only:
+            return [item for item in items if item["is_self_approval"]]
+        return items
+
+    def _admin_infrastructure_revision_rows(
+        self, principal: Principal, state: InfrastructurePlanState | None
+    ) -> list[tuple[InfrastructurePlanRevision, InfrastructurePlan]]:
+        statement = (
+            select(InfrastructurePlanRevision, InfrastructurePlan)
+            .join(InfrastructurePlan, InfrastructurePlan.id == InfrastructurePlanRevision.infrastructure_plan_id)
+            .where(InfrastructurePlanRevision.organization_id == principal.organization_id)
+            .order_by(InfrastructurePlanRevision.created_at.desc())
+        )
+        if state:
+            statement = statement.where(InfrastructurePlanRevision.state == state)
+        return list(self.db.execute(statement).all())
+
+    def _admin_plan_queue_item(
+        self, revision: InfrastructurePlanRevision, plan: InfrastructurePlan
+    ) -> dict[str, Any]:
+        decision = self.db.scalar(
+            select(InfrastructurePlanDecisionRecord).where(
+                InfrastructurePlanDecisionRecord.revision_id == revision.id
+            )
+        )
+        content = revision.content or {}
+        target = content.get("target") or {}
+        application = content.get("application_analysis") or {}
+        policy = content.get("policy_findings") or {}
+        return {
+            "id": revision.id,
+            "plan_id": plan.id,
+            "title": plan.title,
+            "revision": revision.revision_number,
+            "state": revision.state,
+            "creator_subject": plan.creator_subject,
+            "repository": application.get("repository"),
+            "branch": application.get("branch"),
+            "aws_account_id": target.get("account_id"),
+            "region": target.get("region"),
+            "content_digest": revision.content_digest,
+            "policy_result": policy.get("result"),
+            "is_self_approval": bool(decision and decision.is_self_approval),
+            "decision": decision.decision if decision else None,
+            "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
+            "decided_at": decision.decided_at.isoformat() if decision and decision.decided_at else None,
+            "not_deployed": True,
+        }
 
     def create_project(
         self,
@@ -551,6 +602,13 @@ class ProductService:
                 InfrastructurePlanDecisionRecord.revision_id == revision.id
             )
         )
+        content = revision.content or {}
+        application = content.get("application_analysis") or {}
+        target = content.get("target") or {}
+        observability = content.get("observability") or {}
+        cost = content.get("cost_estimate") or {}
+        policy = content.get("policy_findings") or {}
+        risks = content.get("risks_and_limitations") or []
         return {
             "id": revision.id,
             "plan_id": plan.id,
@@ -559,7 +617,21 @@ class ProductService:
             "revision": revision.revision_number,
             "state": revision.state,
             "content_digest": revision.content_digest,
-            "content": revision.content,
+            "content": content,
+            "review_summary": {
+                "requester": plan.creator_subject,
+                "repository": application.get("repository"),
+                "branch": application.get("branch"),
+                "aws_account_id": target.get("account_id"),
+                "region": target.get("region"),
+                "policy_result": policy.get("result"),
+                "prometheus": observability.get("metrics_backend"),
+                "grafana": observability.get("dashboard"),
+                "estimated_cost": cost.get("range"),
+                "risks": risks,
+                "approved_not_deployed": revision.state == InfrastructurePlanState.APPROVED,
+                "execution_boundary": "Approval records a decision only. It does not deploy or mutate AWS resources.",
+            },
             "submitted_by_subject": revision.submitted_by_subject,
             "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
             "decision": None
@@ -625,6 +697,8 @@ class ProductService:
                 "revision": revision.revision_number,
                 "digest": provided_digest,
                 "is_self_approval": record.is_self_approval,
+                "authorization_policy": record.authorization_policy,
+                "reason": record.reason,
             },
         )
         self.db.commit()
@@ -1934,3 +2008,53 @@ class ProductService:
                 AuditEvent.entity_type == "environment", AuditEvent.entity_id == environment_id
             )
         return list(self.db.scalars(statement.order_by(AuditEvent.created_at)))
+
+    def audit_evidence(
+        self, principal: Principal, entity_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        statement = select(AuditEvent).where(
+            AuditEvent.organization_id == principal.organization_id
+        )
+        if entity_id:
+            statement = statement.where(AuditEvent.entity_id == entity_id)
+        events = self.db.scalars(statement.order_by(AuditEvent.created_at)).all()
+        users = {
+            user.subject: user.role
+            for user in self.db.scalars(
+                select(ProductUser).where(ProductUser.organization_id == principal.organization_id)
+            )
+        }
+        return [self._audit_evidence_item(event, users) for event in events]
+
+    @staticmethod
+    def _audit_evidence_item(event: AuditEvent, roles: dict[str, str]) -> dict[str, Any]:
+        detail = event.detail or {}
+        labels = {
+            "project.created": "Project created",
+            "repository.analyzed": "Repository analyzed",
+            "cloud_connection.created": "AWS connection metadata created",
+            "intent.interpreted": "Intent interpreted",
+            "deployment_plan.created": "Deployment plan created",
+            "infrastructure_plan.draft_created": "Customer plan draft created",
+            "infrastructure_plan.constraints_updated": "Draft constraints updated",
+            "infrastructure_plan.submitted": "Plan submitted for approval",
+            "infrastructure_plan.approved": "Plan approved",
+            "infrastructure_plan.rejected": "Plan rejected",
+            "infrastructure_plan.revised": "Plan revised",
+        }
+        return {
+            "id": event.id,
+            "label": labels.get(event.action, event.action.replace("_", " ").replace(".", " / ")),
+            "action": event.action,
+            "actor_subject": event.actor_subject,
+            "actor_role": roles.get(event.actor_subject, "system"),
+            "entity_type": event.entity_type,
+            "entity_id": event.entity_id,
+            "plan_digest": detail.get("digest") or detail.get("hash") or detail.get("plan_hash"),
+            "revision": detail.get("revision"),
+            "decision_reason": detail.get("reason"),
+            "integration": detail.get("provider") or detail.get("execution"),
+            "detail": detail,
+            "at": event.created_at.isoformat() if event.created_at else None,
+            "export_ready": True,
+        }

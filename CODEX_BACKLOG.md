@@ -11,6 +11,7 @@
 - [x] Render one AWS plan with required Prometheus/Grafana details and cost estimate.
 - [x] Add editable draft/rejected plan constraints, assumption decisions and revision diffs before approval submission.
 - [x] Add submit, administrator approval/rejection, self-approval and revision UI/API flows.
+- [x] Add administrator queue filters, richer review evidence, approved-not-deployed banners and export-ready audit evidence.
 - [x] Prove the two-session developer/admin journey with browser controls, deterministic API E2E, restart persistence and security-boundary checks.
 
 ### Completed hardening — local commercial V1

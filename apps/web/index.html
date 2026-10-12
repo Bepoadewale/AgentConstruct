@@ -32,7 +32,7 @@
           <div><strong>Projects</strong><p id="dashboard-projects" class="message">Loading…</p></div>
           <div><strong>AWS connections</strong><p id="dashboard-connections" class="message">Loading…</p></div>
           <div><strong>Your plan revisions</strong><p id="dashboard-plans" class="message">Loading…</p></div>
-          <div id="admin-dashboard" class="hidden"><strong>Pending administrator approvals</strong><p id="dashboard-pending" class="message">Loading…</p><div id="admin-pending-list"></div></div>
+          <div id="admin-dashboard" class="hidden"><strong>Administrator review queue</strong><select id="admin-plan-filter" aria-label="Admin plan filter"><option value="SUBMITTED">Pending</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option><option value="SELF_APPROVED">Self-approved</option></select><p id="dashboard-pending" class="message">Loading…</p><div id="admin-pending-list"></div></div>
         </div>
       </section>
       <section id="describe" class="panel">
@@ -79,6 +79,8 @@
       <section id="customer-review" class="panel hidden">
         <p class="eyebrow">5 · CUSTOMER PLAN REVIEW</p><h2 id="review-title">AWS infrastructure plan</h2>
         <p id="review-status" class="message"></p>
+        <div id="approval-boundary" class="boundary hidden"><strong>Approved, not deployed.</strong> Approval records an exact plan decision only. It does not create or change AWS resources.</div>
+        <div id="admin-review-summary" class="connection-card hidden"></div>
         <div class="review-grid">
           <article><h3>Summary</h3><p id="review-summary"></p></article>
           <article><h3>Application analysis</h3><pre id="review-application"></pre></article>
