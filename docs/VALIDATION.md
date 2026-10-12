@@ -441,3 +441,40 @@ Results:
 - The render payload exposes no apply command and is labeled `PLAN_ONLY_NOT_APPLIED`.
 
 This is local/offline evidence only. It did not run authenticated `terraform plan`, `terraform apply`, `terraform destroy`, AWS APIs, GitHub writes, GitOps sync, Kubernetes commands, or production deployment.
+
+## Cloud-readiness guardrails
+
+Date: 2026-10-12. Environment: macOS, Docker Desktop, Python 3.12, Terraform CLI and local fixture identities.
+
+This validation added a local preflight gate for future cloud actions.
+
+```bash
+.venv/bin/python -m pytest tests/test_customer_plan_review.py -q
+node --check apps/web/app.js
+.venv/bin/python -m ruff check apps/api/src tests scripts
+.venv/bin/python -m pytest -q
+terraform fmt -recursive infrastructure/terraform
+make terraform-validate
+docker compose up -d --build
+make smoke
+make browser-contract
+make verify
+make opa-test
+git diff --check
+```
+
+Results:
+
+- Focused customer-plan/preflight tests passed: **19 passed**.
+- Full pytest suite passed: **98 passed**.
+- JavaScript syntax check passed.
+- Ruff passed.
+- `make terraform-validate` passed.
+- Rebuilt Docker Compose services passed smoke and browser-contract checks.
+- `make verify` passed: Ruff, **98 pytest tests**, and Compose config validation.
+- OPA policy tests passed: **3/3**.
+- `git diff --check` passed.
+
+The preflight stores a `would_deploy` preview and checklist for exact digest, policy, Terraform contract, no apply command, expected account, region, tags, budget, reviewed PR, runtime identity and dry-run/plan-only mode.
+
+Failure fixtures proved wrong account, wrong region, missing tag, budget exceeded, stale digest, no reviewed PR and no runtime identity. This is local guardrail evidence only. It did not call AWS, run authenticated Terraform plan/apply/destroy, write GitHub, sync GitOps, or deploy a workload.

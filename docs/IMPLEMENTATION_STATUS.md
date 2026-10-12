@@ -17,6 +17,7 @@
 | Customer-plan local dry run | Approved customer-plan revisions can be explicitly queued into the bounded local fixture executor. Environments record the originating revision/digest, execution mode, estimated cost and observed READY/FAILED/DEGRADED state. Production destroy uses the existing destroy plan, administrator approval and observed DESTROYED path. No AWS resources are created or deleted. |
 | Desired-state PR publication | Approved customer-plan revisions can create a persisted fixture PR publication. The package binds the exact approved digest, repository/branch, selected AWS profile and profile-specific delivery contract. States and checks are modeled locally; AgentConstruct cannot merge and the live GitHub adapter still refuses writes. |
 | App Runner Terraform contract rendering | Approved `aws-app-runner` customer-plan revisions can render and persist a plan-only Terraform module-input contract. The preview binds service/source/IAM/secret/HTTPS/Prometheus/Grafana/tag/account/region fields to the exact approved digest. Offline `terraform init -backend=false` and `terraform validate` pass against the renderer root. No Terraform plan/apply/destroy or AWS API call is exposed. |
+| Cloud-readiness guardrails | Approved customer-plan revisions can run a persisted local preflight that checks exact digest, policy, plan-only Terraform contract, absence of apply command, expected account, allowed region, required tags, budget ceiling, reviewed desired-state PR state, runtime identity and dry-run/plan-only execution mode. The result is a `would_deploy` preview plus `BLOCKED_*` or `READY_FOR_AUTHORIZED_CLOUD_PLAN` state. |
 | Customer-plan E2E proof | Separate local developer and administrator HTTP sessions prove submission, administrator approval, self-approval, rejection/revision, stale-digest rejection, developer/tenant denial, approved-plan local dry-run execution, readiness failure, governed local destroy, audit evidence and persistence after API restart. Browser controls are contract-checked against the served UI. |
 | Local execution | API persists a `QUEUED` job; a separate trusted worker invokes only the fixed fixture executor and records READY, FAILED or DESTROYED evidence |
 | Day-2 change loop | Deterministic latency evidence → explanation → immutable `CHANGE` plan → production approval → durable worker → observed recovery and audit |
@@ -35,11 +36,12 @@
 - Customer-plan dry-run deployment, destroy and Day-2 change application are bounded local fixtures, not AWS, Terraform, Docker or Kubernetes execution.
 - The selected AWS review, cost and monitoring configuration are deterministic local planning fixtures, not live AWS pricing, managed Prometheus/Grafana provisioned resources, or a deployed workload.
 - The App Runner Terraform renderer is implemented and offline-validated, but it has not run an authenticated AWS plan and cannot apply resources.
+- Cloud-readiness preflight is local guardrail evidence. It does not prove AWS credentials, hosted runtime identity, live GitHub checks, Terraform plan/apply, GitOps sync or workload readiness.
 - Local signed JWT, developer/administrator sign-in, and workspace dashboards are development fixtures. The JWKS verifier adapter is code, not enterprise OIDC execution evidence.
 
 ## Roadmap only
 
-GitHub OAuth/install initiation, GitHub-hosted control-plane OIDC assumption, live GitHub webhooks/reviewed PR writes/checks, authenticated Terraform planning/apply for any profile, real GitOps/Argo execution, enterprise identity, external agent-client installation, subscription billing, model runtime controls and automated remediation.
+GitHub OAuth/install initiation, GitHub-hosted control-plane OIDC assumption, live GitHub webhooks/reviewed PR writes/checks, authenticated Terraform planning/apply for any profile, real GitOps/Argo execution, configured AgentConstruct cloud runtime identity, enterprise identity, external agent-client installation, subscription billing, model runtime controls and automated remediation.
 
 ## Statically validated cloud contract
 

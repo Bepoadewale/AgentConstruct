@@ -283,6 +283,17 @@ class TerraformPlanRenderRequest(BaseModel):
     content_digest: str = Field(min_length=64, max_length=64)
 
 
+class CloudReadinessPreflightRequest(BaseModel):
+    content_digest: str = Field(min_length=64, max_length=64)
+    expected_account_id: str | None = Field(default=None, pattern=r"^[0-9]{12}$")
+    allowed_regions: list[str] = Field(default_factory=lambda: ["us-east-1"], max_length=20)
+    required_tags: dict[str, str] = Field(default_factory=dict, max_length=20)
+    budget_ceiling_usd: int | None = Field(default=None, ge=1)
+    execution_mode: str = Field(default="DRY_RUN_ONLY", pattern=r"^(DRY_RUN_ONLY|PLAN_ONLY)$")
+    require_reviewed_pr: bool = True
+    runtime_identity_configured: bool = False
+
+
 class InfrastructurePlanRevisionRequest(BaseModel):
     """New customer-plan draft content. The preceding revision is never edited."""
 

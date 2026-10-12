@@ -41,6 +41,7 @@ from agentconstruct.models import (
     AuditEvent,
     CloudConnection,
     CloudDiscoveryJob,
+    CloudReadinessPreflight,
     DeploymentPlan,
     DesiredStatePublication,
     Environment,
@@ -637,6 +638,17 @@ class ProductService:
                 .order_by(TerraformPlanRender.created_at.desc())
             )
         ]
+        cloud_preflights = [
+            self._cloud_readiness_preflight_payload(preflight)
+            for preflight in self.db.scalars(
+                select(CloudReadinessPreflight)
+                .where(
+                    CloudReadinessPreflight.organization_id == principal.organization_id,
+                    CloudReadinessPreflight.revision_id == revision.id,
+                )
+                .order_by(CloudReadinessPreflight.created_at.desc())
+            )
+        ]
         return {
             "id": revision.id,
             "plan_id": plan.id,
@@ -663,6 +675,7 @@ class ProductService:
             "local_executions": local_executions,
             "desired_state_publications": desired_state_publications,
             "terraform_plan_renders": terraform_plan_renders,
+            "cloud_readiness_preflights": cloud_preflights,
             "submitted_by_subject": revision.submitted_by_subject,
             "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
             "decision": None
@@ -2048,6 +2061,202 @@ class ProductService:
             "created_at": render.created_at.isoformat() if render.created_at else None,
             "execution": "IMPLEMENTED_UNEXECUTED_PLAN_ONLY",
             "boundary": "No Terraform plan/apply/destroy or AWS mutation is reachable from this renderer.",
+        }
+
+    def create_cloud_readiness_preflight(
+        self,
+        principal: Principal,
+        revision_id: str,
+        *,
+        content_digest: str,
+        expected_account_id: str | None,
+        allowed_regions: list[str],
+        required_tags: dict[str, str],
+        budget_ceiling_usd: int | None,
+        execution_mode: str,
+        require_reviewed_pr: bool,
+        runtime_identity_configured: bool,
+    ) -> dict[str, Any]:
+        """Evaluate local guardrails before any future cloud action can be considered."""
+        revision, infrastructure_plan, _ = self._approved_customer_revision(principal, revision_id)
+        if revision.content_digest != content_digest or plan_hash(revision.content) != content_digest:
+            raise ValueError("stale cloud preflight request: approved digest changed")
+        content = revision.content
+        target = content.get("target") or {}
+        policy = content.get("policy_findings") or {}
+        cost = content.get("cost_estimate", {}).get("range") or {}
+        render = self.db.scalar(
+            select(TerraformPlanRender)
+            .where(
+                TerraformPlanRender.organization_id == principal.organization_id,
+                TerraformPlanRender.revision_id == revision.id,
+                TerraformPlanRender.content_digest == revision.content_digest,
+            )
+            .order_by(TerraformPlanRender.created_at.desc())
+            .limit(1)
+        )
+        publication = self.db.scalar(
+            select(DesiredStatePublication)
+            .where(
+                DesiredStatePublication.organization_id == principal.organization_id,
+                DesiredStatePublication.revision_id == revision.id,
+                DesiredStatePublication.content_digest == revision.content_digest,
+            )
+            .order_by(DesiredStatePublication.created_at.desc())
+            .limit(1)
+        )
+        module_inputs = (render.render.get("module_inputs") if render else {}) or {}
+        render_tags = module_inputs.get("tags") or {}
+        region = target.get("region")
+        account_id = target.get("account_id")
+        if not account_id and render:
+            rendered_account = module_inputs.get("aws_account_id")
+            account_id = None if rendered_account == "customer-account-selected-at-apply-time" else rendered_account
+        checklist = [
+            self._preflight_item(
+                "approved_digest",
+                "Exact approved digest",
+                revision.content_digest == content_digest,
+                f"approved digest {revision.content_digest}",
+            ),
+            self._preflight_item(
+                "policy_result",
+                "Policy allows future execution consideration",
+                policy.get("result") != PolicyResult.DENY,
+                f"policy result: {policy.get('result', 'unknown')}",
+            ),
+            self._preflight_item(
+                "terraform_contract",
+                "Generated Terraform contract",
+                bool(render and render.state == "PLAN_ONLY_NOT_APPLIED"),
+                "plan-only App Runner contract exists" if render else "no generated Terraform contract",
+            ),
+            self._preflight_item(
+                "no_apply_command",
+                "No apply command is reachable",
+                bool(render and render.render.get("apply_command_available") is False),
+                "renderer exposes validate-only commands" if render else "renderer missing",
+            ),
+            self._preflight_item(
+                "expected_account",
+                "Expected AWS account",
+                expected_account_id is None or account_id == expected_account_id,
+                f"expected {expected_account_id or 'not supplied'}; plan target {account_id or 'not connected'}",
+            ),
+            self._preflight_item(
+                "allowed_region",
+                "Allowed AWS region",
+                bool(region and region in allowed_regions),
+                f"region {region or 'missing'}; allowed {', '.join(allowed_regions)}",
+            ),
+            self._preflight_item(
+                "required_tags",
+                "Required ownership tags",
+                all(render_tags.get(key) == value for key, value in required_tags.items()),
+                f"required tags {required_tags or {'ManagedBy': 'AgentConstruct'}}",
+            ),
+            self._preflight_item(
+                "budget_ceiling",
+                "Budget ceiling",
+                budget_ceiling_usd is None or int(cost.get("monthly_high", 0)) <= budget_ceiling_usd,
+                f"estimated high ${cost.get('monthly_high', 'unknown')}; ceiling ${budget_ceiling_usd or 'not supplied'}",
+            ),
+            self._preflight_item(
+                "reviewed_pr",
+                "Reviewed desired-state PR",
+                (not require_reviewed_pr) or bool(publication and publication.state in {"CHECKS_PASSED", "MERGED"}),
+                f"state {publication.state if publication else 'not created'}",
+            ),
+            self._preflight_item(
+                "runtime_identity",
+                "AgentConstruct runtime identity",
+                runtime_identity_configured,
+                "not configured in local mode" if not runtime_identity_configured else "configured by operator",
+            ),
+            self._preflight_item(
+                "execution_mode",
+                "Dry-run/plan-only execution mode",
+                execution_mode in {"DRY_RUN_ONLY", "PLAN_ONLY"},
+                f"mode {execution_mode}; apply remains unavailable",
+            ),
+        ]
+        failures = [item for item in checklist if item["status"] == "FAIL"]
+        if not failures:
+            state = "READY_FOR_AUTHORIZED_CLOUD_PLAN"
+        elif all(item["id"] == "runtime_identity" for item in failures):
+            state = "BLOCKED_CLOUD_RUNTIME_NOT_CONFIGURED"
+        else:
+            state = "BLOCKED_GUARDRAIL_FAILURE"
+        guard = {
+            "expected_account_id": expected_account_id,
+            "allowed_regions": allowed_regions,
+            "required_tags": required_tags,
+            "budget_ceiling_usd": budget_ceiling_usd,
+            "execution_mode": execution_mode,
+            "require_reviewed_pr": require_reviewed_pr,
+            "runtime_identity_configured": runtime_identity_configured,
+        }
+        would_deploy = {
+            "profile": content.get("summary", {}).get("selected_profile"),
+            "aws_account_id": account_id,
+            "region": region,
+            "terraform_root": render.terraform_root if render else None,
+            "terraform_state": render.state if render else None,
+            "desired_state_pr_state": publication.state if publication else None,
+            "policy_result": policy.get("result"),
+            "plan_digest": revision.content_digest,
+            "not_deployed": True,
+            "boundary": (
+                "Preflight only. Cloud execution remains blocked unless a future explicit "
+                "operator workflow performs an authenticated plan and a separately approved apply."
+            ),
+        }
+        stored = CloudReadinessPreflight(
+            organization_id=principal.organization_id,
+            revision_id=revision.id,
+            project_id=infrastructure_plan.project_id,
+            state=state,
+            guard=guard,
+            checklist={"items": checklist},
+            would_deploy=would_deploy,
+            content_digest=revision.content_digest,
+            created_by_subject=principal.subject,
+        )
+        self.db.add(stored)
+        self.db.flush()
+        self.audit(
+            principal,
+            "cloud_readiness.preflight_evaluated",
+            "cloud_readiness_preflight",
+            stored.id,
+            {"revision_id": revision.id, "digest": revision.content_digest, "state": state},
+        )
+        self.db.commit()
+        return self._cloud_readiness_preflight_payload(stored)
+
+    @staticmethod
+    def _preflight_item(check_id: str, label: str, passed: bool, detail: str) -> dict[str, str]:
+        return {
+            "id": check_id,
+            "label": label,
+            "status": "PASS" if passed else "FAIL",
+            "detail": detail,
+        }
+
+    @staticmethod
+    def _cloud_readiness_preflight_payload(preflight: CloudReadinessPreflight) -> dict[str, Any]:
+        return {
+            "id": preflight.id,
+            "revision_id": preflight.revision_id,
+            "state": preflight.state,
+            "guard": preflight.guard,
+            "checklist": preflight.checklist.get("items", []),
+            "would_deploy": preflight.would_deploy,
+            "content_digest": preflight.content_digest,
+            "created_by_subject": preflight.created_by_subject,
+            "created_at": preflight.created_at.isoformat() if preflight.created_at else None,
+            "execution": "LOCAL_PREFLIGHT_ONLY",
+            "boundary": "This preflight cannot run Terraform plan/apply/destroy or mutate AWS.",
         }
 
     def cloud_role_contract(self, principal: Principal, connection_id: str) -> dict[str, str | int]:

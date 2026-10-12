@@ -6,7 +6,11 @@ from agentconstruct.domain import (
     InfrastructurePlanState,
     LifecycleState,
 )
-from agentconstruct.models import GitHubAppInstallationState, RepositoryConnection
+from agentconstruct.models import (
+    DesiredStatePublication,
+    GitHubAppInstallationState,
+    RepositoryConnection,
+)
 from sqlalchemy import select
 from test_product import complete_prompt, founder, make_service, operator
 
@@ -366,3 +370,114 @@ def test_terraform_renderer_fails_closed_for_stale_digest_and_unapproved_revisio
     draft = service.create_customer_plan_review(founder(), deployment.id)
     with pytest.raises(ValueError, match="must be approved"):
         service.create_terraform_plan_render_for_revision(founder(), draft.id, draft.content_digest)
+
+
+def test_cloud_readiness_preflight_blocks_until_runtime_identity_is_configured():
+    service, db = make_service()
+    approved = approved_app_runner_customer_review(service)
+    service.create_terraform_plan_render_for_revision(founder(), approved.id, approved.content_digest)
+    service.create_desired_state_publication_for_revision(founder(), approved.id, approved.content_digest)
+    publication = db.scalar(
+        select(DesiredStatePublication).where(DesiredStatePublication.revision_id == approved.id)
+    )
+    publication.state = "CHECKS_PASSED"
+    db.commit()
+
+    preflight = service.create_cloud_readiness_preflight(
+        founder(),
+        approved.id,
+        content_digest=approved.content_digest,
+        expected_account_id=None,
+        allowed_regions=["us-east-1"],
+        required_tags={"ManagedBy": "AgentConstruct"},
+        budget_ceiling_usd=1000,
+        execution_mode="DRY_RUN_ONLY",
+        require_reviewed_pr=True,
+        runtime_identity_configured=False,
+    )
+
+    assert preflight["state"] == "BLOCKED_CLOUD_RUNTIME_NOT_CONFIGURED"
+    failures = [item["id"] for item in preflight["checklist"] if item["status"] == "FAIL"]
+    assert failures == ["runtime_identity"]
+    assert preflight["would_deploy"]["not_deployed"] is True
+    assert "Preflight only" in preflight["would_deploy"]["boundary"]
+
+
+def test_cloud_readiness_preflight_can_be_ready_for_future_authorized_plan():
+    service, db = make_service()
+    approved = approved_app_runner_customer_review(service)
+    service.create_terraform_plan_render_for_revision(founder(), approved.id, approved.content_digest)
+    service.create_desired_state_publication_for_revision(founder(), approved.id, approved.content_digest)
+    publication = db.scalar(
+        select(DesiredStatePublication).where(DesiredStatePublication.revision_id == approved.id)
+    )
+    publication.state = "CHECKS_PASSED"
+    db.commit()
+
+    preflight = service.create_cloud_readiness_preflight(
+        founder(),
+        approved.id,
+        content_digest=approved.content_digest,
+        expected_account_id=None,
+        allowed_regions=["us-east-1"],
+        required_tags={"ManagedBy": "AgentConstruct"},
+        budget_ceiling_usd=1000,
+        execution_mode="DRY_RUN_ONLY",
+        require_reviewed_pr=True,
+        runtime_identity_configured=True,
+    )
+
+    assert preflight["state"] == "READY_FOR_AUTHORIZED_CLOUD_PLAN"
+    assert {item["status"] for item in preflight["checklist"]} == {"PASS"}
+    assert preflight["would_deploy"]["terraform_root"] == "infrastructure/terraform/renderers/app-runner-plan"
+
+
+def test_cloud_readiness_preflight_records_guardrail_failures_without_cloud_action():
+    service, _ = make_service()
+    approved = approved_app_runner_customer_review(service)
+    service.create_terraform_plan_render_for_revision(founder(), approved.id, approved.content_digest)
+
+    preflight = service.create_cloud_readiness_preflight(
+        founder(),
+        approved.id,
+        content_digest=approved.content_digest,
+        expected_account_id="123456789012",
+        allowed_regions=["eu-west-1"],
+        required_tags={"MissingTag": "required"},
+        budget_ceiling_usd=1,
+        execution_mode="DRY_RUN_ONLY",
+        require_reviewed_pr=True,
+        runtime_identity_configured=False,
+    )
+
+    failed = {item["id"] for item in preflight["checklist"] if item["status"] == "FAIL"}
+    assert preflight["state"] == "BLOCKED_GUARDRAIL_FAILURE"
+    assert {
+        "expected_account",
+        "allowed_region",
+        "required_tags",
+        "budget_ceiling",
+        "reviewed_pr",
+        "runtime_identity",
+    }.issubset(failed)
+    assert preflight["execution"] == "LOCAL_PREFLIGHT_ONLY"
+
+
+def test_cloud_readiness_preflight_rejects_stale_digest():
+    service, _ = make_service()
+    approved = approved_app_runner_customer_review(service)
+    service.create_terraform_plan_render_for_revision(founder(), approved.id, approved.content_digest)
+
+    with pytest.raises(ValueError, match="stale cloud preflight"):
+        service.create_cloud_readiness_preflight(
+            founder(),
+            approved.id,
+            content_digest="0" * 64,
+            expected_account_id=None,
+            allowed_regions=["us-east-1"],
+            required_tags={},
+            budget_ceiling_usd=None,
+            execution_mode="DRY_RUN_ONLY",
+            require_reviewed_pr=False,
+            runtime_identity_configured=False,
+        )

@@ -201,6 +201,7 @@ function renderCustomerReview(review) {
   const localExecution = document.querySelector("#local-execution");
   const desiredStatePr = document.querySelector("#desired-state-pr");
   const terraformPlanContract = document.querySelector("#terraform-plan-contract");
+  const cloudReadiness = document.querySelector("#cloud-readiness");
   const isCreator = currentUser?.user?.subject === review.creator_subject;
   const editable = ["DRAFT", "REJECTED"].includes(review.state) && isCreator;
   submit.classList.toggle("hidden", !(review.state === "DRAFT" && isCreator));
@@ -211,9 +212,15 @@ function renderCustomerReview(review) {
   localExecution.classList.toggle("hidden", review.state !== "APPROVED");
   desiredStatePr.classList.toggle("hidden", review.state !== "APPROVED");
   terraformPlanContract.classList.toggle("hidden", review.state !== "APPROVED");
+  cloudReadiness.classList.toggle("hidden", review.state !== "APPROVED");
   renderReviewEnvironments(review.local_executions || []);
   renderDesiredStatePublications(review.desired_state_publications || []);
   renderTerraformPlanRenders(review.terraform_plan_renders || []);
+  renderCloudReadinessPreflights(review.cloud_readiness_preflights || []);
+  document.querySelector("#guard-account").value = content.target?.account_id || "";
+  document.querySelector("#guard-regions").value = content.target?.region || "us-east-1";
+  const highEstimate = content.cost_estimate?.range?.monthly_high;
+  if (highEstimate) document.querySelector("#guard-budget").value = highEstimate;
   document.querySelector("#review-budget").value = workloadSpec.monthly_budget_usd || "";
   document.querySelector("#review-region").value = content.target?.region || "us-east-1";
   document.querySelector("#review-data-classification").value = workloadSpec.data_classification || "restricted";
@@ -230,6 +237,15 @@ function renderCustomerReview(review) {
   else if (review.state === "SUBMITTED") actionMessage.textContent = isAdministrator() ? "This submitted plan is ready for an administrator decision. It is not deployed." : "Submitted for administrator review. It is not deployed.";
   else if (review.state === "REJECTED") actionMessage.textContent = `Rejected: ${review.decision?.reason || "reason unavailable"}. The creator can make a new draft revision.`;
   else if (review.state === "APPROVED") actionMessage.textContent = `Approved by ${review.decision?.approver_subject || "administrator"}${review.decision?.is_self_approval ? " (self-approval recorded)" : ""}. Approved does not mean deployed.`;
+}
+
+function renderCloudReadinessPreflights(preflights) {
+  const node = document.querySelector("#cloud-preflight-result");
+  if (!preflights.length) {
+    node.textContent = "No cloud-readiness preflight yet. Future cloud execution is BLOCKED_CLOUD_RUNTIME_NOT_CONFIGURED until this checklist is evaluated and explicitly approved later.";
+    return;
+  }
+  node.innerHTML = preflights.map((preflight) => `<div class="component"><strong>${preflight.state}</strong><span>${preflight.boundary}</span></div><div>${(preflight.checklist || []).map((item) => `<div class="component"><strong>${item.status}: ${item.label}</strong><span>${item.detail}</span></div>`).join("")}</div><pre>${JSON.stringify(preflight.would_deploy, null, 2)}</pre>`).join("");
 }
 
 function renderTerraformPlanRenders(renders) {
@@ -252,6 +268,13 @@ function renderTerraformPlanRenders(renders) {
       tags: inputs.tags,
     }, null, 2)}</pre>`;
   }).join("");
+}
+
+function parseGuardTags(value) {
+  return Object.fromEntries(value.split(",").map((item) => item.trim()).filter(Boolean).map((item) => {
+    const [key, ...rest] = item.split("=");
+    return [key.trim(), rest.join("=").trim()];
+  }).filter(([key, val]) => key && val));
 }
 
 function renderDesiredStatePublications(publications) {
@@ -462,6 +485,31 @@ document.querySelector("#render-terraform-contract").addEventListener("click", a
     await refreshOpenCustomerReview();
     await refreshAudit();
     show("Plan-only Terraform contract generated. It is not applied and cannot deploy AWS resources.");
+  } catch (error) { show(error.message, true); }
+});
+
+document.querySelector("#run-cloud-preflight").addEventListener("click", async () => {
+  try {
+    if (!customerReview || customerReview.state !== "APPROVED") throw new Error("Approve the customer plan before running cloud-readiness preflight.");
+    show("Running local cloud-readiness preflight. No Terraform or AWS call will occur…");
+    const account = document.querySelector("#guard-account").value.trim();
+    const preflight = await api(`/api/v1/customer-plan-revisions/${customerReview.id}/cloud-readiness-preflights`, {
+      method: "POST",
+      body: JSON.stringify({
+        content_digest: customerReview.content_digest,
+        expected_account_id: account || null,
+        allowed_regions: document.querySelector("#guard-regions").value.split(",").map((item) => item.trim()).filter(Boolean),
+        required_tags: parseGuardTags(document.querySelector("#guard-tags").value),
+        budget_ceiling_usd: Number(document.querySelector("#guard-budget").value),
+        execution_mode: "DRY_RUN_ONLY",
+        require_reviewed_pr: document.querySelector("#guard-reviewed-pr").checked,
+        runtime_identity_configured: document.querySelector("#guard-runtime").checked,
+      }),
+    });
+    renderCloudReadinessPreflights([preflight]);
+    await refreshOpenCustomerReview();
+    await refreshAudit();
+    show(`Cloud-readiness preflight recorded: ${preflight.state}. No AWS resources were created.`);
   } catch (error) { show(error.message, true); }
 });
 
