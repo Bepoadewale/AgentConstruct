@@ -18,6 +18,7 @@ from agentconstruct.domain import (
     AwsQuickCreateRequest,
     CloudConnectionRequest,
     CloudInventorySnapshotRequest,
+    InfrastructurePlanConstraintUpdateRequest,
     InfrastructurePlanDecisionRequest,
     InfrastructurePlanRevisionRequest,
     IntentRequest,
@@ -516,6 +517,25 @@ def revise_customer_plan(
     REQUESTS.labels("customer_plans.revise").inc()
     try:
         revision = service.revise_infrastructure_plan(principal, plan_id, request.content)
+        return service.infrastructure_plan_revision_detail(principal, revision.id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post("/api/v1/customer-plans/{plan_id}/constraint-revisions", status_code=201)
+def revise_customer_plan_constraints(
+    plan_id: str,
+    request: InfrastructurePlanConstraintUpdateRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("customer_plans.constraint_revise").inc()
+    try:
+        revision = service.revise_infrastructure_plan_constraints(
+            principal,
+            plan_id,
+            request.model_dump(mode="json"),
+        )
         return service.infrastructure_plan_revision_detail(principal, revision.id)
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)

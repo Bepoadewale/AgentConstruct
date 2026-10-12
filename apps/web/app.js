@@ -160,6 +160,7 @@ async function showCloudConnectionDetail(connectionId) {
 function renderCustomerReview(review) {
   customerReview = review;
   const content = review.content;
+  const workloadSpec = content.application_analysis?.workload_spec || {};
   document.querySelector("#customer-review").classList.remove("hidden");
   document.querySelector("#review-title").textContent = `AWS infrastructure plan · revision ${review.revision}`;
   const reviewBoundary = review.state === "DRAFT" ? content.summary.status : "immutable review; not deployed";
@@ -175,12 +176,29 @@ function renderCustomerReview(review) {
   document.querySelector("#review-risks").textContent = JSON.stringify({ risks: content.risks_and_limitations, policy: content.policy_findings }, null, 2);
   const submit = document.querySelector("#submit-review");
   const revise = document.querySelector("#revise-review");
+  const regenerate = document.querySelector("#regenerate-review");
+  const revisionControls = document.querySelector("#revision-controls");
   const decisions = document.querySelector("#administrator-decisions");
   const actionMessage = document.querySelector("#review-action-message");
   const isCreator = currentUser?.user?.subject === review.creator_subject;
+  const editable = ["DRAFT", "REJECTED"].includes(review.state) && isCreator;
   submit.classList.toggle("hidden", !(review.state === "DRAFT" && isCreator));
   revise.classList.toggle("hidden", !(review.state === "REJECTED" && isCreator));
+  regenerate.classList.toggle("hidden", !editable);
+  revisionControls.classList.toggle("hidden", !editable);
   decisions.classList.toggle("hidden", !(review.state === "SUBMITTED" && isAdministrator()));
+  document.querySelector("#review-budget").value = workloadSpec.monthly_budget_usd || "";
+  document.querySelector("#review-region").value = content.target?.region || "us-east-1";
+  document.querySelector("#review-data-classification").value = workloadSpec.data_classification || "restricted";
+  document.querySelector("#review-environment").value = (workloadSpec.environments || ["staging", "production"]).join(",");
+  document.querySelector("#review-availability").value = workloadSpec.availability_target || "99.9%";
+  document.querySelector("#review-workload-type").value = workloadSpec.workload_type || "";
+  document.querySelector("#review-public-access").checked = workloadSpec.requires_private_connectivity === false;
+  document.querySelector("#accepted-assumptions").value = (content.assumption_decisions?.accepted || []).join("\n");
+  document.querySelector("#rejected-assumptions").value = (content.assumption_decisions?.rejected || []).join("\n");
+  document.querySelector("#review-diff").textContent = content.revision_diff && Object.keys(content.revision_diff).length
+    ? JSON.stringify(content.revision_diff, null, 2)
+    : "No revised constraint differences yet.";
   if (review.state === "DRAFT") actionMessage.textContent = isCreator ? "Review the exact digest, then submit it for administrator approval. Submission never deploys infrastructure." : "Only the plan creator can submit this draft.";
   else if (review.state === "SUBMITTED") actionMessage.textContent = isAdministrator() ? "This submitted plan is ready for an administrator decision. It is not deployed." : "Submitted for administrator review. It is not deployed.";
   else if (review.state === "REJECTED") actionMessage.textContent = `Rejected: ${review.decision?.reason || "reason unavailable"}. The creator can make a new draft revision.`;
@@ -295,6 +313,30 @@ document.querySelector("#revise-review").addEventListener("click", async () => {
     const review = await api(`/api/v1/customer-plans/${customerReview.plan_id}/revisions`, { method: "POST", body: JSON.stringify({ content: customerReview.content }) });
     renderCustomerReview(review);
     show("A new immutable draft revision was created. Update the request if needed, then submit the new digest.");
+    await Promise.all([refreshDashboard(), refreshAudit()]);
+  } catch (error) { show(error.message, true); }
+});
+
+document.querySelector("#regenerate-review").addEventListener("click", async () => {
+  try {
+    if (!customerReview) throw new Error("Open a draft or rejected customer plan first.");
+    const lines = (id) => document.querySelector(id).value.split("\n").map((item) => item.trim()).filter(Boolean);
+    const review = await api(`/api/v1/customer-plans/${customerReview.plan_id}/constraint-revisions`, {
+      method: "POST",
+      body: JSON.stringify({
+        monthly_budget_usd: Number(document.querySelector("#review-budget").value),
+        region: document.querySelector("#review-region").value,
+        environment: document.querySelector("#review-environment").value.split(",").filter(Boolean),
+        data_classification: document.querySelector("#review-data-classification").value,
+        availability_target: document.querySelector("#review-availability").value,
+        workload_type: document.querySelector("#review-workload-type").value,
+        public_access: document.querySelector("#review-public-access").checked,
+        accepted_assumptions: lines("#accepted-assumptions"),
+        rejected_assumptions: lines("#rejected-assumptions"),
+      }),
+    });
+    renderCustomerReview(review);
+    show("A revised draft was created from your constraint edits. Review the new digest before submitting.");
     await Promise.all([refreshDashboard(), refreshAudit()]);
   } catch (error) { show(error.message, true); }
 });

@@ -98,6 +98,60 @@ def test_rejection_requires_reason_and_new_revision_preserves_history():
     assert rejected.content_digest == plan_hash(plan_content())
 
 
+def test_creator_can_create_revised_draft_from_editable_constraints():
+    service, _ = make_service()
+    revision = draft(service)
+
+    revised = service.revise_infrastructure_plan_constraints(
+        founder(),
+        revision.infrastructure_plan_id,
+        {
+            "monthly_budget_usd": 300,
+            "region": "eu-west-1",
+            "environment": ["production"],
+            "data_classification": "internal",
+            "availability_target": "99.99%",
+            "workload_type": "event-driven document processor",
+            "public_access": True,
+            "accepted_assumptions": ["Fixture pricing is enough for draft review."],
+            "rejected_assumptions": ["Do not assume private-only browser access."],
+        },
+    )
+
+    spec = revised.content["application_analysis"]["workload_spec"]
+    assert revised.revision_number == 2
+    assert revised.state == InfrastructurePlanState.DRAFT
+    assert spec["monthly_budget_usd"] == 300
+    assert spec["region_constraints"] == ["eu-west-1"]
+    assert spec["environments"] == ["production"]
+    assert spec["data_classification"] == "internal"
+    assert spec["availability_target"] == "99.99%"
+    assert spec["workload_type"] == "event-driven document processor"
+    assert spec["requires_private_connectivity"] is False
+    assert revised.content["assumption_decisions"]["accepted"] == [
+        "Fixture pricing is enough for draft review."
+    ]
+    assert "monthly_budget_usd" in revised.content["revision_diff"]
+    assert revised.content_digest == plan_hash(revised.content)
+
+
+def test_submitted_revision_cannot_be_regenerated_from_constraint_edits():
+    service, _ = make_service()
+    revision = draft(service)
+    service.submit_infrastructure_plan(founder(), revision.id)
+
+    try:
+        service.revise_infrastructure_plan_constraints(
+            founder(),
+            revision.infrastructure_plan_id,
+            {"monthly_budget_usd": 250},
+        )
+    except ValueError as error:
+        assert "draft or rejected" in str(error)
+    else:
+        raise AssertionError("submitted plan accepted a constraint revision")
+
+
 def test_submitted_content_cannot_be_silently_changed_or_decided_twice():
     service, _ = make_service()
     revision = draft(service)
