@@ -299,3 +299,45 @@ make clean-local
 Both cycles passed. The E2E proved that a developer can submit a FastAPI plan, cannot approve it, sees an administrator approval after an API restart, receives a persisted rejection reason, and can create revision 2. It also proved that a workspace administrator can submit and self-approve their own plan with the explicit self-approval policy and audit record. A cross-tenant read was denied; a stale digest and duplicate decision were rejected. The selected simple plan used App Runner and included Prometheus-compatible metrics plus Amazon Managed Grafana rather than EKS. Ruff passed, pytest passed **72 tests**, OPA passed **3/3**, all Terraform roots formatted and validated with `init -backend=false`, Kubernetes rendered without a cluster apply, Tempo received traces, and the MCP catalogue was available. Final cleanup left no project Compose container, volume, virtual environment or local state.
 
 This is locally verified fixture evidence. It is not live GitHub authorization, live AWS role assumption, customer-cloud resource creation, Grafana/Prometheus deployment, or a production deployment claim.
+
+## Seeded local product demo and browser proof
+
+Date: 2026-10-12. Environment: macOS, Docker Desktop, Python 3.12 and local fixture identities.
+
+The PR 5 local proof ran the expanded customer-plan workflow and seeded demo data that a browser user can inspect immediately:
+
+```bash
+node --check apps/web/app.js
+.venv/bin/python -m ruff check apps/api/src tests scripts
+.venv/bin/python -m pytest -q
+make clean-local
+make bootstrap-local
+make smoke
+make browser-contract
+make customer-plan-e2e
+make seed-demo-data
+docker compose restart api
+make smoke
+make customer-plan-persistence
+make trace-check
+make verify
+docker compose config --quiet
+```
+
+Results:
+
+- JavaScript syntax check passed.
+- Ruff passed.
+- Pytest passed **80 tests**.
+- Clean local bootstrap passed.
+- Smoke and browser-contract checks passed.
+- The customer-plan E2E proved developer submission, administrator approval, administrator rejection, administrator self-approval, developer approval denial, stale digest denial, cross-tenant denial, local dry-run execution, observed readiness failure, governed local destroy, and audit evidence.
+- `make seed-demo-data` created realistic local records for a developer, administrator, GitHub fixture, AWS fixture, draft plan, submitted plan, approved plan, rejected plan, administrator self-approved plan, and approved-plan dry-run environments.
+- API restart persistence passed after seeding and dry-run execution.
+- Tempo trace check passed.
+- `make verify` passed after the restart.
+- Docker Compose configuration validated.
+
+An initial seed prompt containing the phrase `no GPU requirement` exposed a deterministic keyword ambiguity in the local fixture parser. The seed prompt was rewritten before final validation so the simple demo remains a non-GPU, non-EKS plan.
+
+This is local fixture evidence only. No AWS resources, Terraform apply, Kubernetes apply, GitHub write, pull request, GitOps sync, or production deployment occurred.
