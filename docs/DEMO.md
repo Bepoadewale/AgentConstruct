@@ -6,10 +6,12 @@ The local product demo has separate signed `founder` developer and `administrato
 2. In Browser B, sign in as **administrator**, use the review queue filters for pending, approved, rejected or self-approved revisions, open the submitted plan, then approve or reject the exact submitted digest. Rejection requires a reason.
 3. Return to Browser A, refresh the dashboard or reopen the revision, and see the persisted result. A draft or rejected plan can create a new immutable draft revision from edited budget, region, environment, data, availability, workload, access and assumption controls.
 4. In Browser B, create, submit and approve an administrator-owned plan. Its audit event and decision record identify `is_self_approval: true`.
+5. On an approved revision, select **Execute local dry run**. The local worker observes READY, FAILED or DEGRADED evidence and displays health, cost and execution state. This does not create AWS resources.
+6. For a local dry-run production environment, select **Request/execute local destroy** as an administrator. The app creates a destroy plan, records approval where required, executes the fixture cleanup and observes DESTROYED.
 
 This demo never creates AWS infrastructure. Real GitHub/AWS modes remain explicit opt-in integrations.
 
-The administrator detail view shows requester, repository/branch, AWS target, policy result, Prometheus/Grafana evidence, estimated cost/risk context, exact digest and a clear **approved, not deployed** boundary. The audit tab shows actor, role, action, digest and rejection reason in an export-ready structure.
+The administrator detail view shows requester, repository/branch, AWS target, policy result, Prometheus/Grafana evidence, estimated cost/risk context, exact digest and a clear **approved, not deployed** boundary. After approval, the local dry-run panel shows observed environment health and destroy state. The audit tab shows actor, role, action, digest and rejection reason in an export-ready structure.
 
 ## Deterministic proof
 

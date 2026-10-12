@@ -2,7 +2,7 @@
 
 AgentConstruct turns an AI workload request into a governed infrastructure plan. A developer describes the outcome, reviews one recommended AWS design, then submits its exact digest for workspace-administrator approval or rejection. Approval never means deployment.
 
-**Delivery state: executable local V1 foundation; customer-AWS and GitHub App read-only discovery executed; workload runtime not executed.** The local workflow is real: FastAPI, PostgreSQL, OPA, a bounded execution fixture, Prometheus, Tempo and Grafana run in Docker Compose. Terraform created the customer discovery identity path and AgentConstruct recorded a live inventory snapshot. The GitHub App read real repository metadata through a short-lived installation token. No application, network, database, compute, GitHub write, or GitOps workload was deployed.
+**Delivery state: executable local V1 foundation; customer-AWS and GitHub App read-only discovery executed; workload runtime not executed in AWS.** The local workflow is real: FastAPI, PostgreSQL, OPA, a bounded execution fixture, Prometheus, Tempo and Grafana run in Docker Compose. Terraform created the customer discovery identity path and AgentConstruct recorded a live inventory snapshot. The GitHub App read real repository metadata through a short-lived installation token. Approved customer-plan revisions can now run a bounded local dry run and observed local destroy. No application, network, database, compute, GitHub write, or GitOps workload was deployed in AWS.
 
 ## What it does
 
@@ -12,7 +12,7 @@ customer request → typed workload specification → reusable-cloud inventory f
 → policy → immutable customer-plan review draft
 → submission → administrator decision
 
-The separate execution lifecycle remains available only through the bounded local fixture.
+After approval, a separate explicit **Execute local dry run** action can queue the bounded fixture worker, observe READY/FAILED/DEGRADED, show health/cost evidence, and create a governed local destroy plan. This remains local execution evidence only.
 
 For the first Day-2 loop, a bounded telemetry fixture can explain elevated latency, propose a replica change with a cost range and rollback, then send that exact change through the same policy, approval, worker and observation path. It never repairs a protected environment automatically.
 

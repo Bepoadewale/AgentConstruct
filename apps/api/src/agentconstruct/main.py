@@ -520,6 +520,59 @@ def decide_customer_plan_revision(
         translate(error)
 
 
+@app.post("/api/v1/customer-plan-revisions/{revision_id}/execute-dry-run")
+def execute_customer_plan_dry_run(
+    revision_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("customer_plans.dry_run_execute").inc()
+    try:
+        environments = service.execute_customer_plan_dry_run(principal, revision_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+    for environment in environments:
+        EXECUTION_RESULTS.labels(environment.state).inc()
+    return {
+        "execution": "LOCAL_DRY_RUN",
+        "boundary": "Queued only against the bounded local fixture executor. No AWS resources are created.",
+        "environments": [
+            {
+                "id": item.id,
+                "name": item.name,
+                "type": item.environment_type,
+                "state": item.state,
+                "execution_mode": item.desired_state.get("execution_mode"),
+                "cost_estimate": item.desired_state.get("cost_estimate"),
+                "observed_state": item.observed_state,
+            }
+            for item in environments
+        ],
+    }
+
+
+@app.post("/api/v1/customer-plan-revisions/{revision_id}/environments/{environment_id}/destroy-dry-run")
+def destroy_customer_plan_dry_run(
+    revision_id: str,
+    environment_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("customer_plans.dry_run_destroy").inc()
+    try:
+        plan = service.customer_plan_destroy_plan(principal, revision_id, environment_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+    return {
+        "id": plan.id,
+        "state": plan.state,
+        "plan_hash": plan.plan_hash,
+        "policy_result": plan.policy_result,
+        "action": plan.action,
+        "boundary": "Destroy is a separate governed local dry-run action; no AWS resources are deleted.",
+    }
+
+
 @app.post("/api/v1/customer-plans/{plan_id}/revisions", status_code=201)
 def revise_customer_plan(
     plan_id: str,
@@ -628,6 +681,9 @@ def list_environments(principal: Principal = Depends(verify_token), db: Session 
             "name": item.name,
             "type": item.environment_type,
             "state": item.state,
+            "execution_mode": item.desired_state.get("execution_mode"),
+            "customer_plan_revision_id": item.desired_state.get("customer_plan_revision_id"),
+            "cost_estimate": item.desired_state.get("cost_estimate"),
             "observed_state": item.observed_state,
         }
         for item in items

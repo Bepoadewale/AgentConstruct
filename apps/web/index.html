@@ -116,6 +116,12 @@
             <label for="rejection-reason">Rejection reason<textarea id="rejection-reason" rows="3" placeholder="Required when rejecting a submitted plan."></textarea></label>
           </div>
         </div>
+        <div id="local-execution" class="connection-card hidden">
+          <strong>Local dry-run execution</strong>
+          <p class="message">Available only after approval. This uses the bounded local fixture executor and never creates or deletes AWS resources.</p>
+          <div class="connection-row"><button id="execute-review-dry-run" type="button">Execute local dry run</button><button id="destroy-review-dry-run" type="button" class="secondary hidden">Request/execute local destroy</button></div>
+          <div id="review-environments">No local dry-run execution yet.</div>
+        </div>
       </section>
       <section id="audit" class="panel">
         <div class="panel-heading"><div><p class="eyebrow">AUDIT</p><h2>What happened</h2></div><button id="refresh-audit" class="secondary">Refresh</button></div>

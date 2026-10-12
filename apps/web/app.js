@@ -186,6 +186,7 @@ function renderCustomerReview(review) {
   const revisionControls = document.querySelector("#revision-controls");
   const decisions = document.querySelector("#administrator-decisions");
   const actionMessage = document.querySelector("#review-action-message");
+  const localExecution = document.querySelector("#local-execution");
   const isCreator = currentUser?.user?.subject === review.creator_subject;
   const editable = ["DRAFT", "REJECTED"].includes(review.state) && isCreator;
   submit.classList.toggle("hidden", !(review.state === "DRAFT" && isCreator));
@@ -193,6 +194,8 @@ function renderCustomerReview(review) {
   regenerate.classList.toggle("hidden", !editable);
   revisionControls.classList.toggle("hidden", !editable);
   decisions.classList.toggle("hidden", !(review.state === "SUBMITTED" && isAdministrator()));
+  localExecution.classList.toggle("hidden", review.state !== "APPROVED");
+  renderReviewEnvironments(review.local_executions || []);
   document.querySelector("#review-budget").value = workloadSpec.monthly_budget_usd || "";
   document.querySelector("#review-region").value = content.target?.region || "us-east-1";
   document.querySelector("#review-data-classification").value = workloadSpec.data_classification || "restricted";
@@ -211,6 +214,17 @@ function renderCustomerReview(review) {
   else if (review.state === "APPROVED") actionMessage.textContent = `Approved by ${review.decision?.approver_subject || "administrator"}${review.decision?.is_self_approval ? " (self-approval recorded)" : ""}. Approved does not mean deployed.`;
 }
 
+function renderReviewEnvironments(environments) {
+  const node = document.querySelector("#review-environments");
+  const destroyable = environments.find((environment) => ["READY", "DEGRADED", "FAILED"].includes(environment.state));
+  document.querySelector("#destroy-review-dry-run").classList.toggle("hidden", !destroyable);
+  if (!environments.length) {
+    node.textContent = "No local dry-run execution yet.";
+    return;
+  }
+  node.innerHTML = environments.map((environment) => `<div class="component"><strong>${environment.type}: ${environment.state}</strong><span>${environment.execution_mode || "LOCAL_DRY_RUN"} · ${environment.cost_estimate ? `$${environment.cost_estimate.monthly_low}–$${environment.cost_estimate.monthly_high}/month estimate` : "cost estimate unavailable"} · ${JSON.stringify(environment.observed_state || {})}</span></div>`).join("");
+}
+
 async function openCustomerReview(revisionId) {
   const review = await api(`/api/v1/customer-plan-revisions/${revisionId}`);
   renderCustomerReview(review);
@@ -225,9 +239,14 @@ async function refreshAudit() {
 function renderEnvironments(environments) {
   productionEnvironment = environments.find((environment) => environment.type === "production" && environment.state === "READY") || null;
   day2Environment = productionEnvironment;
-  document.querySelector("#environments").innerHTML = environments.length ? environments.map((environment) => `<div class="component"><strong>${environment.type}: ${environment.state}</strong><span>${JSON.stringify(environment.observed_state)}</span></div>`).join("") : "No local execution yet.";
-  document.querySelector("#destroy").classList.toggle("hidden", !productionEnvironment);
-  document.querySelector("#day2").classList.toggle("hidden", !day2Environment);
+  const environmentsNode = document.querySelector("#environments");
+  if (environmentsNode) {
+    environmentsNode.innerHTML = environments.length ? environments.map((environment) => `<div class="component"><strong>${environment.type}: ${environment.state}</strong><span>${JSON.stringify(environment.observed_state)}</span></div>`).join("") : "No local execution yet.";
+  }
+  const destroy = document.querySelector("#destroy");
+  const day2 = document.querySelector("#day2");
+  if (destroy) destroy.classList.toggle("hidden", !productionEnvironment);
+  if (day2) day2.classList.toggle("hidden", !day2Environment);
 }
 
 async function waitForWorker(ids) {
@@ -239,6 +258,13 @@ async function waitForWorker(ids) {
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
   throw new Error("The worker did not report a final result within the local demo timeout.");
+}
+
+async function refreshOpenCustomerReview() {
+  if (!customerReview) return null;
+  const review = await api(`/api/v1/customer-plan-revisions/${customerReview.id}`);
+  renderCustomerReview(review);
+  return review;
 }
 
 document.querySelector("#create").addEventListener("click", async () => {
@@ -344,6 +370,39 @@ document.querySelector("#regenerate-review").addEventListener("click", async () 
     renderCustomerReview(review);
     show("A revised draft was created from your constraint edits. Review the new digest before submitting.");
     await Promise.all([refreshDashboard(), refreshAudit()]);
+  } catch (error) { show(error.message, true); }
+});
+
+document.querySelector("#execute-review-dry-run").addEventListener("click", async () => {
+  try {
+    if (!customerReview || customerReview.state !== "APPROVED") throw new Error("Approve the customer plan before running a local dry run.");
+    show("Queuing approved-plan local dry run. No AWS resources will be created…");
+    const queued = await api(`/api/v1/customer-plan-revisions/${customerReview.id}/execute-dry-run`, { method: "POST" });
+    const ids = queued.environments.map((environment) => environment.id);
+    await waitForWorker(ids);
+    await refreshOpenCustomerReview();
+    await refreshAudit();
+    show("Local dry run observed. Review the environment health evidence below.");
+  } catch (error) { show(error.message, true); }
+});
+
+document.querySelector("#destroy-review-dry-run").addEventListener("click", async () => {
+  try {
+    if (!customerReview) throw new Error("Open an approved customer plan first.");
+    const target = (customerReview.local_executions || []).find((environment) => ["READY", "DEGRADED", "FAILED"].includes(environment.state));
+    if (!target) throw new Error("No local dry-run environment is ready for destroy.");
+    show("Creating governed local destroy plan…");
+    const destroyPlan = await api(`/api/v1/customer-plan-revisions/${customerReview.id}/environments/${target.id}/destroy-dry-run`, { method: "POST" });
+    if (destroyPlan.state === "DESTROY_APPROVAL_REQUIRED") {
+      if (!isAdministrator()) throw new Error("Destroy approval is required. Sign in as administrator to approve and execute this local destroy.");
+      await api(`/api/v1/deployment-plans/${destroyPlan.id}/approve`, { method: "POST", body: JSON.stringify({ plan_hash: destroyPlan.plan_hash }) });
+    }
+    const queued = await api(`/api/v1/deployment-plans/${destroyPlan.id}/execute`, { method: "POST" });
+    const ids = queued.environments.map((environment) => environment.id);
+    await waitForWorker(ids);
+    await refreshOpenCustomerReview();
+    await refreshAudit();
+    show("Local dry-run destroy was observed. No AWS resources were deleted.");
   } catch (error) { show(error.message, true); }
 });
 
