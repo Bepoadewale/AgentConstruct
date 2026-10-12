@@ -232,6 +232,15 @@ document.querySelector("#create").addEventListener("click", async () => {
     const repositoryDiscovery = await api(`/api/v1/projects/${project.id}/repository-discovery`);
     const intent = await api("/api/v1/intents", { method: "POST", body: JSON.stringify({ project_id: project.id, prompt: `${document.querySelector("#prompt").value}${constraints}`, source_repository: repository, cloud_connection_id: cloud.id, idempotency_key: idempotencyKey() }) });
     document.querySelector("#spec").textContent = JSON.stringify({ ...intent.spec, repository_discovery: repositoryDiscovery }, null, 2);
+    const analysis = repositoryDiscovery.analysis || {};
+    document.querySelector("#repository-analysis").innerHTML = [
+      ["Runtime", analysis.runtime_hints],
+      ["Frameworks", analysis.framework_hints],
+      ["Manifests", analysis.manifests],
+      ["Data stores", analysis.database_hints],
+      ["Deployment hints", analysis.deployment_hints],
+      ["Limitations", analysis.limitations],
+    ].map(([label, values]) => `<div class="component"><strong>${label}</strong><span>${(values || []).join(", ") || "No signal found"}</span></div>`).join("");
     plan = await api(`/api/v1/intents/${intent.id}/plans`, { method: "POST" });
     const architecture = plan.payload.architecture;
     document.querySelector("#profile").textContent = `${architecture.profile} · ${architecture.region}`;

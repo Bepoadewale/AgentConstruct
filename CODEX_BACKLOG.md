@@ -7,6 +7,7 @@
 - [x] Audit the current product and add the separate immutable customer-plan revision foundation.
 - [x] Add role-aware local sign-in, tenant-scoped workspace dashboards and browser navigation.
 - [x] Add GitHub installation/repository/branch and AWS connected-account selection experiences.
+- [x] Add GitHub repository intelligence for safe manifest analysis, persisted runtime/framework/data/deployment hints, and planner/review binding.
 - [x] Render one AWS plan with required Prometheus/Grafana details and cost estimate.
 - [x] Add submit, administrator approval/rejection, self-approval and revision UI/API flows.
 - [x] Prove the two-session developer/admin journey with browser controls, deterministic API E2E, restart persistence and security-boundary checks.
@@ -46,7 +47,8 @@
 - [x] Create the AgentConstruct control-plane GitHub OIDC identity and a real customer discovery connection. Terraform applied only state/lock and IAM resources; STS, inventory and Cost Explorer were verified without a workload.
 - [ ] Dispatch the hosted GitHub OIDC workflow to prove the production trust route, then keep all deployment permissions profile-specific and separately approved.
 - [ ] Implement the live AWS STS role-assumption adapter with least privilege after the discovery-role pilot.
-- [ ] GitHub App installation, repository discovery and scoped desired-state publication.
+- [x] GitHub App installation/repository/branch discovery and safe manifest intelligence.
+- [ ] Scoped GitHub desired-state publication through reviewed pull requests.
 - [ ] Real GitOps/Argo observer and customer-cloud workload agent.
 - [ ] Enterprise OIDC/JWKS adapter and organisation lifecycle.
 - [ ] Replace the fixture inventory and pricing catalogue with customer-approved AWS discovery and timestamped pricing sources.

@@ -12,6 +12,7 @@ def test_simple_fastapi_customer_review_selects_one_non_eks_aws_plan_with_monito
         "https://github.com/example/fastapi-ai-api",
         "main",
     )
+    service.repository_discovery(founder(), project.id)
     connection = service.create_cloud_connection(
         founder(), "Local AWS fixture", "aws", "byoc_role_contract"
     )
@@ -30,6 +31,7 @@ def test_simple_fastapi_customer_review_selects_one_non_eks_aws_plan_with_monito
     assert review.state == InfrastructurePlanState.DRAFT
     assert content["summary"]["selected_profile"] != "aws-eks-governed"
     assert content["application_analysis"]["branch"] == "main"
+    assert content["application_analysis"]["repository_analysis"]["framework_hints"] == ["fastapi"]
     assert content["target"]["connection_id"] == connection.id
     assert content["observability"]["metrics_backend"].startswith("Prometheus")
     assert content["observability"]["dashboard"] == "Amazon Managed Grafana"

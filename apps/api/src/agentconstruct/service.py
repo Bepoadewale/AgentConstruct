@@ -54,6 +54,7 @@ from agentconstruct.models import (
     RepositoryConnection,
     StoredArchitecturePlan,
     StoredCloudInventorySnapshot,
+    StoredRepositoryAnalysis,
     WorkloadIntent,
 )
 from agentconstruct.planner import AwsV1Planner
@@ -905,28 +906,72 @@ class ProductService:
         self.audit(principal, "repository.disconnected", "project", project.id, {})
         self.db.commit()
 
-    def repository_discovery(self, principal: Principal, project_id: str) -> dict[str, str]:
+    def repository_discovery(self, principal: Principal, project_id: str) -> dict[str, Any]:
         project = self._project(principal, project_id)
         if not project.repository_url:
             raise ValueError("project has no repository connection")
         installation_id = getattr(self.github, "installation_id", "fixture-installation")
-        metadata = self.github.inspect_repository(installation_id, project.repository_url)
-        execution = getattr(self.github, "execution", "SIMULATED")
-        self.audit(
-            principal,
-            "repository.discovered",
-            "project",
-            project.id,
-            {"provider": metadata.provider, "repository": metadata.repository, "execution": execution},
-        )
-        self.db.commit()
         connection = self.db.scalar(
             select(RepositoryConnection).where(RepositoryConnection.project_id == project.id)
         )
+        selected_branch = connection.selected_branch if connection else None
+        analysis = self.github.analyze_repository(
+            installation_id, project.repository_url, selected_branch
+        )
+        metadata = self.github.inspect_repository(
+            installation_id, project.repository_url, selected_branch
+        )
+        execution = getattr(self.github, "execution", "SIMULATED")
+        stored = StoredRepositoryAnalysis(
+            organization_id=principal.organization_id,
+            project_id=project.id,
+            repository_url=project.repository_url,
+            selected_branch=analysis.selected_branch,
+            execution=execution,
+            analysis=self._repository_analysis_payload(analysis),
+        )
+        self.db.add(stored)
+        self.audit(
+            principal,
+            "repository.analyzed",
+            "project",
+            project.id,
+            {
+                "provider": metadata.provider,
+                "repository": metadata.repository,
+                "branch": analysis.selected_branch,
+                "execution": execution,
+                "manifests": list(analysis.manifests),
+            },
+        )
+        self.db.commit()
         return metadata.__dict__ | {
             "execution": execution,
-            "selected_branch": connection.selected_branch if connection else metadata.default_branch,
+            "selected_branch": analysis.selected_branch,
+            "analysis": stored.analysis,
         }
+
+    @staticmethod
+    def _repository_analysis_payload(analysis: object) -> dict[str, Any]:
+        payload = analysis.__dict__.copy()
+        for key, value in payload.items():
+            if isinstance(value, tuple):
+                payload[key] = list(value)
+        return payload
+
+    def latest_repository_analysis(
+        self, principal: Principal, project_id: str
+    ) -> StoredRepositoryAnalysis | None:
+        project = self._project(principal, project_id)
+        return self.db.scalar(
+            select(StoredRepositoryAnalysis)
+            .where(
+                StoredRepositoryAnalysis.organization_id == principal.organization_id,
+                StoredRepositoryAnalysis.project_id == project.id,
+            )
+            .order_by(StoredRepositoryAnalysis.created_at.desc())
+            .limit(1)
+        )
 
     def desired_state_publication(
         self, principal: Principal, project_id: str, plan_id: str
@@ -1017,6 +1062,20 @@ class ProductService:
         selected_repository = source_repository or project.repository_url
         interpretation = self.intent_provider.interpret(prompt, selected_repository)
         spec = interpretation.spec
+        repository_analysis = self.latest_repository_analysis(principal, project.id)
+        spec_payload = spec.model_dump(mode="json")
+        if repository_analysis:
+            repository_runtime = self._runtime_from_repository(repository_analysis.analysis)
+            spec_payload["repository_analysis"] = repository_analysis.analysis
+            if repository_runtime and spec_payload.get("runtime") in {None, "containerized"}:
+                spec_payload["runtime"] = repository_runtime
+            spec_payload["containerized"] = bool(
+                spec_payload.get("containerized")
+                or "containerized" in repository_analysis.analysis.get("runtime_hints", [])
+                or "Dockerfile" in repository_analysis.analysis.get("manifests", [])
+            )
+            if repository_analysis.analysis.get("database_hints"):
+                spec_payload["stateful"] = True
         state = LifecycleState.NEEDS_INPUT if spec.unknowns else LifecycleState.PLANNED
         intent = WorkloadIntent(
             organization_id=principal.organization_id,
@@ -1026,7 +1085,7 @@ class ProductService:
             idempotency_key=idempotency_key,
             state=state,
             spec={
-                **spec.model_dump(mode="json"),
+                **spec_payload,
                 "cloud_connection_id": cloud_connection_id,
                 "questions": [question.model_dump() for question in interpretation.questions],
             },
@@ -1042,6 +1101,21 @@ class ProductService:
         )
         self.db.commit()
         return intent
+
+    @staticmethod
+    def _runtime_from_repository(analysis: dict[str, Any]) -> str | None:
+        hints = analysis.get("framework_hints", []) + analysis.get("runtime_hints", [])
+        if "fastapi" in hints:
+            return "python-fastapi"
+        if "django" in hints:
+            return "python-django"
+        if "next" in hints:
+            return "node-nextjs"
+        if "node" in hints:
+            return "node"
+        if "python" in hints:
+            return "python"
+        return None
 
     def _intent(self, principal: Principal, intent_id: str) -> WorkloadIntent:
         intent = self.db.get(WorkloadIntent, intent_id)
@@ -1144,6 +1218,7 @@ class ProductService:
                 RepositoryConnection.project_id == project.id,
             )
         )
+        repository_analysis = self.latest_repository_analysis(principal, project.id)
         connection_id = deployment.payload.get("cloud_connection_id")
         target: dict[str, Any] = {
             "provider": "aws",
@@ -1191,6 +1266,9 @@ class ProductService:
                 "repository": project.repository_url,
                 "branch": repository.selected_branch if repository else None,
                 "request": intent.prompt,
+                "repository_analysis": repository_analysis.analysis
+                if repository_analysis
+                else deployment.payload["spec"].get("repository_analysis", {}),
                 "workload_spec": deployment.payload["spec"],
             },
             "target": target,

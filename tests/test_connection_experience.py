@@ -32,6 +32,33 @@ def test_project_persists_selected_repository_branch_for_safe_read_only_discover
     discovered = service.repository_discovery(founder(), project.id)
     assert discovered["selected_branch"] == "staging"
     assert discovered["execution"] == "SIMULATED"
+    assert discovered["analysis"]["framework_hints"] == ["fastapi"]
+    assert "Dockerfile" in discovered["analysis"]["manifests"]
+
+
+def test_repository_analysis_is_persisted_and_feeds_intent_spec():
+    service, _ = make_service()
+    project = service.create_project(
+        founder(),
+        "repo-analysis",
+        "https://github.com/example/support-rag-api",
+        "main",
+    )
+    service.repository_discovery(founder(), project.id)
+    intent = service.create_intent(
+        founder(),
+        project.id,
+        "Deploy this AI API in AWS. Keep customer data private. Support 20 requests per second and peak at 100 requests per second. Keep monthly infrastructure under $500. Create staging and production. Enable monitoring.",
+        project.repository_url,
+        None,
+        "repo-analysis-001",
+    )
+
+    analysis = intent.spec["repository_analysis"]
+    assert analysis["repository"] == "example/support-rag-api"
+    assert analysis["selected_branch"] == "main"
+    assert intent.spec["runtime"] == "python-fastapi"
+    assert intent.spec["stateful"] is True
 
 
 def test_aws_connection_detail_and_disconnect_are_tenant_scoped_and_credential_free():
