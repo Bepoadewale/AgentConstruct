@@ -106,6 +106,7 @@ class WorkloadSpec(BaseModel):
     multi_service: bool = False
     execution_duration_minutes: int | None = Field(default=None, ge=1)
     existing_approved_resources: list[str] = Field(default_factory=list)
+    repository_analysis: dict[str, Any] = Field(default_factory=dict)
     field_status: dict[str, str] = Field(default_factory=dict)
     unknowns: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0, le=1)

@@ -26,6 +26,22 @@ class RepositoryMetadata:
 
 
 @dataclass(frozen=True)
+class RepositoryAnalysis:
+    provider: str
+    repository: str
+    selected_branch: str
+    default_branch: str
+    manifests: tuple[str, ...]
+    runtime_hints: tuple[str, ...]
+    framework_hints: tuple[str, ...]
+    database_hints: tuple[str, ...]
+    secret_hints: tuple[str, ...]
+    deployment_hints: tuple[str, ...]
+    confidence: float
+    limitations: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class GitHubInstallation:
     id: str
     account_login: str
@@ -79,7 +95,13 @@ class GitHubConnection(Protocol):
 
     def branches(self, installation_id: str, repository: str) -> list[str]: ...
 
-    def inspect_repository(self, installation_id: str, repository: str) -> RepositoryMetadata: ...
+    def inspect_repository(
+        self, installation_id: str, repository: str, ref: str | None = None
+    ) -> RepositoryMetadata: ...
+
+    def analyze_repository(
+        self, installation_id: str, repository: str, ref: str | None = None
+    ) -> RepositoryAnalysis: ...
 
     def publish_desired_state(
         self, installation_id: str, repository: str, path: str, content: str
@@ -143,8 +165,47 @@ class FixtureGitHubConnection:
             raise ValueError("repository must be an owner/name GitHub repository")
         return candidate
 
-    def inspect_repository(self, installation_id: str, repository: str) -> RepositoryMetadata:
+    def inspect_repository(
+        self, installation_id: str, repository: str, ref: str | None = None
+    ) -> RepositoryMetadata:
+        del ref
         return RepositoryMetadata("fixture", installation_id, repository, "main")
+
+    def analyze_repository(
+        self, installation_id: str, repository: str, ref: str | None = None
+    ) -> RepositoryAnalysis:
+        metadata = self.inspect_repository(installation_id, repository, ref)
+        selected = ref or metadata.default_branch
+        normalized = self._repository_name(repository)
+        if "support-rag-api" in normalized or "fastapi" in normalized:
+            return RepositoryAnalysis(
+                provider="fixture",
+                repository=normalized,
+                selected_branch=selected,
+                default_branch=metadata.default_branch,
+                manifests=("Dockerfile", "requirements.txt", "pyproject.toml"),
+                runtime_hints=("python", "containerized"),
+                framework_hints=("fastapi",),
+                database_hints=("postgresql",),
+                secret_hints=("environment variables",),
+                deployment_hints=("container image",),
+                confidence=0.9,
+                limitations=("Fixture analysis reads deterministic manifest hints only.",),
+            )
+        return RepositoryAnalysis(
+            provider="fixture",
+            repository=normalized,
+            selected_branch=selected,
+            default_branch=metadata.default_branch,
+            manifests=(),
+            runtime_hints=("unknown",),
+            framework_hints=(),
+            database_hints=(),
+            secret_hints=(),
+            deployment_hints=(),
+            confidence=0.45,
+            limitations=("No known fixture manifests were available for this repository.",),
+        )
 
     def publish_desired_state(
         self, installation_id: str, repository: str, path: str, content: str
@@ -259,7 +320,10 @@ class GitHubAppReadOnlyConnection:
             raise ValueError("repository must be an owner/name GitHub repository")
         return candidate
 
-    def inspect_repository(self, installation_id: str, repository: str) -> RepositoryMetadata:
+    def inspect_repository(
+        self, installation_id: str, repository: str, ref: str | None = None
+    ) -> RepositoryMetadata:
+        del ref
         if installation_id != self.installation_id:
             raise PermissionError("GitHub installation is not configured for this connection")
         name = self._repository_name(repository)
@@ -277,6 +341,122 @@ class GitHubAppReadOnlyConnection:
         return RepositoryMetadata(
             "github_app", self.installation_id, name, payload["default_branch"]
         )
+
+    def analyze_repository(
+        self, installation_id: str, repository: str, ref: str | None = None
+    ) -> RepositoryAnalysis:
+        metadata = self.inspect_repository(installation_id, repository, ref)
+        selected = ref or metadata.default_branch
+        manifests = self._manifest_files(metadata.repository, selected)
+        return RepositoryAnalysis(
+            provider="github_app",
+            repository=metadata.repository,
+            selected_branch=selected,
+            default_branch=metadata.default_branch,
+            manifests=tuple(manifests),
+            runtime_hints=tuple(self._runtime_hints(manifests)),
+            framework_hints=tuple(self._framework_hints(manifests)),
+            database_hints=tuple(self._database_hints(manifests)),
+            secret_hints=tuple(self._secret_hints(manifests)),
+            deployment_hints=tuple(self._deployment_hints(manifests)),
+            confidence=0.82 if manifests else 0.5,
+            limitations=(
+                "Live analysis reads repository metadata and selected manifest files only.",
+                "Source code, secrets, issue data and unauthorized repositories are not read.",
+            ),
+        )
+
+    def _manifest_files(self, repository: str, ref: str) -> dict[str, str]:
+        candidates = (
+            "Dockerfile",
+            "docker-compose.yml",
+            "docker-compose.yaml",
+            "compose.yml",
+            "compose.yaml",
+            "requirements.txt",
+            "pyproject.toml",
+            "package.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            "go.mod",
+            "Cargo.toml",
+            ".github/workflows",
+            "k8s",
+            "kubernetes",
+            "helm",
+            "charts",
+            "terraform",
+        )
+        headers = {
+            "Authorization": f"Bearer {self._installation_token()}",
+            "Accept": "application/vnd.github.raw+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        found: dict[str, str] = {}
+        for path in candidates:
+            response = httpx.get(
+                f"{self.api_url}/repos/{repository}/contents/{path}",
+                headers=headers,
+                params={"ref": ref},
+                timeout=10,
+            )
+            if response.status_code == 404:
+                continue
+            response.raise_for_status()
+            text = response.text if len(response.text) < 20_000 else response.text[:20_000]
+            found[path] = text
+        return found
+
+    @staticmethod
+    def _runtime_hints(manifests: dict[str, str]) -> list[str]:
+        joined = "\n".join(manifests.values()).lower()
+        hints: list[str] = []
+        if "python" in joined or "requirements.txt" in manifests or "pyproject.toml" in manifests:
+            hints.append("python")
+        if "node" in joined or "package.json" in manifests:
+            hints.append("node")
+        if "Dockerfile" in manifests:
+            hints.append("containerized")
+        return hints or ["unknown"]
+
+    @staticmethod
+    def _framework_hints(manifests: dict[str, str]) -> list[str]:
+        joined = "\n".join(manifests.values()).lower()
+        frameworks = []
+        for name in ("fastapi", "django", "flask", "next", "express", "react"):
+            if name in joined:
+                frameworks.append(name)
+        return frameworks
+
+    @staticmethod
+    def _database_hints(manifests: dict[str, str]) -> list[str]:
+        joined = "\n".join(manifests.values()).lower()
+        hints = []
+        for name in ("postgres", "postgresql", "mysql", "redis", "sqlite", "mongodb"):
+            if name in joined:
+                hints.append("postgresql" if name == "postgres" else name)
+        return sorted(set(hints))
+
+    @staticmethod
+    def _secret_hints(manifests: dict[str, str]) -> list[str]:
+        joined = "\n".join(manifests.values()).lower()
+        hints = []
+        if ".env" in joined or "secret" in joined or "api_key" in joined or "database_url" in joined:
+            hints.append("environment variables")
+        return hints
+
+    @staticmethod
+    def _deployment_hints(manifests: dict[str, str]) -> list[str]:
+        hints = []
+        if "Dockerfile" in manifests:
+            hints.append("container image")
+        if any(path.startswith(".github/workflows") for path in manifests):
+            hints.append("github actions")
+        if any(path in manifests for path in ("k8s", "kubernetes", "helm", "charts")):
+            hints.append("kubernetes manifests")
+        if "terraform" in manifests:
+            hints.append("terraform")
+        return hints
 
     def publish_desired_state(
         self, installation_id: str, repository: str, path: str, content: str

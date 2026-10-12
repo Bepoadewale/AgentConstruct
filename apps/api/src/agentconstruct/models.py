@@ -50,6 +50,20 @@ class RepositoryConnection(Base):
     selected_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
+class StoredRepositoryAnalysis(Base):
+    """Credential-free GitHub repository facts used by the planner and review."""
+
+    __tablename__ = "repository_analyses"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    repository_url: Mapped[str] = mapped_column(Text)
+    selected_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    execution: Mapped[str] = mapped_column(String(40))
+    analysis: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class CloudConnection(Base):
     __tablename__ = "cloud_connections"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
