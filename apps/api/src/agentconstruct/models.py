@@ -279,6 +279,26 @@ class TerraformPlanRender(Base):
     )
 
 
+class CloudReadinessPreflight(Base):
+    """Local-only guardrail evaluation before any future cloud action is reachable."""
+
+    __tablename__ = "cloud_readiness_preflights"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    revision_id: Mapped[str] = mapped_column(ForeignKey("infrastructure_plan_revisions.id"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    state: Mapped[str] = mapped_column(String(40), default="BLOCKED_CLOUD_RUNTIME_NOT_CONFIGURED", index=True)
+    guard: Mapped[dict] = mapped_column(JSON, default=dict)
+    checklist: Mapped[dict] = mapped_column(JSON, default=dict)
+    would_deploy: Mapped[dict] = mapped_column(JSON, default=dict)
+    content_digest: Mapped[str] = mapped_column(String(64), index=True)
+    created_by_subject: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class DeploymentPlan(Base):
     __tablename__ = "deployment_plans"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

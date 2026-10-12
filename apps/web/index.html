@@ -135,6 +135,20 @@
           <div class="connection-row"><button id="render-terraform-contract" type="button">Generate plan-only Terraform contract</button></div>
           <div id="terraform-render">No Terraform contract yet.</div>
         </div>
+        <div id="cloud-readiness" class="connection-card hidden">
+          <strong>Would deploy? Cloud-readiness guardrails</strong>
+          <p class="message">This local preflight checks the approved digest, AWS account, region, tags, budget, reviewed PR state, Terraform contract and runtime identity. It cannot run Terraform or mutate AWS.</p>
+          <div class="grid controls">
+            <label for="guard-account">Expected AWS account<input id="guard-account" inputmode="numeric" maxlength="12" placeholder="123456789012" /></label>
+            <label for="guard-regions">Allowed regions<input id="guard-regions" value="us-east-1" /></label>
+            <label for="guard-budget">Budget ceiling (USD)<input id="guard-budget" type="number" min="1" value="1500" /></label>
+            <label for="guard-tags">Required tags<input id="guard-tags" value="ManagedBy=AgentConstruct" /></label>
+          </div>
+          <label><input id="guard-reviewed-pr" type="checkbox" checked /> Require reviewed desired-state PR/checks</label>
+          <label><input id="guard-runtime" type="checkbox" /> Runtime identity configured (normally false before cloud deployment)</label>
+          <div class="connection-row"><button id="run-cloud-preflight" type="button">Run cloud-readiness preflight</button></div>
+          <div id="cloud-preflight-result">No cloud-readiness preflight yet.</div>
+        </div>
       </section>
       <section id="audit" class="panel">
         <div class="panel-heading"><div><p class="eyebrow">AUDIT</p><h2>What happened</h2></div><button id="refresh-audit" class="secondary">Refresh</button></div>

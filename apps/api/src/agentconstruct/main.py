@@ -18,6 +18,7 @@ from agentconstruct.domain import (
     AwsQuickCreateRequest,
     CloudConnectionRequest,
     CloudInventorySnapshotRequest,
+    CloudReadinessPreflightRequest,
     DesiredStatePublicationRequest,
     InfrastructurePlanConstraintUpdateRequest,
     InfrastructurePlanDecisionRequest,
@@ -468,6 +469,31 @@ def create_customer_plan_terraform_render(
     try:
         return service.create_terraform_plan_render_for_revision(
             principal, revision_id, request.content_digest
+        )
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post("/api/v1/customer-plan-revisions/{revision_id}/cloud-readiness-preflights")
+def create_customer_plan_cloud_preflight(
+    revision_id: str,
+    request: CloudReadinessPreflightRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("cloud_readiness.preflight").inc()
+    try:
+        return service.create_cloud_readiness_preflight(
+            principal,
+            revision_id,
+            content_digest=request.content_digest,
+            expected_account_id=request.expected_account_id,
+            allowed_regions=request.allowed_regions,
+            required_tags=request.required_tags,
+            budget_ceiling_usd=request.budget_ceiling_usd,
+            execution_mode=request.execution_mode,
+            require_reviewed_pr=request.require_reviewed_pr,
+            runtime_identity_configured=request.runtime_identity_configured,
         )
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
