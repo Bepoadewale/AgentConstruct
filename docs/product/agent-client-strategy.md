@@ -14,13 +14,13 @@ The product stores the organisation boundary, projects, approved cloud target, p
 ## Local V1 interfaces
 
 - **REST API:** the web UI and other clients use the same authenticated API.
-- **CLI:** `agentconstruct` forwards the caller's bearer token to that API.
-- **MCP:** `agentconstruct-mcp` is a stdio server that exposes the safe planning, inspection, bounded Day-2 recommendation/change-plan request, execution-request, and destroy-plan tools.
+- **CLI:** `agentconstruct` forwards the caller's bearer token to that API. It can create/read/submit customer-plan reviews, list administrator review queues when the caller is authorized, and request approved local dry-run execution.
+- **MCP:** `agentconstruct-mcp` is a stdio server that exposes safe planning, customer-plan review creation/read/submission, bounded approved dry-run request, Day-2 recommendation/change-plan request, environment inspection, and destroy-plan tools.
 
 The CLI and MCP server do not mint AWS credentials. Their token is only for the AgentConstruct API. The API remains the authority for tenant checks, policy, exact-plan approval, and execution state. MCP intentionally has no approval tool, so an agent cannot approve its own protected plan.
 
 The same API exposes tenant-scoped repository and cloud-connection surfaces. Fixture mode is fully local. The live GitHub adapter can read authorized repository metadata with a short-lived installation token and refuses writes. The live AWS discovery pilot proved short-lived STS role chaining for read-only inventory and cost discovery, while storing no reusable customer credential. Neither path publishes a pull request, returns credentials to the caller, or deploys infrastructure. See [governed integrations](../architecture/governed-integrations.md).
 
-**Executed locally:** MCP request dispatch and CLI request construction are unit tested. The REST workflow, including the approved Day-2 fixture change, remains covered by the Compose demos.
+**Executed locally:** MCP request dispatch and CLI request construction are unit tested, including customer-plan review creation/read/submission and approved dry-run request forwarding. The REST workflow, including the approved Day-2 fixture change and customer-plan review lifecycle, remains covered by the Compose demos.
 
 **Not executed:** an external Codex, Claude, Cursor, live GitHub write/check integration, or customer-cloud execution. Those clients can be connected later using the documented stdio/API boundary.

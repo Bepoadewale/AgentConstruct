@@ -57,6 +57,21 @@ def _parser() -> argparse.ArgumentParser:
     approve.add_argument("--plan-id", required=True)
     approve.add_argument("--plan-hash", required=True)
 
+    customer_review = subparsers.add_parser("create-customer-review")
+    customer_review.add_argument("--plan-id", required=True)
+
+    customer_get = subparsers.add_parser("get-customer-review")
+    customer_get.add_argument("--revision-id", required=True)
+
+    customer_submit = subparsers.add_parser("submit-customer-review")
+    customer_submit.add_argument("--revision-id", required=True)
+
+    customer_execute = subparsers.add_parser("execute-customer-dry-run")
+    customer_execute.add_argument("--revision-id", required=True)
+
+    customer_queue = subparsers.add_parser("list-customer-reviews")
+    customer_queue.add_argument("--state")
+
     recommend = subparsers.add_parser("recommend-optimization")
     recommend.add_argument("--environment-id", required=True)
 
@@ -102,6 +117,19 @@ def run(
             f"/api/v1/deployment-plans/{args.plan_id}/approve",
             {"plan_hash": args.plan_hash},
         )
+    if args.command == "create-customer-review":
+        return client.request("POST", f"/api/v1/deployment-plans/{args.plan_id}/customer-review")
+    if args.command == "get-customer-review":
+        return client.request("GET", f"/api/v1/customer-plan-revisions/{args.revision_id}")
+    if args.command == "submit-customer-review":
+        return client.request("POST", f"/api/v1/customer-plan-revisions/{args.revision_id}/submit")
+    if args.command == "execute-customer-dry-run":
+        return client.request(
+            "POST", f"/api/v1/customer-plan-revisions/{args.revision_id}/execute-dry-run"
+        )
+    if args.command == "list-customer-reviews":
+        suffix = f"?state={args.state}" if args.state else ""
+        return client.request("GET", f"/api/v1/admin/customer-plan-revisions{suffix}")
     if args.command == "execute-approved-plan":
         return client.request("POST", f"/api/v1/deployment-plans/{args.plan_id}/execute")
     if args.command == "get-environment-status":

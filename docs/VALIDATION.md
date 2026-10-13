@@ -655,3 +655,27 @@ Results:
 - `git diff --check` passed.
 
 This is local product proof only. It did not write GitHub, run authenticated Terraform, run `terraform apply`, create AWS resources, run Kubernetes, sync GitOps or deploy a workload.
+
+## Agent client customer-plan review parity
+
+Date: 2026-10-13. Environment: macOS, Docker Desktop, Python 3.12, running local AgentConstruct stack.
+
+This validation added safe customer-plan review operations to the CLI and MCP surfaces while preserving the rule that MCP has no approval tool and neither interface obtains cloud credentials.
+
+```bash
+.venv/bin/python -m pytest tests/test_agent_interfaces.py -q
+.venv/bin/python -m ruff check apps/api/src tests scripts
+make local-proof
+git diff --check
+```
+
+Results:
+
+- Agent-interface tests passed: **8 passed**.
+- Ruff passed.
+- `make local-proof` passed: local bootstrap, smoke, browser contract, customer-plan E2E, seed data, Tempo trace verification, Ruff, **106 pytest tests**, and Compose config validation.
+- MCP exposes customer-plan review creation/read/submission and approved dry-run request forwarding.
+- MCP still exposes no approval or credential tool.
+- CLI forwards customer-plan review operations to the governed API using the caller's bearer token.
+
+This is local agent-interface evidence only. It did not write GitHub, run authenticated Terraform, run `terraform apply`, create AWS resources, run Kubernetes, sync GitOps or deploy a workload.

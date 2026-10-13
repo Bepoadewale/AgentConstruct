@@ -17,7 +17,7 @@ class RecordingClient:
 
     def request(self, method: str, path: str, payload: dict | None = None):
         self.calls.append((method, path, payload))
-        if path.startswith("/api/v1/deployment-plans/"):
+        if method == "GET" and path.startswith("/api/v1/deployment-plans/"):
             return {
                 "id": "plan-1",
                 "state": "APPROVAL_REQUIRED",
@@ -40,11 +40,17 @@ def test_mcp_catalogue_exposes_governed_operations_but_no_approval_or_credential
         "analyze_workload",
         "plan_infrastructure",
         "get_plan",
+        "create_customer_plan_review",
+        "get_customer_plan_review",
+        "submit_customer_plan_review",
+        "execute_approved_customer_dry_run",
         "recommend_optimization",
         "create_change_plan",
         "destroy_environment",
     } <= names
     assert "approve_plan" not in names
+    assert "approve_customer_plan_review" not in names
+    assert "decide_customer_plan_review" not in names
     assert all("credential" not in name for name in names)
 
 
@@ -63,6 +69,25 @@ def test_mcp_day2_tools_only_request_governed_api_operations():
     assert client.calls == [
         ("GET", "/api/v1/environments/env-1/recommendation", None),
         ("POST", "/api/v1/environments/env-1/change-plan", None),
+    ]
+
+
+def test_mcp_customer_plan_tools_request_api_without_approval_or_credentials():
+    client = RecordingClient()
+    server = AgentConstructMcp(client)
+    assert server.call_tool("create_customer_plan_review", {"plan_id": "plan-1"}) == {"ok": True}
+    assert server.call_tool("get_customer_plan_review", {"revision_id": "revision-1"}) == {"ok": True}
+    assert server.call_tool("submit_customer_plan_review", {"revision_id": "revision-1"}) == {
+        "ok": True
+    }
+    assert server.call_tool("execute_approved_customer_dry_run", {"revision_id": "revision-1"}) == {
+        "ok": True
+    }
+    assert client.calls == [
+        ("POST", "/api/v1/deployment-plans/plan-1/customer-review", None),
+        ("GET", "/api/v1/customer-plan-revisions/revision-1", None),
+        ("POST", "/api/v1/customer-plan-revisions/revision-1/submit", None),
+        ("POST", "/api/v1/customer-plan-revisions/revision-1/execute-dry-run", None),
     ]
 
 
@@ -105,6 +130,32 @@ def test_cli_forwards_analyze_request_without_creating_cloud_credentials():
                 "idempotency_key": "agent-client-001",
             },
         )
+    ]
+
+
+def test_cli_customer_plan_commands_forward_to_governed_api():
+    client = RecordingClient()
+    assert run(Namespace(command="create-customer-review", plan_id="plan-1"), client) == {
+        "ok": True
+    }
+    assert run(Namespace(command="get-customer-review", revision_id="revision-1"), client) == {
+        "ok": True
+    }
+    assert run(Namespace(command="submit-customer-review", revision_id="revision-1"), client) == {
+        "ok": True
+    }
+    assert run(Namespace(command="execute-customer-dry-run", revision_id="revision-1"), client) == {
+        "ok": True
+    }
+    assert run(Namespace(command="list-customer-reviews", state="submitted"), client) == {
+        "ok": True
+    }
+    assert client.calls == [
+        ("POST", "/api/v1/deployment-plans/plan-1/customer-review", None),
+        ("GET", "/api/v1/customer-plan-revisions/revision-1", None),
+        ("POST", "/api/v1/customer-plan-revisions/revision-1/submit", None),
+        ("POST", "/api/v1/customer-plan-revisions/revision-1/execute-dry-run", None),
+        ("GET", "/api/v1/admin/customer-plan-revisions?state=submitted", None),
     ]
 
 
