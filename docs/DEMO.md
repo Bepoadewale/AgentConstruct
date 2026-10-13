@@ -21,7 +21,7 @@ To pre-populate a fresh local workspace for a fast walkthrough, run:
 make seed-demo-data
 ```
 
-It creates a demo AWS fixture connection plus draft, submitted, approved, rejected, administrator self-approved and locally dry-run plan records. It uses only the local API and fixture executor.
+It creates a demo AWS fixture connection plus draft, submitted, approved, rejected, administrator self-approved, fixture PR/check-state, App Runner Terraform render, ready preflight, Terraform plan-only review and locally dry-run plan records. It uses only the local API and fixture executor.
 
 ## Deterministic proof
 

@@ -61,10 +61,10 @@ The V1 browser is deliberately plain HTML/CSS/JavaScript; see [ADR-009](docs/dec
 
 ## What is real, simulated and next
 
-- **Executed locally:** natural-language fixture interpretation, typed validation, AWS candidate comparison, fixture-inventory reuse, transparent estimated cost ranges and complexity scores, live OPA policy, PostgreSQL lifecycle/audit state, tenant-scoped GitHub/AWS connection metadata, exact-plan approval, durable queued fixture work, observed status, persisted incident/recommendation records, bounded Day-2 recommendation/change evidence, metrics, traces and dashboards.
-- **Simulated locally:** the AI intent provider, default planner inventory/pricing, GitHub App/desired-state publication, and deployment target. The executor can call only fixed fixture endpoints; it has no Docker, Kubernetes, Terraform, GitHub or AWS authority.
+- **Executed locally:** natural-language fixture interpretation, typed validation, AWS candidate comparison, fixture-inventory reuse, transparent estimated cost ranges and complexity scores, live OPA policy, PostgreSQL lifecycle/audit state, tenant-scoped GitHub/AWS connection metadata, exact-plan approval, fixture desired-state PR/check-state records, App Runner Terraform contract rendering, cloud-readiness preflight, Terraform plan-only review records, durable queued fixture work, observed status, persisted incident/recommendation records, bounded Day-2 recommendation/change evidence, metrics, traces and dashboards.
+- **Simulated locally:** the AI intent provider, default planner inventory/pricing, GitHub App desired-state publication/checks, and deployment target. The executor can call only fixed fixture endpoints; it has no Docker, Kubernetes, Terraform, GitHub or AWS authority.
 - **Executed discovery:** short-lived AWS STS role chaining, real inventory/Cost Explorer query, a tenant-scoped credential-free snapshot, and GitHub App read-only repository metadata. The AWS discovery role is read-only; the future execution role has no permissions; the GitHub adapter refuses writes.
-- **Roadmap:** hosted GitHub OIDC assumption, GitHub webhooks and reviewed desired-state PRs, profile-specific Terraform rendering/deployment, real GitOps/Argo execution, enterprise OIDC, customer billing and production support.
+- **Roadmap:** hosted GitHub OIDC assumption, live public GitHub webhooks and reviewed desired-state PR writes/checks, authenticated Terraform plan execution and separately authorised deployment, real GitOps/Argo execution, enterprise OIDC, customer billing and production support.
 
 ## Architecture
 
