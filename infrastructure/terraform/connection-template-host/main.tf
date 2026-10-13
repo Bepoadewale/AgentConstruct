@@ -68,7 +68,12 @@ resource "aws_s3_object" "customer_discovery_role" {
   bucket       = aws_s3_bucket.templates.id
   key          = local.template_key
   source       = local.template_source
-  etag         = local.template_hash
+  etag         = filemd5(local.template_source)
   content_type = "application/x-yaml"
   tags         = local.tags
+  depends_on = [
+    aws_s3_bucket_ownership_controls.templates,
+    aws_s3_bucket_server_side_encryption_configuration.templates,
+    aws_s3_bucket_versioning.templates,
+  ]
 }

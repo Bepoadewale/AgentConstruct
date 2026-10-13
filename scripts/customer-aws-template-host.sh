@@ -35,13 +35,13 @@ case "$operation" in
     [[ "${CONFIRM_TEMPLATE_HOST_APPLY:-}" == "APPLY_AGENTCONSTRUCT_TEMPLATE_HOST" ]] || {
       echo "Set CONFIRM_TEMPLATE_HOST_APPLY=APPLY_AGENTCONSTRUCT_TEMPLATE_HOST after reviewing the plan" >&2; exit 2;
     }
-    terraform -chdir="$root" apply -input=false "${vars[@]}"
+    terraform -chdir="$root" apply -input=false -auto-approve "${vars[@]}"
     ;;
   destroy)
     [[ "${CONFIRM_TEMPLATE_HOST_DESTROY:-}" == "DESTROY_AGENTCONSTRUCT_TEMPLATE_HOST" ]] || {
       echo "Set CONFIRM_TEMPLATE_HOST_DESTROY=DESTROY_AGENTCONSTRUCT_TEMPLATE_HOST" >&2; exit 2;
     }
-    terraform -chdir="$root" destroy -input=false "${vars[@]}"
+    terraform -chdir="$root" destroy -input=false -auto-approve "${vars[@]}"
     ;;
   *) echo "usage: $0 {plan|apply|destroy}" >&2; exit 2 ;;
 esac
