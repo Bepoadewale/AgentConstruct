@@ -448,8 +448,22 @@ def test_cloud_readiness_preflight_blocks_until_runtime_identity_is_configured()
     publication.state = "CHECKS_PASSED"
     db.commit()
 
+    with pytest.raises(PermissionError, match="workspace administrator"):
+        service.create_cloud_readiness_preflight(
+            founder(),
+            approved.id,
+            content_digest=approved.content_digest,
+            expected_account_id=None,
+            allowed_regions=["us-east-1"],
+            required_tags={"ManagedBy": "AgentConstruct"},
+            budget_ceiling_usd=1000,
+            execution_mode="DRY_RUN_ONLY",
+            require_reviewed_pr=True,
+            runtime_identity_configured=False,
+        )
+
     preflight = service.create_cloud_readiness_preflight(
-        founder(),
+        operator(),
         approved.id,
         content_digest=approved.content_digest,
         expected_account_id=None,
@@ -480,7 +494,7 @@ def test_cloud_readiness_preflight_can_be_ready_for_future_authorized_plan():
     db.commit()
 
     preflight = service.create_cloud_readiness_preflight(
-        founder(),
+        operator(),
         approved.id,
         content_digest=approved.content_digest,
         expected_account_id=None,
@@ -503,7 +517,7 @@ def test_cloud_readiness_preflight_records_guardrail_failures_without_cloud_acti
     service.create_terraform_plan_render_for_revision(founder(), approved.id, approved.content_digest)
 
     preflight = service.create_cloud_readiness_preflight(
-        founder(),
+        operator(),
         approved.id,
         content_digest=approved.content_digest,
         expected_account_id="123456789012",
@@ -535,7 +549,7 @@ def test_cloud_readiness_preflight_rejects_stale_digest():
 
     with pytest.raises(ValueError, match="stale cloud preflight"):
         service.create_cloud_readiness_preflight(
-            founder(),
+            operator(),
             approved.id,
             content_digest="0" * 64,
             expected_account_id=None,

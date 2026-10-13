@@ -558,3 +558,39 @@ Results:
 - The seed script created draft, submitted, approved, rejected and administrator self-approved customer-plan revisions.
 - The approved seeded revision also created a fixture desired-state PR, recorded `CHECKS_PASSED`, rendered the App Runner Terraform contract, recorded `READY_FOR_AUTHORIZED_CLOUD_PLAN`, recorded `LOCAL_CONTRACT_PLAN_REVIEWED`, and queued observed local dry-run environments.
 - The output boundary explicitly states no AWS resources, GitHub writes, authenticated Terraform plan/apply, Kubernetes or GitOps execution occurred.
+
+## Administrator-gated readiness actions
+
+Date: 2026-10-13. Environment: macOS, Docker Desktop, Python 3.12 virtualenv, running local AgentConstruct stack.
+
+This validation made future cloud-readiness controls workspace-administrator-only. A developer can still create, submit and view plans, but cannot run the operator preflight or see the operator-only UI controls.
+
+```bash
+.venv/bin/python -m pytest tests/test_customer_plan_review.py -q
+.venv/bin/python -m ruff check apps/api/src tests scripts
+node --check apps/web/app.js
+.venv/bin/python -m pytest -q
+docker compose up -d --build
+make smoke
+make browser-contract
+make customer-plan-e2e
+make seed-demo-data
+make verify
+git diff --check
+```
+
+Results:
+
+- Focused customer-plan tests passed: **27 passed**.
+- Ruff passed.
+- JavaScript syntax check passed.
+- Full pytest suite passed: **106 passed**.
+- Docker Compose rebuilt and started the local API, worker and fixture executor.
+- Smoke passed for API, worker, fixture executor, Prometheus, Grafana, Tempo and OPA.
+- Browser contract passed.
+- `make customer-plan-e2e` passed, including developer submission, administrator decision, administrator self-approval, local dry-run execution, readiness failure, governed destroy and audit.
+- `make seed-demo-data` created fixture records through the local API, including desired-state PR/check state, App Runner Terraform render, ready preflight, plan-only review and local dry-run environments.
+- `make verify` passed: Ruff, **106 pytest tests**, and Compose config validation.
+- `git diff --check` passed.
+
+This is local product hardening evidence only. It did not write GitHub, run authenticated Terraform, run `terraform apply`, create AWS resources, run Kubernetes, sync GitOps or deploy a workload.

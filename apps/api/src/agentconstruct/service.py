@@ -2143,6 +2143,8 @@ class ProductService:
         runtime_identity_configured: bool,
     ) -> dict[str, Any]:
         """Evaluate local guardrails before any future cloud action can be considered."""
+        if not self._is_workspace_administrator(principal):
+            raise PermissionError("only a workspace administrator can run cloud-readiness preflight")
         revision, infrastructure_plan, _ = self._approved_customer_revision(principal, revision_id)
         if revision.content_digest != content_digest or plan_hash(revision.content) != content_digest:
             raise ValueError("stale cloud preflight request: approved digest changed")
