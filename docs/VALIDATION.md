@@ -543,3 +543,18 @@ Results:
 - OPA policy tests passed: **3/3**.
 
 This is local product stability evidence only. It did not write GitHub, run authenticated Terraform, run `terraform apply`, create AWS resources, run Kubernetes, sync GitOps or deploy a workload.
+
+## Demo data readiness seed
+
+Date: 2026-10-13. Environment: macOS, Docker Desktop, Python 3.12 virtualenv, running local AgentConstruct stack.
+
+```bash
+.venv/bin/python -m py_compile scripts/seed_demo_data.py
+make seed-demo-data
+```
+
+Results:
+
+- The seed script created draft, submitted, approved, rejected and administrator self-approved customer-plan revisions.
+- The approved seeded revision also created a fixture desired-state PR, recorded `CHECKS_PASSED`, rendered the App Runner Terraform contract, recorded `READY_FOR_AUTHORIZED_CLOUD_PLAN`, recorded `LOCAL_CONTRACT_PLAN_REVIEWED`, and queued observed local dry-run environments.
+- The output boundary explicitly states no AWS resources, GitHub writes, authenticated Terraform plan/apply, Kubernetes or GitOps execution occurred.

@@ -147,6 +147,79 @@ def wait_for_revision_environments(
     raise RuntimeError(f"seeded dry-run environments did not reach {expected}: {last}")
 
 
+def record_readiness_artifacts(
+    client: httpx.Client,
+    developer: str,
+    administrator: str,
+    approved: dict[str, Any],
+) -> dict[str, Any]:
+    publication = expect(
+        client.post(
+            f"{BASE}/api/v1/customer-plan-revisions/{approved['id']}/desired-state-publications",
+            headers=auth(developer),
+            json={"content_digest": approved["content_digest"]},
+        ),
+        "seed fixture desired-state PR",
+    )
+    checked = expect(
+        client.post(
+            f"{BASE}/api/v1/customer-plan-revisions/{approved['id']}/desired-state-publications/{publication['id']}/state",
+            headers=auth(administrator),
+            json={"content_digest": approved["content_digest"], "state": "CHECKS_PASSED"},
+        ),
+        "seed fixture desired-state checks",
+    )
+    render = expect(
+        client.post(
+            f"{BASE}/api/v1/customer-plan-revisions/{approved['id']}/terraform-plan-renders",
+            headers=auth(developer),
+            json={"content_digest": approved["content_digest"]},
+        ),
+        "seed App Runner Terraform contract",
+    )
+    preflight = expect(
+        client.post(
+            f"{BASE}/api/v1/customer-plan-revisions/{approved['id']}/cloud-readiness-preflights",
+            headers=auth(administrator),
+            json={
+                "content_digest": approved["content_digest"],
+                "expected_account_id": None,
+                "allowed_regions": ["us-east-1"],
+                "required_tags": {"ManagedBy": "AgentConstruct"},
+                "budget_ceiling_usd": 1000,
+                "execution_mode": "PLAN_ONLY",
+                "require_reviewed_pr": True,
+                "runtime_identity_configured": True,
+            },
+        ),
+        "seed cloud-readiness preflight",
+    )
+    plan_review = expect(
+        client.post(
+            f"{BASE}/api/v1/customer-plan-revisions/{approved['id']}/terraform-plan-reviews",
+            headers=auth(administrator),
+            json={
+                "content_digest": approved["content_digest"],
+                "preflight_id": preflight["id"],
+                "expected_account_id": None,
+                "expected_region": "us-east-1",
+                "mode": "LOCAL_CONTRACT_ONLY",
+                "allow_cloud_plan": False,
+            },
+        ),
+        "seed Terraform plan-only review",
+    )
+    return {
+        "desired_state_publication_id": publication["id"],
+        "desired_state_publication_state": checked["state"],
+        "terraform_render_id": render["id"],
+        "cloud_readiness_preflight_id": preflight["id"],
+        "cloud_readiness_state": preflight["state"],
+        "terraform_plan_review_id": plan_review["id"],
+        "terraform_plan_review_state": plan_review["state"],
+    }
+
+
 def seed(run_dry_run: bool) -> dict[str, Any]:
     with httpx.Client(timeout=20) as client:
         developer = token(client, "founder")
@@ -186,6 +259,7 @@ def seed(run_dry_run: bool) -> dict[str, Any]:
             ),
             "APPROVED",
         )
+        readiness = record_readiness_artifacts(client, developer, administrator, approved)
 
         dry_run_environments: list[dict[str, Any]] = []
         if run_dry_run:
@@ -207,8 +281,12 @@ def seed(run_dry_run: bool) -> dict[str, Any]:
             "approved_revision_id": approved["id"],
             "rejected_revision_id": rejected["id"],
             "admin_self_approved_revision_id": admin_self_approved["id"],
+            **readiness,
             "dry_run_environment_ids": [item["id"] for item in dry_run_environments],
-            "boundary": "Local fixture seed only. No AWS resources, GitHub writes, Terraform, Kubernetes or GitOps execution occurred.",
+            "boundary": (
+                "Local fixture seed only. No AWS resources, GitHub writes, authenticated "
+                "Terraform plan/apply, Kubernetes or GitOps execution occurred."
+            ),
         }
 
 
