@@ -594,3 +594,43 @@ Results:
 - `git diff --check` passed.
 
 This is local product hardening evidence only. It did not write GitHub, run authenticated Terraform, run `terraform apply`, create AWS resources, run Kubernetes, sync GitOps or deploy a workload.
+
+## Local proof developer experience and clean-room repeat
+
+Date: 2026-10-13. Environment: macOS, Docker Desktop, Python 3.12, clean local Compose volumes.
+
+This validation added `make help` and `make local-proof`, updated stale current-state documentation, and repeated the local product proof twice from a clean state.
+
+Warm-stack command check:
+
+```bash
+make help
+make local-proof
+git diff --check
+```
+
+Clean-room repeat:
+
+```bash
+make clean-local
+make bootstrap-local
+make local-proof
+make clean-local
+make bootstrap-local
+make local-proof
+make clean-local
+```
+
+Results:
+
+- `make help` printed the local operator command list and cloud-safety boundary.
+- Both cold cycles rebuilt the Python virtualenv and Docker Compose services from scratch.
+- Both cold cycles passed service readiness for API, worker, fixture executor, Prometheus, Grafana, Tempo and OPA.
+- Both cold cycles passed the browser contract.
+- Both cold cycles passed `make customer-plan-e2e`, proving developer submission, administrator decision, administrator self-approval, local dry-run execution, readiness failure, governed destroy and audit.
+- Both cold cycles passed `make seed-demo-data`, including fixture desired-state PR/check state, App Runner Terraform render, ready cloud-readiness preflight, plan-only review and local dry-run environment records.
+- Both cold cycles passed Tempo trace verification.
+- Both cold cycles passed `make verify`: Ruff, **106 pytest tests**, and Compose config validation.
+- Final cleanup removed local project containers, volumes, `.venv` and `.local`.
+
+This is local clean-room evidence only. It did not write GitHub, run authenticated Terraform, run `terraform apply`, create AWS resources, run Kubernetes, sync GitOps or deploy a workload.

@@ -18,7 +18,7 @@ This prevents a request that needs a simple managed application from accidentall
 
 **Implemented / unexecuted:** approved `aws-app-runner` customer-plan revisions can now render a plan-only Terraform contract. The rendered contract includes module inputs for the service, repository/branch, ECR/source boundary, IAM boundary, secret references, HTTPS assumptions, Prometheus/Grafana monitoring contract, required tags, selected account/region, revision ID and exact approved digest. The renderer persists the preview and exposes only offline validation commands. It does not expose `terraform apply`.
 
-Approved revisions can also run a cloud-readiness preflight that checks account, region, tags, budget, reviewed PR state, runtime identity and dry-run/plan-only mode before any future cloud workflow can be considered. The current local product is expected to block because the runtime identity and real reviewed PR/check state are not configured locally.
+Approved revisions can also run a workspace-administrator-only cloud-readiness preflight that checks account, region, tags, budget, reviewed PR state, runtime identity and dry-run/plan-only mode before any future cloud workflow can be considered. The local demo can produce `READY_FOR_AUTHORIZED_CLOUD_PLAN` only by using fixture reviewed-PR/check state and the explicit local runtime-identity checkbox; that is guardrail evidence, not proof of a hosted runtime identity or live GitHub checks.
 
 **Simulated:** the executor reports a deterministic local result. Fixture desired-state PR publication records a reviewed-PR contract without writing GitHub.
 

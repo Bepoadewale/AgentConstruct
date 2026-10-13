@@ -19,8 +19,8 @@ The product stores the organisation boundary, projects, approved cloud target, p
 
 The CLI and MCP server do not mint AWS credentials. Their token is only for the AgentConstruct API. The API remains the authority for tenant checks, policy, exact-plan approval, and execution state. MCP intentionally has no approval tool, so an agent cannot approve its own protected plan.
 
-The same API exposes fixture repository discovery and a future BYOC role contract. They are tenant-scoped and safe to inspect, but do not install a GitHub App, publish a pull request, assume an AWS role, or return credentials. See [governed integrations](../architecture/governed-integrations.md).
+The same API exposes tenant-scoped repository and cloud-connection surfaces. Fixture mode is fully local. The live GitHub adapter can read authorized repository metadata with a short-lived installation token and refuses writes. The live AWS discovery pilot proved short-lived STS role chaining for read-only inventory and cost discovery, while storing no reusable customer credential. Neither path publishes a pull request, returns credentials to the caller, or deploys infrastructure. See [governed integrations](../architecture/governed-integrations.md).
 
 **Executed locally:** MCP request dispatch and CLI request construction are unit tested. The REST workflow, including the approved Day-2 fixture change, remains covered by the Compose demos.
 
-**Not executed:** an external Codex, Claude, Cursor, or GitHub App installation. Those clients can be connected later using the documented stdio/API boundary.
+**Not executed:** an external Codex, Claude, Cursor, live GitHub write/check integration, or customer-cloud execution. Those clients can be connected later using the documented stdio/API boundary.

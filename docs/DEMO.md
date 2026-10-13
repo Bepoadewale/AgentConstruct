@@ -28,6 +28,12 @@ It creates a demo AWS fixture connection plus draft, submitted, approved, reject
 The same two-session workflow is exercised without manual browser state by:
 
 ```bash
+make local-proof
+```
+
+For the individual proof steps, run:
+
+```bash
 make customer-plan-e2e
 make seed-demo-data
 docker compose restart api

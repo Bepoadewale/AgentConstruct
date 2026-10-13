@@ -3,7 +3,21 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export PYTHONPATH := apps/api/src
 
-.PHONY: install lint test bootstrap-local smoke seed-demo-data demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check browser-contract customer-plan-e2e customer-plan-persistence verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy customer-aws-template-host-plan customer-aws-template-host-apply customer-aws-template-host-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
+.PHONY: help install lint test bootstrap-local smoke seed-demo-data demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check browser-contract customer-plan-e2e customer-plan-persistence local-proof verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy customer-aws-template-host-plan customer-aws-template-host-apply customer-aws-template-host-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
+
+help:
+	@echo "AgentConstruct local commands"
+	@echo ""
+	@echo "  make install                 Create .venv and install dev dependencies"
+	@echo "  make bootstrap-local         Build/start local API, worker, Postgres, OPA, Prometheus, Grafana, Tempo"
+	@echo "  make smoke                   Check local service readiness"
+	@echo "  make seed-demo-data          Seed realistic local developer/admin demo records"
+	@echo "  make local-proof             Run smoke, UI contract, customer-plan E2E, seed data, trace check, verify"
+	@echo "  make customer-plan-e2e       Prove developer submit, admin decision, self-approval, dry-run, destroy"
+	@echo "  make verify                  Run lint, tests, and Compose config validation"
+	@echo "  make clean-local             Stop local stack and remove local volumes/.venv/.local"
+	@echo ""
+	@echo "Cloud-safety boundary: normal local targets never run Terraform apply, create AWS workload resources, write GitHub PRs, or deploy Kubernetes/GitOps."
 
 install:
 	command -v $(PYTHON) >/dev/null || { echo "Python 3.12 is required"; exit 1; }
@@ -60,6 +74,8 @@ customer-plan-e2e:
 
 customer-plan-persistence:
 	$(PY) scripts/customer_plan_e2e.py --verify-persistence
+
+local-proof: smoke browser-contract customer-plan-e2e seed-demo-data trace-check verify
 
 opa-test:
 	docker compose exec -T opa opa test /policies

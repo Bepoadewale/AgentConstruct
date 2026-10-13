@@ -1,6 +1,6 @@
 # Current State Audit
 
-Audit date: 2026-10-11. Branch reviewed: `main` at `865689b` before this change.
+Audit date: 2026-10-13. Branch reviewed: `main` after the local V1 hardening and administrator-gated readiness work.
 
 ## What works today
 
@@ -10,25 +10,26 @@ Audit date: 2026-10-11. Branch reviewed: `main` at `865689b` before this change.
 - The product stores projects, intents, cloud connections, plans, approvals, audit events and local execution results.
 - A GitHub App has read repository metadata through a short-lived installation token. The live adapter refuses writes.
 - A customer AWS discovery role has been proven with short-lived STS access. It is read-only and has not deployed a workload.
+- The customer-facing plan flow supports draft, submitted, approved and rejected revisions; administrator rejection reasons; administrator self-approval; editable draft/rejected constraints; review diffs; and a clear approved-not-deployed boundary.
+- The local UI has separate developer and administrator fixture sessions, role-aware dashboards, integration selectors, one-plan review, approval queues, audit evidence, local dry-run execution, governed destroy, fixture desired-state PR state, App Runner Terraform contract preview, cloud-readiness preflight and plan-only review records.
+- Every customer AWS plan includes mandatory Prometheus-compatible metrics and Amazon Managed Grafana review components with cost assumptions and coverage limitations.
 
 ## What is simulated or partial
 
 - Natural-language understanding, pricing and normal inventory are deterministic fixtures.
 - Browser login is a local signed fixture; it is not customer sign-in.
-- The current browser is one local demonstration page, not separate developer and administrator dashboards.
-- The existing `DeploymentPlan` approval flow governs bounded local execution. It requires a distinct operator and has no customer-facing submitted/rejected revision lifecycle.
-- The browser currently shows alternatives. The requested product flow must show one selected AWS plan.
-- Prometheus and Grafana run locally, but are not yet mandatory typed resources in every customer plan.
+- Fixture desired-state PR/check state does not write GitHub, publish checks, or merge code.
+- App Runner Terraform rendering and plan-only review records are local governance evidence; they do not run authenticated Terraform or create AWS resources.
+- Cloud-readiness preflight is administrator-only local guardrail evidence; it does not prove a hosted runtime identity, live reviewed PR/checks, or workload readiness.
 
 ## Missing for the developer and administrator journey
 
-1. Customer-facing infrastructure plan/revision records with `DRAFT`, `SUBMITTED`, `APPROVED` and `REJECTED` states.
-2. Administrator review, rejection reasons, decision history and explicit administrator self-approval.
-3. Role-aware dashboards and real two-user local demonstration.
-4. GitHub App installation/account/repository/branch selection and disconnect flows.
-5. AWS account capability/region views and connected-account selection.
-6. One-plan customer review with mandatory Prometheus/Grafana details and costs.
-7. Browser/API end-to-end evidence for submission, approval, rejection, revision, persistence and decision races.
+1. Enterprise/customer identity is not connected; local login remains a signed fixture.
+2. Live GitHub public OAuth/install callback and public webhook delivery are not executed; fixture webhooks and read-only installation-token discovery are implemented.
+3. Live GitHub desired-state PR writes/checks are not enabled; publication remains fixture-only.
+4. The public CloudFormation template host and AgentConstruct runtime identity are not deployed, so the browser Quick Create path is not live for a new customer account.
+5. Authenticated Terraform plan-only review has not been executed; apply remains out of scope until separately authorized.
+6. Real workload monitoring, actual AWS cost evidence for deployed workloads, GitOps/Argo reconciliation and customer-cloud destroy evidence are not implemented.
 
 ## Reuse plan
 
@@ -36,4 +37,4 @@ Reuse the existing organisation checks, signed principal boundary, OPA client, c
 
 ## Risks and shortest credible path
 
-Real GitHub installation and real AWS roles need customer-controlled external setup. Local fixtures will prove the user journey without creating cloud resources. The shortest path is: persist customer plan revisions first, then role-aware dashboards, integrations, one-plan review, submission/decision UI and end-to-end proof. Approval remains separate from deployment throughout.
+Real GitHub writes and real AWS execution need customer-controlled external setup plus AgentConstruct runtime hosting. The local product is stable enough to demonstrate the intended plan/review/approval/dry-run lifecycle without cloud spend. The shortest next path is to prove authenticated Terraform plan-only mode for the App Runner contract, then run a separately authorized create → validate → destroy cloud pilot. Approval remains separate from deployment throughout.
