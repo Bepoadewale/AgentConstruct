@@ -25,13 +25,13 @@ It creates a demo AWS fixture connection plus draft, submitted, approved, reject
 
 ## Deterministic proof
 
-The same two-session workflow is exercised without manual browser state by:
+The same two-session workflow is exercised without manual browser state by one self-contained local command:
 
 ```bash
 make local-proof
 ```
 
-For the individual proof steps, run:
+For the individual proof steps after the stack is already running, run:
 
 ```bash
 make customer-plan-e2e
