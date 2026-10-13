@@ -61,6 +61,7 @@ from agentconstruct.models import (
     StoredCloudInventorySnapshot,
     StoredRepositoryAnalysis,
     TerraformPlanRender,
+    TerraformPlanReview,
     WorkloadIntent,
 )
 from agentconstruct.planner import AwsV1Planner
@@ -649,6 +650,17 @@ class ProductService:
                 .order_by(CloudReadinessPreflight.created_at.desc())
             )
         ]
+        terraform_plan_reviews = [
+            self._terraform_plan_review_payload(review)
+            for review in self.db.scalars(
+                select(TerraformPlanReview)
+                .where(
+                    TerraformPlanReview.organization_id == principal.organization_id,
+                    TerraformPlanReview.revision_id == revision.id,
+                )
+                .order_by(TerraformPlanReview.created_at.desc())
+            )
+        ]
         return {
             "id": revision.id,
             "plan_id": plan.id,
@@ -676,6 +688,7 @@ class ProductService:
             "desired_state_publications": desired_state_publications,
             "terraform_plan_renders": terraform_plan_renders,
             "cloud_readiness_preflights": cloud_preflights,
+            "terraform_plan_reviews": terraform_plan_reviews,
             "submitted_by_subject": revision.submitted_by_subject,
             "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
             "decision": None
@@ -2257,6 +2270,175 @@ class ProductService:
             "created_at": preflight.created_at.isoformat() if preflight.created_at else None,
             "execution": "LOCAL_PREFLIGHT_ONLY",
             "boundary": "This preflight cannot run Terraform plan/apply/destroy or mutate AWS.",
+        }
+
+    def create_terraform_plan_review_for_revision(
+        self,
+        principal: Principal,
+        revision_id: str,
+        *,
+        content_digest: str,
+        preflight_id: str | None,
+        expected_account_id: str | None,
+        expected_region: str | None,
+        mode: str,
+        allow_cloud_plan: bool,
+    ) -> dict[str, Any]:
+        """Create plan-only Terraform review evidence.
+
+        This is intentionally not an apply path. The default local mode records
+        deterministic command evidence only. Authenticated plan mode is blocked
+        unless both the request and process environment explicitly opt in.
+        """
+        if not self._is_workspace_administrator(principal):
+            raise PermissionError("only a workspace administrator can request a Terraform plan review")
+        revision, infrastructure_plan, _ = self._approved_customer_revision(principal, revision_id)
+        if revision.content_digest != content_digest or plan_hash(revision.content) != content_digest:
+            raise ValueError("stale Terraform plan review request: approved digest changed")
+        render = self.db.scalar(
+            select(TerraformPlanRender)
+            .where(
+                TerraformPlanRender.organization_id == principal.organization_id,
+                TerraformPlanRender.revision_id == revision.id,
+                TerraformPlanRender.content_digest == revision.content_digest,
+                TerraformPlanRender.profile == "aws-app-runner",
+            )
+            .order_by(TerraformPlanRender.created_at.desc())
+            .limit(1)
+        )
+        preflight_query = select(CloudReadinessPreflight).where(
+            CloudReadinessPreflight.organization_id == principal.organization_id,
+            CloudReadinessPreflight.revision_id == revision.id,
+            CloudReadinessPreflight.content_digest == revision.content_digest,
+        )
+        if preflight_id:
+            preflight_query = preflight_query.where(CloudReadinessPreflight.id == preflight_id)
+        preflight = self.db.scalar(
+            preflight_query.order_by(CloudReadinessPreflight.created_at.desc()).limit(1)
+        )
+        state = "PLAN_REVIEW_READY"
+        blockers: list[str] = []
+        evidence: dict[str, Any] = {
+            "mode": mode,
+            "profile": "aws-app-runner",
+            "apply_available": False,
+            "requested_authenticated_plan": mode == "AUTHENTICATED_TERRAFORM_PLAN",
+            "execution_boundary": (
+                "Plan-only review evidence. Terraform apply/destroy is unavailable and no AWS "
+                "resource creation is reachable from this endpoint."
+            ),
+        }
+        command = {
+            "terraform_root": render.terraform_root if render else None,
+            "commands": [],
+            "apply_command_available": False,
+            "executor": "fixture-plan-review",
+        }
+        if render is None:
+            state = "BLOCKED_TERRAFORM_CONTRACT_REQUIRED"
+            blockers.append("Generate an App Runner Terraform contract for the approved digest first.")
+        else:
+            render_inputs = render.render.get("module_inputs", {})
+            region = render_inputs.get("aws_region")
+            account_id = render_inputs.get("aws_account_id")
+            command["commands"] = [
+                f"terraform -chdir={render.terraform_root} init -backend=false -input=false",
+                f"terraform -chdir={render.terraform_root} plan -input=false -refresh=false -lock=false -no-color",
+            ]
+            evidence.update(
+                {
+                    "terraform_render_id": render.id,
+                    "terraform_root": render.terraform_root,
+                    "module_path": render.module_path,
+                    "plan_digest_embedded": render_inputs.get("plan_digest") == revision.content_digest,
+                    "aws_account_id": account_id,
+                    "aws_region": region,
+                }
+            )
+            if expected_account_id and account_id not in {expected_account_id, "customer-account-selected-at-apply-time"}:
+                state = "BLOCKED_ACCOUNT_GUARD"
+                blockers.append(f"Expected AWS account {expected_account_id}; render targets {account_id}.")
+            if expected_region and region != expected_region:
+                state = "BLOCKED_REGION_GUARD"
+                blockers.append(f"Expected AWS region {expected_region}; render targets {region}.")
+        if preflight is None:
+            state = "BLOCKED_PREFLIGHT_REQUIRED"
+            blockers.append("Run a cloud-readiness preflight for this approved digest first.")
+        elif preflight.state != "READY_FOR_AUTHORIZED_CLOUD_PLAN":
+            state = "BLOCKED_PREFLIGHT"
+            blockers.append(f"Cloud-readiness preflight is {preflight.state}.")
+            evidence["preflight"] = self._cloud_readiness_preflight_payload(preflight)
+        else:
+            evidence["preflight"] = self._cloud_readiness_preflight_payload(preflight)
+        if mode == "AUTHENTICATED_TERRAFORM_PLAN":
+            env_allowed = os.getenv("ALLOW_CLOUD_PLAN", "").lower() == "true"
+            if not allow_cloud_plan or not env_allowed:
+                state = "BLOCKED_CLOUD_PLAN_NOT_ALLOWED"
+                blockers.append("Authenticated Terraform plan requires request allow_cloud_plan=true and ALLOW_CLOUD_PLAN=true.")
+            command["executor"] = "authenticated-terraform-plan-gated"
+            evidence["allow_cloud_plan_request"] = allow_cloud_plan
+            evidence["allow_cloud_plan_env"] = env_allowed
+        else:
+            evidence["fixture_plan_summary"] = (
+                "Local contract review only. Commands are recorded as the only allowed plan-only "
+                "shape; they are not an authenticated AWS plan and they never include apply."
+            )
+        if state == "PLAN_REVIEW_READY":
+            state = (
+                "AUTHENTICATED_PLAN_ALLOWED_NOT_EXECUTED"
+                if mode == "AUTHENTICATED_TERRAFORM_PLAN"
+                else "LOCAL_CONTRACT_PLAN_REVIEWED"
+            )
+            evidence["result"] = "ready for operator-authenticated terraform plan command outside automated tests"
+        evidence["blockers"] = blockers
+        stored = TerraformPlanReview(
+            organization_id=principal.organization_id,
+            revision_id=revision.id,
+            project_id=infrastructure_plan.project_id,
+            terraform_render_id=render.id if render else None,
+            preflight_id=preflight.id if preflight else None,
+            mode=mode,
+            state=state,
+            command=command,
+            evidence=evidence,
+            content_digest=revision.content_digest,
+            created_by_subject=principal.subject,
+        )
+        self.db.add(stored)
+        self.db.flush()
+        self.audit(
+            principal,
+            "terraform.plan_only_review_recorded",
+            "terraform_plan_review",
+            stored.id,
+            {
+                "revision_id": revision.id,
+                "digest": revision.content_digest,
+                "state": state,
+                "mode": mode,
+                "apply_available": False,
+            },
+        )
+        self.db.commit()
+        return self._terraform_plan_review_payload(stored)
+
+    @staticmethod
+    def _terraform_plan_review_payload(review: TerraformPlanReview) -> dict[str, Any]:
+        return {
+            "id": review.id,
+            "revision_id": review.revision_id,
+            "terraform_render_id": review.terraform_render_id,
+            "preflight_id": review.preflight_id,
+            "mode": review.mode,
+            "state": review.state,
+            "command": review.command,
+            "evidence": review.evidence,
+            "content_digest": review.content_digest,
+            "created_by_subject": review.created_by_subject,
+            "created_at": review.created_at.isoformat() if review.created_at else None,
+            "apply_available": False,
+            "execution": "PLAN_ONLY_REVIEW_NO_APPLY",
+            "boundary": "Terraform apply/destroy is unavailable. This record does not create AWS resources.",
         }
 
     def cloud_role_contract(self, principal: Principal, connection_id: str) -> dict[str, str | int]:

@@ -481,3 +481,168 @@ def test_cloud_readiness_preflight_rejects_stale_digest():
             require_reviewed_pr=False,
             runtime_identity_configured=False,
         )
+
+
+def ready_app_runner_preflight(service, db, approved):
+    service.create_terraform_plan_render_for_revision(operator(), approved.id, approved.content_digest)
+    service.create_desired_state_publication_for_revision(operator(), approved.id, approved.content_digest)
+    publication = db.scalar(
+        select(DesiredStatePublication).where(DesiredStatePublication.revision_id == approved.id)
+    )
+    publication.state = "CHECKS_PASSED"
+    db.commit()
+    return service.create_cloud_readiness_preflight(
+        operator(),
+        approved.id,
+        content_digest=approved.content_digest,
+        expected_account_id=None,
+        allowed_regions=["us-east-1"],
+        required_tags={"ManagedBy": "AgentConstruct"},
+        budget_ceiling_usd=1000,
+        execution_mode="PLAN_ONLY",
+        require_reviewed_pr=True,
+        runtime_identity_configured=True,
+    )
+
+
+def test_terraform_plan_review_is_administrator_only():
+    service, db = make_service()
+    approved = approved_app_runner_customer_review(service)
+    preflight = ready_app_runner_preflight(service, db, approved)
+
+    with pytest.raises(PermissionError, match="workspace administrator"):
+        service.create_terraform_plan_review_for_revision(
+            founder(),
+            approved.id,
+            content_digest=approved.content_digest,
+            preflight_id=preflight["id"],
+            expected_account_id=None,
+            expected_region="us-east-1",
+            mode="LOCAL_CONTRACT_ONLY",
+            allow_cloud_plan=False,
+        )
+
+
+def test_terraform_plan_review_blocks_without_preflight_or_render():
+    service, _ = make_service()
+    approved = approved_app_runner_customer_review(service)
+
+    review = service.create_terraform_plan_review_for_revision(
+        operator(),
+        approved.id,
+        content_digest=approved.content_digest,
+        preflight_id=None,
+        expected_account_id=None,
+        expected_region="us-east-1",
+        mode="LOCAL_CONTRACT_ONLY",
+        allow_cloud_plan=False,
+    )
+
+    assert review["state"] == "BLOCKED_PREFLIGHT_REQUIRED"
+    assert review["apply_available"] is False
+    assert any("Generate an App Runner Terraform contract" in blocker for blocker in review["evidence"]["blockers"])
+    assert any("Run a cloud-readiness preflight" in blocker for blocker in review["evidence"]["blockers"])
+
+
+def test_terraform_plan_review_blocks_failed_cloud_preflight():
+    service, _ = make_service()
+    approved = approved_app_runner_customer_review(service)
+    service.create_terraform_plan_render_for_revision(operator(), approved.id, approved.content_digest)
+    preflight = service.create_cloud_readiness_preflight(
+        operator(),
+        approved.id,
+        content_digest=approved.content_digest,
+        expected_account_id="123456789012",
+        allowed_regions=["eu-west-1"],
+        required_tags={"ManagedBy": "AgentConstruct"},
+        budget_ceiling_usd=1,
+        execution_mode="PLAN_ONLY",
+        require_reviewed_pr=True,
+        runtime_identity_configured=False,
+    )
+
+    review = service.create_terraform_plan_review_for_revision(
+        operator(),
+        approved.id,
+        content_digest=approved.content_digest,
+        preflight_id=preflight["id"],
+        expected_account_id=None,
+        expected_region="us-east-1",
+        mode="LOCAL_CONTRACT_ONLY",
+        allow_cloud_plan=False,
+    )
+
+    assert review["state"] == "BLOCKED_PREFLIGHT"
+    assert "Cloud-readiness preflight is BLOCKED_GUARDRAIL_FAILURE." in review["evidence"]["blockers"]
+    assert all("apply" not in command for command in review["command"]["commands"])
+
+
+def test_terraform_plan_review_records_local_plan_only_evidence_after_ready_preflight():
+    service, db = make_service()
+    approved = approved_app_runner_customer_review(service)
+    preflight = ready_app_runner_preflight(service, db, approved)
+
+    review = service.create_terraform_plan_review_for_revision(
+        operator(),
+        approved.id,
+        content_digest=approved.content_digest,
+        preflight_id=preflight["id"],
+        expected_account_id=None,
+        expected_region="us-east-1",
+        mode="LOCAL_CONTRACT_ONLY",
+        allow_cloud_plan=False,
+    )
+    detail = service.infrastructure_plan_revision_detail(operator(), approved.id)
+
+    assert review["state"] == "LOCAL_CONTRACT_PLAN_REVIEWED"
+    assert review["execution"] == "PLAN_ONLY_REVIEW_NO_APPLY"
+    assert review["apply_available"] is False
+    assert review["evidence"]["plan_digest_embedded"] is True
+    assert any("terraform -chdir=" in command for command in review["command"]["commands"])
+    assert all(" apply" not in command for command in review["command"]["commands"])
+    assert detail["terraform_plan_reviews"][0]["id"] == review["id"]
+    assert any(
+        event.action == "terraform.plan_only_review_recorded"
+        for event in service.audits(operator())
+    )
+
+
+def test_authenticated_terraform_plan_review_requires_explicit_operator_flag(monkeypatch):
+    service, db = make_service()
+    approved = approved_app_runner_customer_review(service)
+    preflight = ready_app_runner_preflight(service, db, approved)
+    monkeypatch.delenv("ALLOW_CLOUD_PLAN", raising=False)
+
+    review = service.create_terraform_plan_review_for_revision(
+        operator(),
+        approved.id,
+        content_digest=approved.content_digest,
+        preflight_id=preflight["id"],
+        expected_account_id=None,
+        expected_region="us-east-1",
+        mode="AUTHENTICATED_TERRAFORM_PLAN",
+        allow_cloud_plan=False,
+    )
+
+    assert review["state"] == "BLOCKED_CLOUD_PLAN_NOT_ALLOWED"
+    assert review["command"]["executor"] == "authenticated-terraform-plan-gated"
+    assert review["evidence"]["allow_cloud_plan_env"] is False
+    assert review["apply_available"] is False
+
+
+def test_terraform_plan_review_rejects_stale_digest():
+    service, db = make_service()
+    approved = approved_app_runner_customer_review(service)
+    preflight = ready_app_runner_preflight(service, db, approved)
+
+    with pytest.raises(ValueError, match="stale Terraform plan review"):
+        service.create_terraform_plan_review_for_revision(
+            operator(),
+            approved.id,
+            content_digest="0" * 64,
+            preflight_id=preflight["id"],
+            expected_account_id=None,
+            expected_region="us-east-1",
+            mode="LOCAL_CONTRACT_ONLY",
+            allow_cloud_plan=False,
+        )

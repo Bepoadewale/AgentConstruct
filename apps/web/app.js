@@ -202,6 +202,7 @@ function renderCustomerReview(review) {
   const desiredStatePr = document.querySelector("#desired-state-pr");
   const terraformPlanContract = document.querySelector("#terraform-plan-contract");
   const cloudReadiness = document.querySelector("#cloud-readiness");
+  const terraformPlanReview = document.querySelector("#terraform-plan-review");
   const isCreator = currentUser?.user?.subject === review.creator_subject;
   const editable = ["DRAFT", "REJECTED"].includes(review.state) && isCreator;
   submit.classList.toggle("hidden", !(review.state === "DRAFT" && isCreator));
@@ -213,10 +214,12 @@ function renderCustomerReview(review) {
   desiredStatePr.classList.toggle("hidden", review.state !== "APPROVED");
   terraformPlanContract.classList.toggle("hidden", review.state !== "APPROVED");
   cloudReadiness.classList.toggle("hidden", review.state !== "APPROVED");
+  terraformPlanReview.classList.toggle("hidden", review.state !== "APPROVED");
   renderReviewEnvironments(review.local_executions || []);
   renderDesiredStatePublications(review.desired_state_publications || []);
   renderTerraformPlanRenders(review.terraform_plan_renders || []);
   renderCloudReadinessPreflights(review.cloud_readiness_preflights || []);
+  renderTerraformPlanReviews(review.terraform_plan_reviews || []);
   document.querySelector("#guard-account").value = content.target?.account_id || "";
   document.querySelector("#guard-regions").value = content.target?.region || "us-east-1";
   const highEstimate = content.cost_estimate?.range?.monthly_high;
@@ -246,6 +249,19 @@ function renderCloudReadinessPreflights(preflights) {
     return;
   }
   node.innerHTML = preflights.map((preflight) => `<div class="component"><strong>${preflight.state}</strong><span>${preflight.boundary}</span></div><div>${(preflight.checklist || []).map((item) => `<div class="component"><strong>${item.status}: ${item.label}</strong><span>${item.detail}</span></div>`).join("")}</div><pre>${JSON.stringify(preflight.would_deploy, null, 2)}</pre>`).join("");
+}
+
+function renderTerraformPlanReviews(reviews) {
+  const node = document.querySelector("#terraform-plan-review-result");
+  if (!reviews.length) {
+    node.textContent = "No Terraform plan-only review yet. Run cloud-readiness preflight first. Apply is unavailable.";
+    return;
+  }
+  node.innerHTML = reviews.map((review) => `<div class="component"><strong>${review.state}</strong><span>${review.mode} · apply available: ${review.apply_available}</span></div><pre>${JSON.stringify({
+    command: review.command,
+    evidence: review.evidence,
+    boundary: review.boundary,
+  }, null, 2)}</pre>`).join("");
 }
 
 function renderTerraformPlanRenders(renders) {
@@ -510,6 +526,31 @@ document.querySelector("#run-cloud-preflight").addEventListener("click", async (
     await refreshOpenCustomerReview();
     await refreshAudit();
     show(`Cloud-readiness preflight recorded: ${preflight.state}. No AWS resources were created.`);
+  } catch (error) { show(error.message, true); }
+});
+
+document.querySelector("#run-terraform-plan-review").addEventListener("click", async () => {
+  try {
+    if (!customerReview || customerReview.state !== "APPROVED") throw new Error("Approve the customer plan before requesting a Terraform plan-only review.");
+    const preflights = customerReview.cloud_readiness_preflights || [];
+    const latestPreflight = preflights[0];
+    show("Recording Terraform plan-only review evidence. Apply is unavailable…");
+    const account = document.querySelector("#guard-account").value.trim();
+    const review = await api(`/api/v1/customer-plan-revisions/${customerReview.id}/terraform-plan-reviews`, {
+      method: "POST",
+      body: JSON.stringify({
+        content_digest: customerReview.content_digest,
+        preflight_id: latestPreflight?.id || null,
+        expected_account_id: account || null,
+        expected_region: document.querySelector("#guard-regions").value.split(",").map((item) => item.trim()).filter(Boolean)[0] || null,
+        mode: "LOCAL_CONTRACT_ONLY",
+        allow_cloud_plan: false,
+      }),
+    });
+    renderTerraformPlanReviews([review]);
+    await refreshOpenCustomerReview();
+    await refreshAudit();
+    show(`Terraform plan-only review recorded: ${review.state}. Apply remains unavailable.`);
   } catch (error) { show(error.message, true); }
 });
 

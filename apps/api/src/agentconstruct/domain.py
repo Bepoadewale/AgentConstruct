@@ -294,6 +294,18 @@ class CloudReadinessPreflightRequest(BaseModel):
     runtime_identity_configured: bool = False
 
 
+class TerraformPlanReviewRequest(BaseModel):
+    content_digest: str = Field(min_length=64, max_length=64)
+    preflight_id: str | None = None
+    expected_account_id: str | None = Field(default=None, pattern=r"^[0-9]{12}$")
+    expected_region: str | None = Field(default=None, pattern=r"^[a-z]{2}-[a-z]+-\d$")
+    mode: str = Field(
+        default="LOCAL_CONTRACT_ONLY",
+        pattern=r"^(LOCAL_CONTRACT_ONLY|AUTHENTICATED_TERRAFORM_PLAN)$",
+    )
+    allow_cloud_plan: bool = False
+
+
 class InfrastructurePlanRevisionRequest(BaseModel):
     """New customer-plan draft content. The preceding revision is never edited."""
 

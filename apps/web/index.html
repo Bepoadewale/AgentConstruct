@@ -149,6 +149,12 @@
           <div class="connection-row"><button id="run-cloud-preflight" type="button">Run cloud-readiness preflight</button></div>
           <div id="cloud-preflight-result">No cloud-readiness preflight yet.</div>
         </div>
+        <div id="terraform-plan-review" class="connection-card hidden">
+          <strong>Terraform plan-only review</strong>
+          <p class="message">Administrators can record the exact plan-only Terraform command shape after the App Runner contract and cloud-readiness preflight exist. Authenticated cloud planning requires an explicit operator flag outside the local demo. Terraform apply is unavailable.</p>
+          <div class="connection-row"><button id="run-terraform-plan-review" type="button">Run plan-only review</button></div>
+          <div id="terraform-plan-review-result">No Terraform plan-only review yet.</div>
+        </div>
       </section>
       <section id="audit" class="panel">
         <div class="panel-heading"><div><p class="eyebrow">AUDIT</p><h2>What happened</h2></div><button id="refresh-audit" class="secondary">Refresh</button></div>
