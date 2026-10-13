@@ -27,7 +27,7 @@ Audit date: 2026-10-13. Branch reviewed: `main` after the local V1 hardening and
 1. Enterprise/customer identity is not connected; local login remains a signed fixture.
 2. Live GitHub public OAuth/install callback and public webhook delivery are not executed; fixture webhooks and read-only installation-token discovery are implemented.
 3. Live GitHub desired-state PR writes/checks are not enabled; publication remains fixture-only.
-4. The public CloudFormation template host and AgentConstruct runtime identity are not deployed, so the browser Quick Create path is not live for a new customer account.
+4. The public CloudFormation template host is deployed and verified. The AgentConstruct hosted runtime identity is not deployed yet, so the browser Quick Create verification path is not live for a new customer account.
 5. Authenticated Terraform plan-only review has not been executed; apply remains out of scope until separately authorized.
 6. Real workload monitoring, actual AWS cost evidence for deployed workloads, GitOps/Argo reconciliation and customer-cloud destroy evidence are not implemented.
 

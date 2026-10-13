@@ -21,4 +21,10 @@ The trust policy requires AgentConstruct's runtime role and one unique external 
 
 The Quick Create endpoint only generates an AWS Console link. The customer creates the stack in their own account. The browser never receives AWS credentials. A separately approved execution role is required before AgentConstruct can provision a workload.
 
-For local development, set `AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN`, `AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL`, and the explicit live-discovery flag only outside Git. Production uses a separate workload/IRSA runtime role, not the GitHub Actions role. Use `AGENTCONSTRUCT_CONNECTION_SECRET_BACKEND=aws_secrets_manager` in production; `local_encrypted` is only a local substitute. The template URL must be a public, versioned S3 object with no customer data or secrets; a private repository raw URL is not suitable. The Terraform template-host and runtime-identity roots are confirmation-gated and have not been applied.
+For local development, set `AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN`, `AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL`, and the explicit live-discovery flag only outside Git. Production uses a separate workload/IRSA runtime role, not the GitHub Actions role. Use `AGENTCONSTRUCT_CONNECTION_SECRET_BACKEND=aws_secrets_manager` in production; `local_encrypted` is only a local substitute. The template URL must be a public, versioned S3 object with no customer data or secrets; a private repository raw URL is not suitable. The Terraform template-host root is applied and verified. The runtime-identity root remains confirmation-gated and cannot be applied until AgentConstruct has a hosted runtime OIDC issuer.
+
+Current hosted template URL:
+
+```text
+https://agentconstruct-customer-templates-654654474502.s3.us-east-1.amazonaws.com/cloudformation/customer-discovery-role-0e3209bff02286acf582ec3ed73858266261b294ae0c7e0d30ae37550a8926b2.yaml
+```

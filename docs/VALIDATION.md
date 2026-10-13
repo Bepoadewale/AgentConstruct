@@ -270,9 +270,26 @@ No authenticated plan was run. An eventual plan requires a real AgentConstruct c
 
 Date: 2026-10-09. The browser contract and unit tests cover the AWS target picker, account-ID validation, Quick Create handoff, and server-side verification endpoint. The verification adapter only uses STS `AssumeRole` in the control-plane process, verifies that the resulting account matches the requested account, and stores a credential-free inventory snapshot. Tests use a deterministic STS adapter; no new customer stack, public template bucket, or live UI verification occurred.
 
-The public-template Terraform root uses a versioned S3 object key and permits public `GetObject` only under its `cloudformation/` prefix. It blocks public ACLs and all bucket listing. Its plan, apply and destroy commands are account-guarded; apply and destroy require an explicit confirmation string. It has not been applied.
+The public-template Terraform root uses a versioned S3 object key and permits public `GetObject` only under its `cloudformation/` prefix. It blocks public ACLs and all bucket listing. Its plan, apply and destroy commands are account-guarded; apply and destroy require an explicit confirmation string.
 
-An authenticated plan against AWS account `654654474502` completed with **7 to add, 0 to change, 0 to destroy**: the dedicated template bucket, ownership controls, versioning, encryption, narrowly scoped public-read policy, public-access configuration, and one hash-versioned YAML object. The plan produced the expected `s3.us-east-1.amazonaws.com/cloudformation/...` URL. No apply was run and no public bucket or object exists yet.
+Date: 2026-10-13. An authenticated plan against AWS account `654654474502` completed with **7 to add, 0 to change, 0 to destroy**: the dedicated template bucket, ownership controls, versioning, encryption, narrowly scoped public-read policy, public-access configuration, and one hash-versioned YAML object.
+
+The first non-interactive apply attempt failed safely because Terraform still requested interactive approval after the script-level confirmation. The script was fixed to pass `-auto-approve` only after the explicit `CONFIRM_TEMPLATE_HOST_APPLY=APPLY_AGENTCONSTRUCT_TEMPLATE_HOST` guard is present. A second apply completed with **7 added, 0 changed, 0 destroyed**.
+
+Verification found that the first object upload had `x-amz-version-id: null` because S3 versioning completed after the object upload. The Terraform root was tightened so the object depends on bucket ownership controls, encryption and versioning. The object was tainted and re-applied, completing with **1 added, 0 changed, 1 destroyed** for the template object only.
+
+Final evidence:
+
+```text
+customer_discovery_template_url = "https://agentconstruct-customer-templates-654654474502.s3.us-east-1.amazonaws.com/cloudformation/customer-discovery-role-0e3209bff02286acf582ec3ed73858266261b294ae0c7e0d30ae37550a8926b2.yaml"
+bucket versioning = Enabled
+bucket encryption = AES256
+template object HTTP status = 200
+template object x-amz-version-id = sRcSIAyRmBYcnqUEvImdK7MhtqQJ60xM
+bucket root HTTP status = 403 AccessDenied
+```
+
+No customer workload, VPC, compute, database, Kubernetes, App Runner, GitOps, secret, or application resource was created by this template-host apply. This is AgentConstruct control-plane foundation only. The hosted runtime identity remains unexecuted because there is not yet an AgentConstruct runtime OIDC issuer.
 
 ## Customer-plan approval workflow clean-room evidence
 
