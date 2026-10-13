@@ -236,6 +236,71 @@ def test_approved_customer_review_publishes_fixture_desired_state_pr_contract():
     )
 
 
+def test_administrator_can_record_fixture_pr_checks_passed_for_approved_revision():
+    service, _ = make_service()
+    approved = approved_customer_review(service)
+    publication = service.create_desired_state_publication_for_revision(
+        founder(), approved.id, approved.content_digest
+    )
+
+    with pytest.raises(PermissionError, match="workspace administrator"):
+        service.update_desired_state_publication_state(
+            founder(),
+            approved.id,
+            publication["id"],
+            content_digest=approved.content_digest,
+            state="CHECKS_PASSED",
+        )
+
+    updated = service.update_desired_state_publication_state(
+        operator(),
+        approved.id,
+        publication["id"],
+        content_digest=approved.content_digest,
+        state="CHECKS_PASSED",
+    )
+
+    assert updated["state"] == "CHECKS_PASSED"
+    assert updated["merge_boundary"] == "AgentConstruct never merges the desired-state PR itself."
+    assert any(
+        event.action == "desired_state.fixture_pr_state_recorded"
+        for event in service.audits(operator())
+    )
+
+
+def test_fixture_pr_state_update_rejects_stale_digest_and_invalid_transition():
+    service, _ = make_service()
+    approved = approved_customer_review(service)
+    publication = service.create_desired_state_publication_for_revision(
+        founder(), approved.id, approved.content_digest
+    )
+
+    with pytest.raises(ValueError, match="stale desired-state state update"):
+        service.update_desired_state_publication_state(
+            operator(),
+            approved.id,
+            publication["id"],
+            content_digest="0" * 64,
+            state="CHECKS_PASSED",
+        )
+
+    service.update_desired_state_publication_state(
+        operator(),
+        approved.id,
+        publication["id"],
+        content_digest=approved.content_digest,
+        state="CHECKS_PASSED",
+    )
+    with pytest.raises(ValueError, match="cannot change fixture PR state"):
+        service.update_desired_state_publication_state(
+            operator(),
+            approved.id,
+            publication["id"],
+            content_digest=approved.content_digest,
+            state="CHECKS_PENDING",
+        )
+
+
 def test_desired_state_publication_requires_exact_approved_digest():
     service, _ = make_service()
     approved = approved_customer_review(service)
@@ -485,12 +550,16 @@ def test_cloud_readiness_preflight_rejects_stale_digest():
 
 def ready_app_runner_preflight(service, db, approved):
     service.create_terraform_plan_render_for_revision(operator(), approved.id, approved.content_digest)
-    service.create_desired_state_publication_for_revision(operator(), approved.id, approved.content_digest)
-    publication = db.scalar(
-        select(DesiredStatePublication).where(DesiredStatePublication.revision_id == approved.id)
+    publication = service.create_desired_state_publication_for_revision(
+        operator(), approved.id, approved.content_digest
     )
-    publication.state = "CHECKS_PASSED"
-    db.commit()
+    service.update_desired_state_publication_state(
+        operator(),
+        approved.id,
+        publication["id"],
+        content_digest=approved.content_digest,
+        state="CHECKS_PASSED",
+    )
     return service.create_cloud_readiness_preflight(
         operator(),
         approved.id,

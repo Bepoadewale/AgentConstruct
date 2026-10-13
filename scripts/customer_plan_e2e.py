@@ -190,6 +190,81 @@ def execute_and_destroy_local_dry_run(
     return final
 
 
+def record_plan_only_readiness(
+    client: httpx.Client, developer: str, administrator: str, approved: dict[str, Any]
+) -> dict[str, Any]:
+    publication = expect(
+        client.post(
+            f"{BASE}/api/v1/customer-plan-revisions/{approved['id']}/desired-state-publications",
+            headers=auth(developer),
+            json={"content_digest": approved["content_digest"]},
+        ),
+        200,
+        "create fixture desired-state PR",
+    )
+    assert publication["state"] == "PUBLISHED"
+    checks = expect(
+        client.post(
+            f"{BASE}/api/v1/customer-plan-revisions/{approved['id']}/desired-state-publications/{publication['id']}/state",
+            headers=auth(administrator),
+            json={"content_digest": approved["content_digest"], "state": "CHECKS_PASSED"},
+        ),
+        200,
+        "record fixture desired-state checks",
+    )
+    assert checks["state"] == "CHECKS_PASSED"
+    render = expect(
+        client.post(
+            f"{BASE}/api/v1/customer-plan-revisions/{approved['id']}/terraform-plan-renders",
+            headers=auth(developer),
+            json={"content_digest": approved["content_digest"]},
+        ),
+        200,
+        "render App Runner Terraform contract",
+    )
+    assert render["profile"] == "aws-app-runner"
+    assert render["render"]["apply_command_available"] is False
+    preflight = expect(
+        client.post(
+            f"{BASE}/api/v1/customer-plan-revisions/{approved['id']}/cloud-readiness-preflights",
+            headers=auth(administrator),
+            json={
+                "content_digest": approved["content_digest"],
+                "expected_account_id": None,
+                "allowed_regions": ["us-east-1"],
+                "required_tags": {"ManagedBy": "AgentConstruct"},
+                "budget_ceiling_usd": 1000,
+                "execution_mode": "PLAN_ONLY",
+                "require_reviewed_pr": True,
+                "runtime_identity_configured": True,
+            },
+        ),
+        200,
+        "run cloud-readiness preflight",
+    )
+    assert preflight["state"] == "READY_FOR_AUTHORIZED_CLOUD_PLAN"
+    review = expect(
+        client.post(
+            f"{BASE}/api/v1/customer-plan-revisions/{approved['id']}/terraform-plan-reviews",
+            headers=auth(administrator),
+            json={
+                "content_digest": approved["content_digest"],
+                "preflight_id": preflight["id"],
+                "expected_account_id": None,
+                "expected_region": "us-east-1",
+                "mode": "LOCAL_CONTRACT_ONLY",
+                "allow_cloud_plan": False,
+            },
+        ),
+        200,
+        "record Terraform plan-only review",
+    )
+    assert review["state"] == "LOCAL_CONTRACT_PLAN_REVIEWED"
+    assert review["apply_available"] is False
+    assert all(" apply" not in command for command in review["command"]["commands"])
+    return review
+
+
 def run(state_file: Path) -> None:
     with httpx.Client(timeout=15) as client:
         developer = token(client, "founder")
@@ -217,6 +292,7 @@ def run(state_file: Path) -> None:
             f"{BASE}/api/v1/customer-plan-revisions/{approved['id']}", headers=auth(other_tenant)
         ).status_code == 403
 
+        plan_review = record_plan_only_readiness(client, developer, administrator, approved)
         final_environments = execute_and_destroy_local_dry_run(
             client, developer, administrator, approved
         )
@@ -279,6 +355,9 @@ def run(state_file: Path) -> None:
 
         audit = expect(client.get(f"{BASE}/api/v1/audit-evidence", headers=auth(developer)), 200, "audit evidence")
         actions = {event["action"] for event in audit}
+        assert "desired_state.fixture_pr_published" in actions
+        assert "desired_state.fixture_pr_state_recorded" in actions
+        assert "terraform.plan_only_review_recorded" in actions
         assert "customer_plan.local_dry_run_queued" in actions
         assert "customer_plan.local_destroy_requested" in actions
         assert "environment.destroyed" in actions
@@ -289,6 +368,7 @@ def run(state_file: Path) -> None:
                 {
                     "revision_id": approved["id"],
                     "expected_state": "APPROVED",
+                    "terraform_plan_review_id": plan_review["id"],
                     "destroyed_environment_id": next(
                         item["id"] for item in final_environments if item["state"] == "DESTROYED"
                     ),

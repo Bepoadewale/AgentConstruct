@@ -489,6 +489,24 @@ document.querySelector("#publish-desired-state").addEventListener("click", async
   } catch (error) { show(error.message, true); }
 });
 
+document.querySelector("#mark-desired-state-reviewed").addEventListener("click", async () => {
+  try {
+    if (!customerReview || customerReview.state !== "APPROVED") throw new Error("Approve the customer plan before recording fixture PR checks.");
+    const publication = (customerReview.desired_state_publications || [])[0];
+    if (!publication) throw new Error("Create the fixture desired-state PR first.");
+    if (!isAdministrator()) throw new Error("Only an administrator can record fixture PR checks.");
+    show("Recording fixture PR checks passed. No GitHub write, merge or deployment will occur…");
+    const updated = await api(`/api/v1/customer-plan-revisions/${customerReview.id}/desired-state-publications/${publication.id}/state`, {
+      method: "POST",
+      body: JSON.stringify({ content_digest: customerReview.content_digest, state: "CHECKS_PASSED" }),
+    });
+    renderDesiredStatePublications([updated]);
+    await refreshOpenCustomerReview();
+    await refreshAudit();
+    show("Fixture PR checks passed were recorded locally. AgentConstruct still cannot merge or deploy.");
+  } catch (error) { show(error.message, true); }
+});
+
 document.querySelector("#render-terraform-contract").addEventListener("click", async () => {
   try {
     if (!customerReview || customerReview.state !== "APPROVED") throw new Error("Approve the customer plan before generating a Terraform contract.");

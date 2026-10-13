@@ -279,6 +279,11 @@ class DesiredStatePublicationRequest(BaseModel):
     content_digest: str = Field(min_length=64, max_length=64)
 
 
+class DesiredStatePublicationStateRequest(BaseModel):
+    content_digest: str = Field(min_length=64, max_length=64)
+    state: str = Field(pattern=r"^(CHECKS_PENDING|CHECKS_PASSED|CLOSED)$")
+
+
 class TerraformPlanRenderRequest(BaseModel):
     content_digest: str = Field(min_length=64, max_length=64)
 
