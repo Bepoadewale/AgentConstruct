@@ -35,13 +35,11 @@ The local administrator experience includes filtered queues for pending, approve
 
 ```bash
 make help
-make install
-make bootstrap-local
 make local-proof
 make clean-local
 ```
 
-`make local-proof` runs service readiness, the browser contract, customer-plan E2E, demo-data seeding, Tempo trace verification and `make verify`. Individual demo targets remain available for narrower checks: `make demo-simple`, `make demo-complex`, `make demo-day2`, `make demo-degraded`, `make demo-failure`, `make demo-readiness-failure`, `make customer-plan-persistence`.
+`make local-proof` bootstraps the local stack, then runs service readiness, the browser contract, customer-plan E2E, demo-data seeding, Tempo trace verification and `make verify`. Individual setup and demo targets remain available for narrower checks: `make install`, `make bootstrap-local`, `make demo-simple`, `make demo-complex`, `make demo-day2`, `make demo-degraded`, `make demo-failure`, `make demo-readiness-failure`, `make customer-plan-persistence`.
 
 Open http://localhost:8080. Grafana is at http://localhost:3000 and Prometheus is at http://localhost:9090. The local login is a documented signed fixture, not production identity.
 

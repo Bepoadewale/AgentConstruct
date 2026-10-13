@@ -599,7 +599,7 @@ This is local product hardening evidence only. It did not write GitHub, run auth
 
 Date: 2026-10-13. Environment: macOS, Docker Desktop, Python 3.12, clean local Compose volumes.
 
-This validation added `make help` and `make local-proof`, updated stale current-state documentation, and repeated the local product proof twice from a clean state.
+This validation added `make help` and `make local-proof`, updated stale current-state documentation, and repeated the local product proof twice from a clean state. A later hardening update made `make local-proof` self-contained by depending on `make bootstrap-local`.
 
 Warm-stack command check:
 
@@ -612,11 +612,8 @@ git diff --check
 Clean-room repeat:
 
 ```bash
-make clean-local
-make bootstrap-local
 make local-proof
 make clean-local
-make bootstrap-local
 make local-proof
 make clean-local
 ```
@@ -634,3 +631,27 @@ Results:
 - Final cleanup removed local project containers, volumes, `.venv` and `.local`.
 
 This is local clean-room evidence only. It did not write GitHub, run authenticated Terraform, run `terraform apply`, create AWS resources, run Kubernetes, sync GitOps or deploy a workload.
+
+## Self-contained local proof command
+
+Date: 2026-10-13. Environment: macOS, Docker Desktop, Python 3.12, local stack initially stopped.
+
+This validation changed `make local-proof` to bootstrap the local stack before running the proof sequence.
+
+```bash
+make local-proof
+git diff --check
+```
+
+Results:
+
+- `make local-proof` installed/reused the local Python environment and ran `docker compose up -d --build`.
+- Smoke passed for API, worker, fixture executor, Prometheus, Grafana, Tempo and OPA.
+- Browser contract passed.
+- `make customer-plan-e2e` passed, including developer submission, administrator decision, administrator self-approval, local dry-run execution, readiness failure, governed destroy and audit.
+- `make seed-demo-data` created realistic fixture records, including desired-state PR/check state, App Runner Terraform render, ready preflight, Terraform plan-only review and local dry-run environments.
+- Tempo trace verification passed.
+- `make verify` passed: Ruff, **106 pytest tests**, and Compose config validation.
+- `git diff --check` passed.
+
+This is local product proof only. It did not write GitHub, run authenticated Terraform, run `terraform apply`, create AWS resources, run Kubernetes, sync GitOps or deploy a workload.

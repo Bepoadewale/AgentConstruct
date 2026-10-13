@@ -12,7 +12,7 @@ help:
 	@echo "  make bootstrap-local         Build/start local API, worker, Postgres, OPA, Prometheus, Grafana, Tempo"
 	@echo "  make smoke                   Check local service readiness"
 	@echo "  make seed-demo-data          Seed realistic local developer/admin demo records"
-	@echo "  make local-proof             Run smoke, UI contract, customer-plan E2E, seed data, trace check, verify"
+	@echo "  make local-proof             Bootstrap, then run smoke, UI contract, customer-plan E2E, seed data, trace check, verify"
 	@echo "  make customer-plan-e2e       Prove developer submit, admin decision, self-approval, dry-run, destroy"
 	@echo "  make verify                  Run lint, tests, and Compose config validation"
 	@echo "  make clean-local             Stop local stack and remove local volumes/.venv/.local"
@@ -75,7 +75,7 @@ customer-plan-e2e:
 customer-plan-persistence:
 	$(PY) scripts/customer_plan_e2e.py --verify-persistence
 
-local-proof: smoke browser-contract customer-plan-e2e seed-demo-data trace-check verify
+local-proof: bootstrap-local smoke browser-contract customer-plan-e2e seed-demo-data trace-check verify
 
 opa-test:
 	docker compose exec -T opa opa test /policies
