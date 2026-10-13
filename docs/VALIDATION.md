@@ -289,7 +289,7 @@ template object x-amz-version-id = sRcSIAyRmBYcnqUEvImdK7MhtqQJ60xM
 bucket root HTTP status = 403 AccessDenied
 ```
 
-No customer workload, VPC, compute, database, Kubernetes, App Runner, GitOps, secret, or application resource was created by this template-host apply. This is AgentConstruct control-plane foundation only. The hosted runtime identity remains unexecuted because there is not yet an AgentConstruct runtime OIDC issuer.
+No customer workload, VPC, compute, database, Kubernetes, GitOps, secret, or application resource was created by this template-host apply. This was AgentConstruct control-plane foundation evidence only. Later on 2026-10-13, the App Runner-hosted runtime was applied and verified for read-only customer discovery; see the AWS-hosted runtime evidence below.
 
 ## Customer-plan approval workflow clean-room evidence
 
@@ -696,3 +696,113 @@ Results:
 - CLI forwards customer-plan review operations to the governed API using the caller's bearer token.
 
 This is local agent-interface evidence only. It did not write GitHub, run authenticated Terraform, run `terraform apply`, create AWS resources, run Kubernetes, sync GitOps or deploy a workload.
+
+## AWS-hosted AgentConstruct runtime and live customer discovery verification
+
+Date: 2026-10-13. Environment: macOS, AWS CLI, Terraform, Docker Desktop, AWS account `654654474502`, region `us-east-1`.
+
+Purpose: deploy the AgentConstruct control-plane runtime into AWS and verify the customer AWS connection journey against the hosted runtime. This is control-plane/discovery validation only, not customer workload deployment.
+
+Commands and evidence:
+
+```bash
+AWS_PROFILE=ai-platform-pilot-key AWS_REGION=us-east-1 \
+  ./scripts/build-push-runtime-image.sh
+
+CONFIRM_RUNTIME_SERVICE_APPLY=APPLY_AGENTCONSTRUCT_RUNTIME_SERVICE \
+  ./scripts/app-runner-runtime.sh apply-service
+
+curl -fsS https://x75qgwappp.us-east-1.awsapprunner.com/healthz
+
+curl -fsS -X POST \
+  https://x75qgwappp.us-east-1.awsapprunner.com/api/v1/auth/local-login
+
+curl -fsS -X POST \
+  https://x75qgwappp.us-east-1.awsapprunner.com/api/v1/cloud-connections
+
+curl -fsS -X POST \
+  https://x75qgwappp.us-east-1.awsapprunner.com/api/v1/cloud-connections/{connection_id}/aws-quick-create
+
+aws cloudformation create-stack \
+  --stack-name AgentConstruct-Discovery-72eed5c4 \
+  --template-url "$TEMPLATE_URL" \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameters \
+    ParameterKey=AgentConstructControlPlaneRoleArn,ParameterValue="$CONTROL_PLANE_ROLE_ARN" \
+    ParameterKey=ExternalId,ParameterValue="$EXTERNAL_ID" \
+    ParameterKey=ConnectionId,ParameterValue="$CONNECTION_ID"
+
+aws cloudformation wait stack-create-complete \
+  --stack-name AgentConstruct-Discovery-72eed5c4
+
+curl -fsS -X POST \
+  https://x75qgwappp.us-east-1.awsapprunner.com/api/v1/cloud-connections/{connection_id}/aws-verify \
+  -d '{"region":"us-east-1"}'
+
+aws cloudformation delete-stack \
+  --stack-name AgentConstruct-Discovery-72eed5c4
+
+aws cloudformation wait stack-delete-complete \
+  --stack-name AgentConstruct-Discovery-72eed5c4
+```
+
+Results:
+
+- Terraform applied the AWS-hosted App Runner service:
+  - service ARN: `arn:aws:apprunner:us-east-1:654654474502:service/agentconstruct-runtime/7a82ea2eb2c349749424bf419eac3f92`
+  - URL: `https://x75qgwappp.us-east-1.awsapprunner.com`
+  - runtime role: `arn:aws:iam::654654474502:role/agentconstruct-control-plane-runtime`
+  - ECR image: `654654474502.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-runtime:3febfef36577-policy-fixture`
+- Health check returned `{"status":"ok","product":"AgentConstruct"}`.
+- Hosted local fixture login returned a valid developer token for `user-founder`.
+- Hosted Quick Create generated a customer stack name `AgentConstruct-Discovery-72eed5c4` and a CloudFormation review URL using the public versioned template.
+- The customer-side CloudFormation stack reached `CREATE_COMPLETE` and created only the read-only discovery role.
+- Hosted verification returned `SUCCEEDED`, `credentials_stored=false`, and stored a snapshot with `live-read-only-sts-discovery` provenance.
+- Snapshot contents included:
+  - `aws-account:654654474502`
+  - `vpc:1`
+  - `ecr:2`
+  - `eks:0`
+  - `ecs:0`
+  - `rds:0`
+  - `lambda:2`
+  - `app-runner:1`
+  - `s3:7`
+- Hosted developer plan flow succeeded after explicit material requirements were supplied: intent parsing, one AWS plan, customer review draft, immutable submission and administrator approval.
+- Hosted administrator self-approval also succeeded and recorded `is_self_approval=true`.
+- Cleanup verified:
+  - CloudFormation stack `AgentConstruct-Discovery-72eed5c4` was deleted.
+  - IAM role `AgentConstructDiscovery-72eed5c4-3e5f-4828-b1e1-d4b79b31d8f9` no longer existed.
+  - Per-connection ExternalId secret `agentconstruct/customer-connections/org-demo/72eed5c4-3e5f-4828-b1e1-d4b79b31d8f9/external-id` was force-deleted.
+
+Validation commands after code/config changes:
+
+```bash
+.venv/bin/python -m pytest \
+  tests/test_connection_experience.py \
+  tests/test_customer_aws_connection_contract.py \
+  tests/test_customer_plan_review.py -q
+
+.venv/bin/ruff check apps/api/src tests
+
+AWS_PROFILE=ai-platform-pilot-key AWS_REGION=us-east-1 \
+  terraform -chdir=infrastructure/terraform/app-runner-runtime init -backend=false -reconfigure
+
+AWS_PROFILE=ai-platform-pilot-key AWS_REGION=us-east-1 \
+  terraform -chdir=infrastructure/terraform/app-runner-runtime validate
+
+git diff --check
+```
+
+Results:
+
+- Pytest passed: **41 passed**, 1 warning.
+- Ruff passed.
+- Terraform App Runner runtime root validated successfully.
+- `git diff --check` passed.
+
+Boundaries:
+
+- The hosted runtime currently uses local fixture sign-in, fixture policy and SQLite in `/tmp`; it is validation/demo infrastructure, not production SaaS persistence.
+- No customer workload, VPC, database, compute service, GitHub write, GitOps sync, Terraform workload plan, Terraform apply or Terraform destroy was executed.
+- The only customer-side AWS resource created for this validation was the temporary read-only discovery CloudFormation stack, and it was destroyed after verification.

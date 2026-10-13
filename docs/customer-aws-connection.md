@@ -21,7 +21,11 @@ The trust policy requires AgentConstruct's runtime role and one unique external 
 
 The Quick Create endpoint only generates an AWS Console link. The customer creates the stack in their own account. The browser never receives AWS credentials. A separately approved execution role is required before AgentConstruct can provision a workload.
 
-For local development, set `AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN`, `AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL`, and the explicit live-discovery flag only outside Git. Production uses a separate workload/IRSA runtime role, not the GitHub Actions role. Use `AGENTCONSTRUCT_CONNECTION_SECRET_BACKEND=aws_secrets_manager` in production; `local_encrypted` is only a local substitute. The template URL must be a public, versioned S3 object with no customer data or secrets; a private repository raw URL is not suitable. The Terraform template-host root is applied and verified. The runtime-identity root remains confirmation-gated and cannot be applied until AgentConstruct has a hosted runtime OIDC issuer.
+For local development, set `AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN`, `AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL`, and the explicit live-discovery flag only outside Git. Production uses a separate runtime role, not the GitHub Actions role. Use `AGENTCONSTRUCT_CONNECTION_SECRET_BACKEND=aws_secrets_manager` in hosted environments; `local_encrypted` is only a local substitute. The template URL must be a public, versioned S3 object with no customer data or secrets; a private repository raw URL is not suitable. The Terraform template-host root is applied and verified. The App Runner runtime root is also applied for read-only discovery validation, with fixture sign-in/policy and ephemeral SQLite still clearly labeled non-production.
+
+## Current hosted validation
+
+On 2026-10-13, the AWS-hosted AgentConstruct runtime at `https://x75qgwappp.us-east-1.awsapprunner.com` created a Quick Create URL, assumed the resulting customer read-only discovery role with STS, and stored a credential-free inventory snapshot with `live-read-only-sts-discovery` provenance. The temporary customer CloudFormation stack, discovery role and per-connection ExternalId secret were deleted after verification. No customer workload resources were created.
 
 Current hosted template URL:
 

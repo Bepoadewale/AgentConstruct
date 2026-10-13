@@ -9,3 +9,4 @@ RUN pip install --no-cache-dir .
 USER app
 ENV AGENTCONSTRUCT_WEB_ROOT=/app/apps/web
 EXPOSE 8080 8090
+CMD ["uvicorn", "agentconstruct.main:app", "--host", "0.0.0.0", "--port", "8080"]

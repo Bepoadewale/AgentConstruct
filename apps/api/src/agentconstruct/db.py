@@ -28,7 +28,13 @@ def run_migrations(target: Engine | None = None) -> None:
     """Small versioned bootstrap for V1; replace with an expanded migration set as schemas evolve."""
     selected = target or engine
     if str(selected.url).startswith("sqlite"):
-        Path(".local").mkdir(exist_ok=True)
+        database = selected.url.database
+        if database and database not in {":memory:"}:
+            path = Path(database)
+            if path.parent != Path("."):
+                path.parent.mkdir(parents=True, exist_ok=True)
+            elif str(path).startswith(".local/"):
+                Path(".local").mkdir(exist_ok=True)
     with selected.begin() as connection:
         # API and worker can start together in Compose. PostgreSQL needs one
         # transaction-scoped lock before either process creates the migration table.
