@@ -478,3 +478,29 @@ Results:
 The preflight stores a `would_deploy` preview and checklist for exact digest, policy, Terraform contract, no apply command, expected account, region, tags, budget, reviewed PR, runtime identity and dry-run/plan-only mode.
 
 Failure fixtures proved wrong account, wrong region, missing tag, budget exceeded, stale digest, no reviewed PR and no runtime identity. This is local guardrail evidence only. It did not call AWS, run authenticated Terraform plan/apply/destroy, write GitHub, sync GitOps, or deploy a workload.
+
+## Terraform plan-only review gate
+
+Date: 2026-10-13. Environment: macOS, Python 3.12 virtualenv, local fixture identities.
+
+This validation added an administrator-only Terraform plan-review record for approved App Runner customer-plan revisions.
+
+```bash
+.venv/bin/python -m pytest tests/test_customer_plan_review.py -q
+.venv/bin/python -m ruff check apps/api/src tests scripts
+node --check apps/web/app.js
+.venv/bin/python -m pytest -q
+make verify
+```
+
+Results:
+
+- Focused customer-plan tests passed: **25 passed**.
+- Ruff passed.
+- JavaScript syntax check passed.
+- Full pytest suite passed: **104 passed**.
+- `make verify` passed: Ruff, **104 pytest tests**, and Compose config validation.
+
+The tests prove administrator-only access, exact digest binding, App Runner contract requirement, cloud-readiness preflight requirement, failed-preflight blockers, local plan-only evidence, authenticated-mode `ALLOW_CLOUD_PLAN=true` gating and stale-digest rejection.
+
+This is plan-review governance evidence only. It did not run authenticated `terraform plan`, `terraform apply`, `terraform destroy`, AWS APIs, GitHub writes, GitOps sync, Kubernetes commands or workload deployment.

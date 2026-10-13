@@ -299,6 +299,32 @@ class CloudReadinessPreflight(Base):
     )
 
 
+class TerraformPlanReview(Base):
+    """Plan-only Terraform review evidence for an approved customer-plan revision."""
+
+    __tablename__ = "terraform_plan_reviews"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    revision_id: Mapped[str] = mapped_column(ForeignKey("infrastructure_plan_revisions.id"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    terraform_render_id: Mapped[str | None] = mapped_column(
+        ForeignKey("terraform_plan_renders.id"), nullable=True, index=True
+    )
+    preflight_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cloud_readiness_preflights.id"), nullable=True, index=True
+    )
+    mode: Mapped[str] = mapped_column(String(60), default="LOCAL_CONTRACT_ONLY", index=True)
+    state: Mapped[str] = mapped_column(String(60), default="BLOCKED_PREFLIGHT_REQUIRED", index=True)
+    command: Mapped[dict] = mapped_column(JSON, default=dict)
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+    content_digest: Mapped[str] = mapped_column(String(64), index=True)
+    created_by_subject: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class DeploymentPlan(Base):
     __tablename__ = "deployment_plans"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

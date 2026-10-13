@@ -27,6 +27,7 @@ from agentconstruct.domain import (
     LocalLoginRequest,
     ProjectRequest,
     TerraformPlanRenderRequest,
+    TerraformPlanReviewRequest,
 )
 from agentconstruct.models import Environment
 from agentconstruct.security import Principal, issue_local_token, verify_token
@@ -494,6 +495,29 @@ def create_customer_plan_cloud_preflight(
             execution_mode=request.execution_mode,
             require_reviewed_pr=request.require_reviewed_pr,
             runtime_identity_configured=request.runtime_identity_configured,
+        )
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post("/api/v1/customer-plan-revisions/{revision_id}/terraform-plan-reviews")
+def create_customer_plan_terraform_plan_review(
+    revision_id: str,
+    request: TerraformPlanReviewRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("terraform.customer_plan_review").inc()
+    try:
+        return service.create_terraform_plan_review_for_revision(
+            principal,
+            revision_id,
+            content_digest=request.content_digest,
+            preflight_id=request.preflight_id,
+            expected_account_id=request.expected_account_id,
+            expected_region=request.expected_region,
+            mode=request.mode,
+            allow_cloud_plan=request.allow_cloud_plan,
         )
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
