@@ -71,6 +71,42 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "create_customer_plan_review",
+        "description": "Create one customer-facing AWS review draft from an existing governed deployment plan. It does not submit, approve, or deploy.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["plan_id"],
+            "properties": {"plan_id": {"type": "string"}},
+        },
+    },
+    {
+        "name": "get_customer_plan_review",
+        "description": "Read a tenant-scoped customer-plan revision with its digest, status, cost, security, observability and audit context.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["revision_id"],
+            "properties": {"revision_id": {"type": "string"}},
+        },
+    },
+    {
+        "name": "submit_customer_plan_review",
+        "description": "Submit an exact customer-plan revision for human administrator review. It never approves or deploys.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["revision_id"],
+            "properties": {"revision_id": {"type": "string"}},
+        },
+    },
+    {
+        "name": "execute_approved_customer_dry_run",
+        "description": "Request the local bounded dry-run executor for an already approved customer-plan revision. API policy remains authoritative; no cloud credentials are returned.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["revision_id"],
+            "properties": {"revision_id": {"type": "string"}},
+        },
+    },
+    {
         "name": "execute_approved_plan",
         "description": "Ask the governed API to execute an already executable plan. API policy and exact-plan approval remain authoritative.",
         "inputSchema": {
@@ -167,6 +203,22 @@ class AgentConstructMcp:
             if name == "get_approval_status":
                 return {key: plan[key] for key in ("id", "state", "plan_hash", "policy_result")}
             return plan
+        if name == "create_customer_plan_review":
+            return self.client.request(
+                "POST", f"/api/v1/deployment-plans/{arguments['plan_id']}/customer-review"
+            )
+        if name == "get_customer_plan_review":
+            return self.client.request(
+                "GET", f"/api/v1/customer-plan-revisions/{arguments['revision_id']}"
+            )
+        if name == "submit_customer_plan_review":
+            return self.client.request(
+                "POST", f"/api/v1/customer-plan-revisions/{arguments['revision_id']}/submit"
+            )
+        if name == "execute_approved_customer_dry_run":
+            return self.client.request(
+                "POST", f"/api/v1/customer-plan-revisions/{arguments['revision_id']}/execute-dry-run"
+            )
         if name == "execute_approved_plan":
             return self.client.request(
                 "POST", f"/api/v1/deployment-plans/{arguments['plan_id']}/execute"
