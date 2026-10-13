@@ -504,3 +504,42 @@ Results:
 The tests prove administrator-only access, exact digest binding, App Runner contract requirement, cloud-readiness preflight requirement, failed-preflight blockers, local plan-only evidence, authenticated-mode `ALLOW_CLOUD_PLAN=true` gating and stale-digest rejection.
 
 This is plan-review governance evidence only. It did not run authenticated `terraform plan`, `terraform apply`, `terraform destroy`, AWS APIs, GitHub writes, GitOps sync, Kubernetes commands or workload deployment.
+
+## Local stability hardening: reviewed fixture PR to plan-only review
+
+Date: 2026-10-13. Environment: macOS, Docker Desktop, Python 3.12 virtualenv, local fixture identities.
+
+This validation made the post-approval cloud-readiness path reachable through product APIs and UI controls, not database edits.
+
+```bash
+.venv/bin/python -m py_compile scripts/customer_plan_e2e.py
+.venv/bin/python -m pytest tests/test_customer_plan_review.py -q
+.venv/bin/python -m ruff check apps/api/src tests scripts
+node --check apps/web/app.js
+.venv/bin/python -m pytest -q
+docker compose up -d --build
+make smoke
+make browser-contract
+make customer-plan-e2e
+docker compose restart api
+./scripts/smoke.sh
+make customer-plan-persistence
+make verify
+make opa-test
+```
+
+Results:
+
+- Customer-plan focused tests passed: **27 passed**.
+- Ruff passed.
+- JavaScript syntax check passed.
+- Full pytest suite passed: **106 passed**.
+- Docker Compose rebuilt API, worker and fixture-executor images.
+- Smoke passed for API, worker, fixture executor, Prometheus, Grafana, Tempo and OPA.
+- Browser contract passed and includes the new fixture PR check action.
+- `make customer-plan-e2e` passed, including fixture desired-state PR creation, administrator-recorded `CHECKS_PASSED`, App Runner Terraform render, ready cloud-readiness preflight, Terraform plan-only review, local dry-run execution, readiness failure, governed local destroy and audit evidence.
+- API restart plus `make customer-plan-persistence` passed.
+- `make verify` passed: Ruff, **106 pytest tests**, and Compose config validation.
+- OPA policy tests passed: **3/3**.
+
+This is local product stability evidence only. It did not write GitHub, run authenticated Terraform, run `terraform apply`, create AWS resources, run Kubernetes, sync GitOps or deploy a workload.

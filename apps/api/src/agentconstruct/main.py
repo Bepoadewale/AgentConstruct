@@ -20,6 +20,7 @@ from agentconstruct.domain import (
     CloudInventorySnapshotRequest,
     CloudReadinessPreflightRequest,
     DesiredStatePublicationRequest,
+    DesiredStatePublicationStateRequest,
     InfrastructurePlanConstraintUpdateRequest,
     InfrastructurePlanDecisionRequest,
     InfrastructurePlanRevisionRequest,
@@ -454,6 +455,29 @@ def create_customer_plan_desired_state_publication(
     try:
         return service.create_desired_state_publication_for_revision(
             principal, revision_id, request.content_digest
+        )
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post(
+    "/api/v1/customer-plan-revisions/{revision_id}/desired-state-publications/{publication_id}/state"
+)
+def update_customer_plan_desired_state_publication_state(
+    revision_id: str,
+    publication_id: str,
+    request: DesiredStatePublicationStateRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("desired_state.customer_plan_fixture_pr_state").inc()
+    try:
+        return service.update_desired_state_publication_state(
+            principal,
+            revision_id,
+            publication_id,
+            content_digest=request.content_digest,
+            state=request.state,
         )
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)

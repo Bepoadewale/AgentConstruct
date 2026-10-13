@@ -1711,6 +1711,58 @@ class ProductService:
         if state and state.state in blocked_states:
             raise PermissionError(f"GitHub App installation is not publishable: {state.state}")
 
+    def update_desired_state_publication_state(
+        self,
+        principal: Principal,
+        revision_id: str,
+        publication_id: str,
+        *,
+        content_digest: str,
+        state: str,
+    ) -> dict[str, Any]:
+        """Record local fixture PR/check state for the approved desired-state package.
+
+        This models a human-reviewed PR/check result in local mode. It never
+        writes GitHub, never merges, and never deploys.
+        """
+        if not self._is_workspace_administrator(principal):
+            raise PermissionError("only a workspace administrator can update fixture PR review state")
+        revision, _, _ = self._approved_customer_revision(principal, revision_id)
+        if revision.content_digest != content_digest or plan_hash(revision.content) != content_digest:
+            raise ValueError("stale desired-state state update: approved digest changed")
+        publication = self.db.get(DesiredStatePublication, publication_id)
+        if (
+            publication is None
+            or publication.organization_id != principal.organization_id
+            or publication.revision_id != revision.id
+            or publication.content_digest != revision.content_digest
+        ):
+            raise PermissionError("desired-state publication not found for this approved revision")
+        allowed = {
+            "PUBLISHED": {"CHECKS_PENDING", "CHECKS_PASSED", "CLOSED"},
+            "CHECKS_PENDING": {"CHECKS_PASSED", "CLOSED"},
+            "CHECKS_PASSED": {"CLOSED"},
+            "CLOSED": set(),
+            "MERGED": set(),
+        }
+        if state not in allowed.get(publication.state, set()):
+            raise ValueError(f"cannot change fixture PR state from {publication.state} to {state}")
+        publication.state = state
+        self.audit(
+            principal,
+            "desired_state.fixture_pr_state_recorded",
+            "desired_state_publication",
+            publication.id,
+            {
+                "revision_id": revision.id,
+                "digest": revision.content_digest,
+                "state": state,
+                "boundary": "local fixture PR/check state only; no GitHub write, merge or deployment",
+            },
+        )
+        self.db.commit()
+        return self._desired_state_publication_payload(publication)
+
     def _desired_state_package(
         self,
         *,

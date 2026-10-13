@@ -6,8 +6,10 @@ The local product demo has separate signed `founder` developer and `administrato
 2. In Browser B, sign in as **administrator**, use the review queue filters for pending, approved, rejected or self-approved revisions, open the submitted plan, then approve or reject the exact submitted digest. Rejection requires a reason.
 3. Return to Browser A, refresh the dashboard or reopen the revision, and see the persisted result. A draft or rejected plan can create a new immutable draft revision from edited budget, region, environment, data, availability, workload, access and assumption controls.
 4. In Browser B, create, submit and approve an administrator-owned plan. Its audit event and decision record identify `is_self_approval: true`.
-5. On an approved revision, select **Execute local dry run**. The local worker observes READY, FAILED or DEGRADED evidence and displays health, cost and execution state. This does not create AWS resources.
-6. For a local dry-run production environment, select **Request/execute local destroy** as an administrator. The app creates a destroy plan, records approval where required, executes the fixture cleanup and observes DESTROYED.
+5. On an approved App Runner revision, select **Create fixture desired-state PR**, then sign in as administrator and select **Mark fixture PR checks passed**. This records the local human-review/check state only; AgentConstruct still cannot merge GitHub changes.
+6. Select **Generate plan-only Terraform contract**, run **cloud-readiness preflight** with runtime identity enabled for the local fixture, then select **Run plan-only review**. The app records the allowed `terraform init`/`terraform plan` command shape and keeps apply unavailable.
+7. On an approved revision, select **Execute local dry run**. The local worker observes READY, FAILED or DEGRADED evidence and displays health, cost and execution state. This does not create AWS resources.
+8. For a local dry-run production environment, select **Request/execute local destroy** as an administrator. The app creates a destroy plan, records approval where required, executes the fixture cleanup and observes DESTROYED.
 
 This demo never creates AWS infrastructure. Real GitHub/AWS modes remain explicit opt-in integrations.
 
@@ -33,7 +35,7 @@ make smoke
 make customer-plan-persistence
 ```
 
-It proves developer submission, developer decision denial, stale-digest rejection, administrator approval, rejection with a reason, immutable revision creation, cross-tenant denial, administrator self-approval, approved-plan local dry-run execution, observed readiness failure, governed local destroy, audit evidence and persistence after the API restarts. It never calls AWS, Terraform, Kubernetes or GitHub writes.
+It proves developer submission, developer decision denial, stale-digest rejection, administrator approval, rejection with a reason, immutable revision creation, cross-tenant denial, administrator self-approval, fixture PR publication and reviewed-check recording, App Runner Terraform contract rendering, ready cloud-readiness preflight, Terraform plan-only review, approved-plan local dry-run execution, observed readiness failure, governed local destroy, audit evidence and persistence after the API restarts. It never calls AWS, Terraform apply/destroy, Kubernetes or GitHub writes.
 
 ## Connection flow available now
 
