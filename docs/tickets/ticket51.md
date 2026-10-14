@@ -33,22 +33,22 @@ Document and implement the first future-scale boundaries without changing the cu
 
 ## Acceptance criteria
 
-- [ ] Contracts are typed, versioned and importable by API, worker and future adapters.
-- [ ] Tenant scope is explicit and cannot be omitted from platform envelopes.
-- [ ] Evidence includes provenance and capture time.
-- [ ] Model calls include provider/model/prompt version and usage metadata without secrets.
-- [ ] Jobs include idempotency, retry, timeout and tenant scope metadata.
-- [ ] Capability and cost contracts are provider-neutral and AWS-compatible.
-- [ ] Usage events support future quotas and billing without implementing billing now.
-- [ ] Existing tests and local workflow remain unchanged.
+- [x] Contracts are typed, versioned and importable by API, worker and future adapters.
+- [x] Tenant scope is explicit and cannot be omitted from platform envelopes.
+- [x] Evidence includes provenance and capture time.
+- [x] Model calls include provider/model/prompt version and usage metadata without secrets.
+- [x] Jobs include idempotency, retry, timeout and tenant scope metadata.
+- [x] Capability and cost contracts are provider-neutral and AWS-compatible.
+- [x] Usage events support future quotas and billing without implementing billing now.
+- [x] Existing tests and local workflow remain unchanged.
 
 ## Acceptance status
 
-Pending implementation and validation.
+Met for the additive contract layer. Queue transport, model provider, evidence ingestion and execution isolation remain follow-up PRs.
 
 ## Tests / validation performed
 
-To run after implementation:
+Validation performed:
 
 ```bash
 make lint
@@ -56,6 +56,8 @@ make test
 python3 scripts/check_doc_conventions.py
 git diff --check
 ```
+
+Results: lint passed; 128 tests passed; documentation conventions passed; diff check passed.
 
 ## Evidence files produced
 
@@ -68,4 +70,3 @@ This PR does not add a model provider, change authorization, execute Terraform, 
 ## Follow-up work
 
 Add queue adapters, model gateway implementations, evidence-backed planning, execution-runner isolation, usage metering, and cell-aware routing in separate PRs.
-

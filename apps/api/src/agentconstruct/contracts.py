@@ -1,0 +1,185 @@
+"""Versioned platform contracts for scale-ready AgentConstruct boundaries.
+
+These contracts are deliberately transport-neutral.  They can be carried by the
+current PostgreSQL worker and later by SQS/EventBridge, an external model
+provider, or an isolated execution runner without changing their meaning.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
+from uuid import uuid4
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+CONTRACT_VERSION = "2026-10-1"
+
+
+class ContractBase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    schema_version: str = CONTRACT_VERSION
+
+
+class TenantScope(ContractBase):
+    """Mandatory scope carried through every platform operation."""
+
+    organization_id: str = Field(min_length=1, max_length=160)
+    workspace_id: str = Field(min_length=1, max_length=160)
+    project_id: str | None = Field(default=None, max_length=160)
+    environment_id: str | None = Field(default=None, max_length=160)
+    actor_id: str = Field(min_length=1, max_length=160)
+
+
+class EvidenceKind(StrEnum):
+    USER_CONFIRMED = "user_confirmed"
+    REPOSITORY = "repository"
+    AWS_API = "aws_api"
+    PRICING_CATALOG = "pricing_catalog"
+    MODEL_INFERENCE = "model_inference"
+    POLICY = "policy"
+    OBSERVATION = "observation"
+    FIXTURE = "fixture"
+
+
+class EvidenceRef(ContractBase):
+    """A pointer to evidence; raw secrets and large payloads stay elsewhere."""
+
+    evidence_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1)
+    tenant: TenantScope
+    kind: EvidenceKind
+    source: str = Field(min_length=1, max_length=240)
+    captured_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    content_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    location: str | None = Field(default=None, max_length=500)
+    freshness_seconds: int | None = Field(default=None, ge=0)
+    limitations: tuple[str, ...] = ()
+
+
+class ModelPurpose(StrEnum):
+    INTENT_EXTRACTION = "intent_extraction"
+    CLARIFICATION = "clarification"
+    PLAN_EXPLANATION = "plan_explanation"
+    EVIDENCE_SUMMARY = "evidence_summary"
+
+
+class ModelRequest(ContractBase):
+    """Safe metadata for a model call; prompt content is never execution authority."""
+
+    request_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1)
+    tenant: TenantScope
+    purpose: ModelPurpose
+    provider: str = Field(min_length=1, max_length=80)
+    model: str = Field(min_length=1, max_length=160)
+    prompt_version: str = Field(min_length=1, max_length=120)
+    input_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    timeout_seconds: int = Field(default=60, ge=1, le=900)
+    max_output_tokens: int = Field(default=2_000, ge=1, le=100_000)
+    data_policy: str = Field(default="customer-data-controlled", max_length=120)
+
+
+class ModelUsage(ContractBase):
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    estimated_cost_usd: float | None = Field(default=None, ge=0)
+    measured_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class ModelResponse(ContractBase):
+    request: ModelRequest
+    output: dict[str, Any]
+    evidence: tuple[EvidenceRef, ...] = ()
+    usage: ModelUsage | None = None
+    finish_reason: str = Field(default="stop", min_length=1, max_length=80)
+    safety_result: str = Field(default="validated-schema-only", min_length=1, max_length=120)
+
+
+class JobKind(StrEnum):
+    INTENT = "intent"
+    PLANNING = "planning"
+    GITHUB = "github"
+    AWS_DISCOVERY = "aws_discovery"
+    TERRAFORM = "terraform"
+    OBSERVATION = "observation"
+    BILLING = "billing"
+    NOTIFICATION = "notification"
+    REMEDIATION = "remediation"
+
+
+class JobEnvelope(ContractBase):
+    """Transport-neutral durable job metadata."""
+
+    job_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1)
+    tenant: TenantScope
+    kind: JobKind
+    idempotency_key: str = Field(min_length=8, max_length=200)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    attempt: int = Field(default=0, ge=0)
+    max_attempts: int = Field(default=3, ge=1, le=20)
+    timeout_seconds: int = Field(default=900, ge=1, le=86_400)
+    trace_id: str | None = Field(default=None, max_length=128)
+    not_before: datetime | None = None
+
+
+class CapabilityKind(StrEnum):
+    COMPUTE = "compute"
+    DATABASE = "database"
+    STORAGE = "storage"
+    NETWORKING = "networking"
+    SECURITY = "security"
+    OBSERVABILITY = "observability"
+    AI_RUNTIME = "ai_runtime"
+    EXECUTION = "execution"
+
+
+class CapabilityRequirement(ContractBase):
+    kind: CapabilityKind
+    name: str = Field(min_length=1, max_length=120)
+    required: bool = True
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    evidence: tuple[EvidenceRef, ...] = ()
+
+
+class ProviderCapability(ContractBase):
+    provider: str = Field(min_length=1, max_length=80)
+    kind: CapabilityKind
+    name: str = Field(min_length=1, max_length=120)
+    regions: tuple[str, ...] = ()
+    limits: dict[str, Any] = Field(default_factory=dict)
+    operational_complexity: int = Field(ge=1, le=5)
+    catalog_version: str = Field(min_length=1, max_length=160)
+    evidence: tuple[EvidenceRef, ...] = ()
+
+
+class CostEvidence(ContractBase):
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    monthly_low: float = Field(ge=0)
+    monthly_high: float = Field(ge=0)
+    catalog_version: str = Field(min_length=1, max_length=160)
+    captured_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    assumptions: tuple[str, ...] = ()
+    actual_billing: bool = False
+
+    @field_validator("monthly_high")
+    @classmethod
+    def high_not_below_low(cls, value: float, info: Any) -> float:
+        low = info.data.get("monthly_low")
+        if low is not None and value < low:
+            raise ValueError("monthly_high cannot be below monthly_low")
+        return value
+
+
+class UsageEvent(ContractBase):
+    """Metering input; billing is a later consumer, not an authority here."""
+
+    event_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1)
+    tenant: TenantScope
+    event_type: str = Field(min_length=1, max_length=120)
+    quantity: float = Field(default=1, gt=0)
+    unit: str = Field(min_length=1, max_length=60)
+    occurred_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    source: str = Field(min_length=1, max_length=120)
+    correlation_id: str | None = Field(default=None, max_length=160)
+    metadata: dict[str, str] = Field(default_factory=dict)
+
