@@ -5,12 +5,18 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
+import boto3
 import jwt
 from fastapi import Header, HTTPException
 
-LOCAL_SIGNING_KEY = os.getenv(
-    "AGENTCONSTRUCT_LOCAL_SIGNING_KEY", "local-development-only-change-me"
-)
+
+def local_signing_key() -> str:
+    secret_arn = os.getenv("AGENTCONSTRUCT_LOCAL_SIGNING_KEY_SECRET_ARN")
+    if secret_arn:
+        return str(boto3.client("secretsmanager").get_secret_value(SecretId=secret_arn)["SecretString"])
+    return os.getenv("AGENTCONSTRUCT_LOCAL_SIGNING_KEY", "local-development-only-change-me")
+
+
 LOCAL_ISSUER = "agentconstruct-local"
 LOCAL_AUDIENCE = "agentconstruct-api"
 
@@ -52,7 +58,7 @@ def issue_local_token(username: str) -> str:
             "iat": now,
             "exp": now + timedelta(minutes=30),
         },
-        LOCAL_SIGNING_KEY,
+        local_signing_key(),
         algorithm="HS256",
     )
 
@@ -69,7 +75,7 @@ class LocalIdentityVerifier:
         try:
             payload = jwt.decode(
                 token,
-                LOCAL_SIGNING_KEY,
+                local_signing_key(),
                 algorithms=["HS256"],
                 issuer=LOCAL_ISSUER,
                 audience=LOCAL_AUDIENCE,
@@ -126,7 +132,7 @@ def verify_local_token_for_test(authorization: str) -> Principal:
     try:
         payload = jwt.decode(
             authorization.removeprefix("Bearer "),
-            LOCAL_SIGNING_KEY,
+            local_signing_key(),
             algorithms=["HS256"],
             issuer=LOCAL_ISSUER,
             audience=LOCAL_AUDIENCE,

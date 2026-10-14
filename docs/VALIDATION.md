@@ -289,7 +289,7 @@ template object x-amz-version-id = sRcSIAyRmBYcnqUEvImdK7MhtqQJ60xM
 bucket root HTTP status = 403 AccessDenied
 ```
 
-No customer workload, VPC, compute, database, Kubernetes, App Runner, GitOps, secret, or application resource was created by this template-host apply. This is AgentConstruct control-plane foundation only. The hosted runtime identity remains unexecuted because there is not yet an AgentConstruct runtime OIDC issuer.
+No customer workload, VPC, compute, database, Kubernetes, GitOps, secret, or application resource was created by this template-host apply. This was AgentConstruct control-plane foundation evidence only. Later on 2026-10-13, the App Runner-hosted runtime was applied and verified for read-only customer discovery; see the AWS-hosted runtime evidence below.
 
 ## Customer-plan approval workflow clean-room evidence
 
@@ -696,3 +696,247 @@ Results:
 - CLI forwards customer-plan review operations to the governed API using the caller's bearer token.
 
 This is local agent-interface evidence only. It did not write GitHub, run authenticated Terraform, run `terraform apply`, create AWS resources, run Kubernetes, sync GitOps or deploy a workload.
+
+## AWS-hosted AgentConstruct runtime and live customer discovery verification
+
+Date: 2026-10-13. Environment: macOS, AWS CLI, Terraform, Docker Desktop, AWS account `654654474502`, region `us-east-1`.
+
+Purpose: deploy the AgentConstruct control-plane runtime into AWS and verify the customer AWS connection journey against the hosted runtime. This is control-plane/discovery validation only, not customer workload deployment.
+
+Commands and evidence:
+
+```bash
+AWS_PROFILE=ai-platform-pilot-key AWS_REGION=us-east-1 \
+  ./scripts/build-push-runtime-image.sh
+
+CONFIRM_RUNTIME_SERVICE_APPLY=APPLY_AGENTCONSTRUCT_RUNTIME_SERVICE \
+  ./scripts/app-runner-runtime.sh apply-service
+
+curl -fsS https://x75qgwappp.us-east-1.awsapprunner.com/healthz
+
+curl -fsS -X POST \
+  https://x75qgwappp.us-east-1.awsapprunner.com/api/v1/auth/local-login
+
+curl -fsS -X POST \
+  https://x75qgwappp.us-east-1.awsapprunner.com/api/v1/cloud-connections
+
+curl -fsS -X POST \
+  https://x75qgwappp.us-east-1.awsapprunner.com/api/v1/cloud-connections/{connection_id}/aws-quick-create
+
+aws cloudformation create-stack \
+  --stack-name AgentConstruct-Discovery-72eed5c4 \
+  --template-url "$TEMPLATE_URL" \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameters \
+    ParameterKey=AgentConstructControlPlaneRoleArn,ParameterValue="$CONTROL_PLANE_ROLE_ARN" \
+    ParameterKey=ExternalId,ParameterValue="$EXTERNAL_ID" \
+    ParameterKey=ConnectionId,ParameterValue="$CONNECTION_ID"
+
+aws cloudformation wait stack-create-complete \
+  --stack-name AgentConstruct-Discovery-72eed5c4
+
+curl -fsS -X POST \
+  https://x75qgwappp.us-east-1.awsapprunner.com/api/v1/cloud-connections/{connection_id}/aws-verify \
+  -d '{"region":"us-east-1"}'
+
+aws cloudformation delete-stack \
+  --stack-name AgentConstruct-Discovery-72eed5c4
+
+aws cloudformation wait stack-delete-complete \
+  --stack-name AgentConstruct-Discovery-72eed5c4
+```
+
+Results:
+
+- Terraform applied the AWS-hosted App Runner service:
+  - service ARN: `arn:aws:apprunner:us-east-1:654654474502:service/agentconstruct-runtime/7a82ea2eb2c349749424bf419eac3f92`
+  - URL: `https://x75qgwappp.us-east-1.awsapprunner.com`
+  - runtime role: `arn:aws:iam::654654474502:role/agentconstruct-control-plane-runtime`
+  - ECR image: `654654474502.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-runtime:3febfef36577-policy-fixture`
+- Health check returned `{"status":"ok","product":"AgentConstruct"}`.
+- Hosted local fixture login returned a valid developer token for `user-founder`.
+- Hosted Quick Create generated a customer stack name `AgentConstruct-Discovery-72eed5c4` and a CloudFormation review URL using the public versioned template.
+- The customer-side CloudFormation stack reached `CREATE_COMPLETE` and created only the read-only discovery role.
+- Hosted verification returned `SUCCEEDED`, `credentials_stored=false`, and stored a snapshot with `live-read-only-sts-discovery` provenance.
+- Snapshot contents included:
+  - `aws-account:654654474502`
+  - `vpc:1`
+  - `ecr:2`
+  - `eks:0`
+  - `ecs:0`
+  - `rds:0`
+  - `lambda:2`
+  - `app-runner:1`
+  - `s3:7`
+- Hosted developer plan flow succeeded after explicit material requirements were supplied: intent parsing, one AWS plan, customer review draft, immutable submission and administrator approval.
+- Hosted administrator self-approval also succeeded and recorded `is_self_approval=true`.
+- Cleanup verified:
+  - CloudFormation stack `AgentConstruct-Discovery-72eed5c4` was deleted.
+  - IAM role `AgentConstructDiscovery-72eed5c4-3e5f-4828-b1e1-d4b79b31d8f9` no longer existed.
+  - Per-connection ExternalId secret `agentconstruct/customer-connections/org-demo/72eed5c4-3e5f-4828-b1e1-d4b79b31d8f9/external-id` was force-deleted.
+
+Validation commands after code/config changes:
+
+```bash
+.venv/bin/python -m pytest \
+  tests/test_connection_experience.py \
+  tests/test_customer_aws_connection_contract.py \
+  tests/test_customer_plan_review.py -q
+
+.venv/bin/ruff check apps/api/src tests
+
+AWS_PROFILE=ai-platform-pilot-key AWS_REGION=us-east-1 \
+  terraform -chdir=infrastructure/terraform/app-runner-runtime init -backend=false -reconfigure
+
+AWS_PROFILE=ai-platform-pilot-key AWS_REGION=us-east-1 \
+  terraform -chdir=infrastructure/terraform/app-runner-runtime validate
+
+git diff --check
+```
+
+Results:
+
+- Pytest passed: **41 passed**, 1 warning.
+- Ruff passed.
+- Terraform App Runner runtime root validated successfully.
+- `git diff --check` passed.
+
+Boundaries:
+
+- The hosted runtime currently uses local fixture sign-in, fixture policy and SQLite in `/tmp`; it is validation/demo infrastructure, not production SaaS persistence.
+- No customer workload, VPC, database, compute service, GitHub write, GitOps sync, Terraform workload plan, Terraform apply or Terraform destroy was executed.
+- The only customer-side AWS resource created for this validation was the temporary read-only discovery CloudFormation stack, and it was destroyed after verification.
+
+## Real customer workload App Runner create / validate / destroy pilot
+
+Date: 2026-10-14. Environment: macOS, AWS CLI, Terraform, Docker Desktop, AWS account `654654474502`, region `us-east-1`.
+
+Purpose: prove a real customer workload lifecycle twice using the customer repository `https://github.com/Bepoadewale/ai-platform-control-plane` at commit `de60dfe2e24930d76e6be8a5fb2c428e35f483c6`.
+
+Per-run evidence files:
+
+- `docs/test/test42.md` — PR #42 customer workload App Runner pilot, cycles 1 and 2.
+
+Execution boundary:
+
+- This was a real AWS customer-workload pilot.
+- Terraform created App Runner, ECR, IAM and CloudWatch resources for the workload.
+- The workload was observed through App Runner status and an HTTP `/healthz` request.
+- Both workload cycles were destroyed after validation.
+- Foundation/support resources were intentionally retained: Terraform state bucket, DynamoDB lock table, GitHub OIDC provider, and AgentConstruct IAM connection/support roles.
+
+Added reusable pilot automation:
+
+```text
+infrastructure/terraform/customer-workload-app-runner-pilot/
+scripts/customer-workload-app-runner-pilot.sh
+```
+
+Validation commands executed:
+
+```bash
+terraform fmt -recursive infrastructure/terraform/customer-workload-app-runner-pilot
+TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-customer-apprunner \
+  terraform -chdir=infrastructure/terraform/customer-workload-app-runner-pilot init -backend=false -input=false
+TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-customer-apprunner \
+  terraform -chdir=infrastructure/terraform/customer-workload-app-runner-pilot validate
+```
+
+Result: Terraform formatting and validation passed.
+
+Cycle 1 commands and evidence:
+
+```bash
+AWS_PROFILE=ai-platform-pilot-key AWS_REGION=us-east-1 \
+EXPECTED_AWS_ACCOUNT_ID=654654474502 \
+TF_STATE_BUCKET=agentconstruct-tfstate-654654474502 \
+TF_LOCK_TABLE=agentconstruct-terraform-locks \
+AGENTCONSTRUCT_CUSTOMER_SOURCE_COMMIT=de60dfe2e24930d76e6be8a5fb2c428e35f483c6 \
+AGENTCONSTRUCT_CUSTOMER_PLAN_DIGEST=pilot-cycle-1 \
+./scripts/customer-workload-app-runner-pilot.sh plan
+
+CONFIRM_CUSTOMER_WORKLOAD_FOUNDATION_APPLY=APPLY_CUSTOMER_WORKLOAD_FOUNDATION \
+  ./scripts/customer-workload-app-runner-pilot.sh apply-foundation
+
+AGENTCONSTRUCT_CUSTOMER_SOURCE_DIR=/tmp/.../ai-platform-control-plane \
+AGENTCONSTRUCT_CUSTOMER_ECR_REPOSITORY_URL=654654474502.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-customer-ai-platform-control-plane \
+AGENTCONSTRUCT_CUSTOMER_IMAGE_TAG=cycle1-de60dfe2e249 \
+  ./scripts/customer-workload-app-runner-pilot.sh build-push-image
+
+AGENTCONSTRUCT_ENABLE_CUSTOMER_SERVICE=true \
+AGENTCONSTRUCT_CUSTOMER_IMAGE_IDENTIFIER=654654474502.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-customer-ai-platform-control-plane:cycle1-de60dfe2e249 \
+CONFIRM_CUSTOMER_WORKLOAD_SERVICE_APPLY=APPLY_CUSTOMER_WORKLOAD_SERVICE \
+  ./scripts/customer-workload-app-runner-pilot.sh apply-service
+
+AGENTCONSTRUCT_ENABLE_CUSTOMER_SERVICE=true \
+AGENTCONSTRUCT_CUSTOMER_IMAGE_IDENTIFIER=654654474502.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-customer-ai-platform-control-plane:cycle1-de60dfe2e249 \
+  ./scripts/customer-workload-app-runner-pilot.sh wait-ready
+
+AGENTCONSTRUCT_ENABLE_CUSTOMER_SERVICE=true \
+AGENTCONSTRUCT_CUSTOMER_IMAGE_IDENTIFIER=654654474502.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-customer-ai-platform-control-plane:cycle1-de60dfe2e249 \
+  ./scripts/customer-workload-app-runner-pilot.sh smoke
+
+AGENTCONSTRUCT_ENABLE_CUSTOMER_SERVICE=true \
+AGENTCONSTRUCT_CUSTOMER_IMAGE_IDENTIFIER=654654474502.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-customer-ai-platform-control-plane:cycle1-de60dfe2e249 \
+CONFIRM_CUSTOMER_WORKLOAD_DESTROY=DESTROY_CUSTOMER_WORKLOAD \
+  ./scripts/customer-workload-app-runner-pilot.sh destroy
+
+./scripts/customer-workload-app-runner-pilot.sh verify-absent
+```
+
+Cycle 1 results:
+
+- Terraform plan proposed only the pilot workload resources: ECR repository, App Runner service roles, log group, account guard, and then App Runner service.
+- Terraform applied foundation: **6 created**.
+- Docker built the customer repo image from `control-plane/Dockerfile` and pushed tag `cycle1-de60dfe2e249`.
+- Terraform applied App Runner service: **1 created**.
+- App Runner service ARN: `arn:aws:apprunner:us-east-1:654654474502:service/agentconstruct-customer-control-plane/5d378e5d076f4f8f977d0483fafc0c51`.
+- App Runner URL: `https://ksp93iumxq.us-east-1.awsapprunner.com`.
+- Observed status: `RUNNING`.
+- Smoke result: `https://ksp93iumxq.us-east-1.awsapprunner.com/healthz` returned `{"status":"ok"}`.
+- Terraform destroy removed **7 resources**.
+- Absence check passed: App Runner service absent and ECR repository deleted.
+
+Cycle 2 results:
+
+- Terraform re-created the pilot foundation: **6 created**.
+- Docker rebuilt/pushed the same customer commit with tag `cycle2-de60dfe2e249`.
+- Terraform applied App Runner service: **1 created**.
+- App Runner service ARN: `arn:aws:apprunner:us-east-1:654654474502:service/agentconstruct-customer-control-plane/99b6286c6e37463c91921b6ca0282c13`.
+- App Runner URL: `https://tpayu7abh2.us-east-1.awsapprunner.com`.
+- Observed status: `RUNNING`.
+- Smoke result: `https://tpayu7abh2.us-east-1.awsapprunner.com/healthz` returned `{"status":"ok"}`.
+- Terraform destroy removed **7 resources**.
+- Absence check passed: App Runner service absent and ECR repository deleted.
+
+Final cleanup and retained resources:
+
+```bash
+aws apprunner list-services --profile ai-platform-pilot-key --region us-east-1
+aws ecr describe-repositories --profile ai-platform-pilot-key --region us-east-1
+aws logs describe-log-groups --profile ai-platform-pilot-key --region us-east-1 \
+  --log-group-name-prefix /aws/apprunner/agentconstruct
+aws resourcegroupstaggingapi get-resources --profile ai-platform-pilot-key --region us-east-1 \
+  --tag-filters Key=Project,Values=agentconstruct
+```
+
+Final results:
+
+- No AgentConstruct App Runner services remained.
+- No AgentConstruct ECR repositories remained.
+- App Runner-created CloudWatch log groups for both customer workload cycles and old AgentConstruct runtime checks were deleted.
+- Customer workload Terraform output was `{}`, confirming empty state outputs after destroy.
+- Remaining tagged AgentConstruct support resources:
+  - `arn:aws:s3:::agentconstruct-tfstate-654654474502`
+  - `arn:aws:dynamodb:us-east-1:654654474502:table/agentconstruct-terraform-locks`
+  - `arn:aws:iam::654654474502:oidc-provider/token.actions.githubusercontent.com`
+- Remaining AgentConstruct IAM roles:
+  - `agentconstruct-control-plane-github`
+  - `agentconstruct-adewale-primary-aws-discovery`
+  - `agentconstruct-adewale-primary-aws-execution`
+
+Limitations:
+
+- The customer workload validation covered App Runner service creation, container start, App Runner `RUNNING` state, HTTP `/healthz`, and teardown.
+- It did not validate the customer app’s protected JWT/OPA write paths, because those require the full control-plane dependencies.
+- It did not create a VPC, database, Prometheus, Grafana, GitHub PR, GitOps sync or Argo CD deployment for this customer workload.

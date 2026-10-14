@@ -20,7 +20,7 @@ class PolicyClient:
         self.url = url or os.getenv(
             "AGENTCONSTRUCT_OPA_URL", "http://opa:8181/v1/data/agentconstruct/decision"
         )
-        self.fixture = fixture
+        self.fixture = fixture or os.getenv("AGENTCONSTRUCT_POLICY_FIXTURE", "false").lower() == "true"
 
     def evaluate(
         self,

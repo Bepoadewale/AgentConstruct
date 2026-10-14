@@ -10,6 +10,16 @@ permissions:
   pull-requests: read
 
 jobs:
+  docs-conventions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: python scripts/check_doc_conventions.py
+        env:
+          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+
   python:
     runs-on: ubuntu-latest
     steps:

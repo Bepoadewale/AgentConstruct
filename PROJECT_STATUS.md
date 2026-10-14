@@ -2,7 +2,7 @@
 
 ## Current state
 
-**AgentConstruct V1 foundation — implemented locally; customer-AWS and GitHub repository discovery executed; workload/cloud runtime not executed.**
+**AgentConstruct V1 foundation — implemented locally; hosted customer-AWS discovery runtime executed; customer workload deployment not executed.**
 
 The GitHub repository has been renamed from `ai-platform-product-strategy` to `AgentConstruct`. It is a private commercial product repository.
 
@@ -19,7 +19,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - One governed REST API shared by the browser, a thin CLI, and a stdio MCP server. Agent clients can analyse, plan, compare, estimate, inspect, request eligible execution, create fixture desired-state PR contracts, and create a destroy plan; they cannot self-approve, merge GitHub PRs, or receive cloud, shell, Terraform, Kubernetes, or secret access.
 - GitHub App read-only discovery, repository intelligence and local webhook workflow contract. The selected `Bepoadewale/ai-platform-control-plane` repository was read through a short-lived installation token. The adapter can inspect safe repository metadata plus selected manifest files, persists credential-free runtime/framework/data/deployment hints, and refuses GitHub writes. Signed fixture webhooks now persist installation state and deduplicated deliveries; reviewed-PR publication remains simulated.
 - Executed customer-AWS discovery connection: Terraform created an encrypted, versioned AgentConstruct state bucket, a DynamoDB lock table, GitHub OIDC control-plane identity, one read-only discovery role and one empty future-execution role. STS role chaining, real account inventory and Cost Explorer discovery were proved. No workload, network, database or compute resource was created.
-- Customer AWS connection UI is implemented: a user can choose an AWS target, enter an account ID, open a CloudFormation Quick Create review, and queue server-side STS verification. Connection external IDs are protected through a control-plane secret-store interface; the browser and normal connection record never hold them. A separate runtime-role Terraform contract prevents the GitHub Actions role from being the production runtime identity. The public CloudFormation template host is applied and verified as a versioned S3 object; the hosted runtime identity and new live UI verification path are not yet deployed.
+- Customer AWS connection UI is implemented and live-verified through an AWS-hosted App Runner runtime: a user can choose an AWS target, enter an account ID, open a CloudFormation Quick Create review, and queue server-side STS verification. Connection external IDs are protected through a control-plane secret-store interface; the browser and normal connection record never hold them. A separate App Runner runtime IAM role prevents the GitHub Actions role from being the production runtime identity. The public CloudFormation template host is applied and verified as a versioned S3 object.
 - A bounded Day-2 loop: deterministic latency evidence, a transparent replica recommendation, immutable `CHANGE` plan, independent production approval, durable worker, observed result and audit. It is local fixture evidence, not autonomous remediation or cloud monitoring.
 - One selected AWS customer-plan review with durable submit, administrator approval/rejection, editable draft/rejected constraint revisions, filtered administrator review queues, rich review evidence and explicit self-approval audit paths. Approval remains separate from execution.
 - Approved customer-plan revisions can be explicitly executed as bounded local dry runs. The trusted worker independently observes READY, FAILED or DEGRADED evidence, ties each local environment back to the approved revision/digest, and supports a governed local destroy request/approval/observed-destroy path. This is local fixture execution only and does not create or delete AWS resources.
@@ -33,7 +33,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 
 ## Boundaries
 
-- This does **not** deploy a workload into AWS or a customer account. One customer-AWS discovery connection is live and read-only; it is not deployment permission. Customer-plan dry runs execute only against the local fixture worker. Cost Explorer values are delayed billing data, not settled cost evidence.
+- This does **not** deploy a customer workload into AWS or a customer account. Customer-AWS discovery is live and read-only; it is not deployment permission. Customer-plan dry runs execute only against the local fixture worker. The hosted App Runner runtime currently uses fixture sign-in, fixture policy and ephemeral SQLite, so it is validation/demo infrastructure rather than production SaaS persistence. Cost Explorer values are delayed billing data, not settled cost evidence.
 - Terraform plan-only review records are governance evidence unless a future operator deliberately enables and runs authenticated plan mode. They are not apply, destroy or workload-readiness evidence.
 - The local identity issuer, intent provider and execution target are fixtures. The JWKS adapter is implemented but not connected to an enterprise issuer.
 - GitHub OAuth/install initiation, real public webhook delivery, live reviewed desired-state PR writes/checks, GitHub-hosted OIDC assumption, profile-specific deployment permission, GitOps/Argo execution, enterprise IdP, external agent-client installation and billing are next work, not evidence.
@@ -46,8 +46,9 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 
 ## Next delivery sequence
 
-1. Add an authenticated Terraform plan-only operator workflow for App Runner. It must stop before apply.
-2. Run a separately authorised cloud pilot: plan, create, smoke, failure proof, observability, cost query, destroy and absence verification.
+1. Replace hosted fixture sign-in/policy/ephemeral SQLite with production identity, OPA and durable PostgreSQL for the AWS-hosted control plane.
+2. Add an authenticated Terraform plan-only operator workflow for App Runner. It must stop before apply.
+3. Run a separately authorised customer-workload cloud pilot: plan, create, smoke, failure proof, observability, cost query, destroy and absence verification.
 
 ## Clean-room reproducibility
 
@@ -55,7 +56,7 @@ Status: the earlier V1 proof completed two clean local-runtime cycles plus one r
 
 ## Cloud contract validation
 
-On 2026-10-09, authenticated Terraform plans and identity-only applies completed for the AgentConstruct state foundation, control-plane identity and one customer discovery connection. The follow-up plans reported no changes. This is executed identity/discovery evidence only; no workload runtime was applied.
+On 2026-10-09, authenticated Terraform plans and identity-only applies completed for the AgentConstruct state foundation, control-plane identity and one customer discovery connection. On 2026-10-13, Terraform applied the hosted App Runner control-plane runtime, ECR repository, runtime IAM role and runtime signing secret. The hosted runtime assumed a temporary customer read-only discovery role, recorded a live inventory snapshot, then the temporary customer stack/role and per-connection ExternalId secret were deleted. This is executed control-plane/discovery evidence only; no customer workload runtime was applied.
 
 ## Future operator workflow
 

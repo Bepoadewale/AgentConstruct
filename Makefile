@@ -94,6 +94,10 @@ terraform-validate:
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-connection terraform -chdir=infrastructure/terraform/customer-connection validate
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-template-host terraform -chdir=infrastructure/terraform/connection-template-host init -backend=false -input=false
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-template-host terraform -chdir=infrastructure/terraform/connection-template-host validate
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-apprunner-runtime terraform -chdir=infrastructure/terraform/app-runner-runtime init -backend=false -input=false
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-apprunner-runtime terraform -chdir=infrastructure/terraform/app-runner-runtime validate
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-customer-apprunner terraform -chdir=infrastructure/terraform/customer-workload-app-runner-pilot init -backend=false -input=false
+	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-customer-apprunner terraform -chdir=infrastructure/terraform/customer-workload-app-runner-pilot validate
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-apprunner-renderer terraform -chdir=infrastructure/terraform/renderers/app-runner-plan init -backend=false -input=false
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-apprunner-renderer terraform -chdir=infrastructure/terraform/renderers/app-runner-plan validate
 	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-pilot terraform -chdir=infrastructure/terraform/pilot init -backend=false -input=false

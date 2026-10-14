@@ -24,6 +24,25 @@ Build and maintain **AgentConstruct**, the private commercial product. Use plain
 - Use bounded readiness checks, useful failures and project-scoped cleanup.
 - Do not push directly to `main`; use a focused branch and reviewable PR.
 
+## Customer workload evidence
+
+- Every PR that performs a customer workload test run must have a PR-numbered evidence file under `docs/test/`.
+- Use the GitHub PR number as the filename: PR #42 uses `test42.md`, PR #43 uses `test43.md`, and so on.
+- If one PR performs multiple customer workload cycles, record all cycles in that one PR-numbered file.
+- Do not overwrite, rename, or renumber older test evidence.
+- Each file must state whether the run was local, simulated, statically validated, or real AWS execution.
+- For real AWS workload runs, record the exact repository, commit, account, region, commands, resources created, observed readiness result, teardown command, absence check, retained resources, and limitations.
+- `docs/VALIDATION.md` may summarize multiple runs, but `docs/test/test<PR_NUMBER>.md` is the per-PR customer workload evidence source of truth.
+
+## PR tickets
+
+- Every PR must have a PR-numbered ticket file under `docs/tickets/`.
+- Use the GitHub PR number as the filename: PR #42 uses `ticket42.md`, PR #43 uses `ticket43.md`, and so on.
+- Create the ticket file before implementation work starts whenever the PR number is already known. If the PR does not exist yet, create the branch, open a draft PR early to get the number, then add the matching ticket before substantive implementation.
+- Do not overwrite, rename, or renumber older tickets.
+- Each ticket must include the PR goal, current repo state relevant to the PR, research/references, work to be done, acceptance criteria, whether each criterion was met, validation performed, evidence files, boundaries, and follow-up work.
+- Keep the ticket updated as implementation changes. Before marking the PR review-ready, update the acceptance status truthfully.
+
 ## Clean-room gate
 
 Before calling a runnable change review-ready, execute and record:

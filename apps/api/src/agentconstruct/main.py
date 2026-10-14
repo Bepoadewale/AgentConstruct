@@ -322,6 +322,9 @@ def verify_aws_connection(
     REQUESTS.labels("cloud_connections.aws_verify").inc()
     try:
         job = service.queue_aws_connection_verification(principal, connection_id, request.region)
+        if os.getenv("AGENTCONSTRUCT_AWS_VERIFY_INLINE", "false").lower() == "true":
+            service.run_next_discovery_job()
+            job = service.cloud_discovery_job(principal, connection_id, job.id)
     except (PermissionError, ValueError, KeyError, RuntimeError) as error:
         translate(error)
     return {
