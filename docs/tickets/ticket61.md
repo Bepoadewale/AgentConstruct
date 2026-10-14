@@ -2,7 +2,7 @@
 
 - PR: https://github.com/Bepoadewale/AgentConstruct/pull/61
 - Branch: `feature/ui-polish-final`
-- Status: ready for review
+- Status: merged
 
 ## Problem / goal
 
@@ -30,18 +30,18 @@ The merged UI in PR60 provides workspace navigation, onboarding, a command palet
 
 ## Acceptance criteria
 
-- [ ] Mobile users can navigate Overview, New plan, Plan, and Activity without relying on hidden desktop navigation.
-- [ ] Plan output exposes a concise decision summary before detailed architecture components.
-- [ ] Review status is visually scannable and the immutable digest can be copied.
-- [ ] Plan generation communicates busy state and prevents duplicate clicks.
-- [ ] Dynamic repository/map content is HTML-escaped before insertion.
-- [ ] Existing API identifiers and governed workflow behavior remain compatible.
-- [ ] No gradient declarations or decorative AI effects are introduced.
-- [ ] Reduced-motion behavior remains supported.
+- [x] Mobile users can navigate Overview, New plan, Plan, and Activity without relying on hidden desktop navigation.
+- [x] Plan output exposes a concise decision summary before detailed architecture components.
+- [x] Review status is visually scannable and the immutable digest can be copied.
+- [x] Plan generation communicates busy state and prevents duplicate clicks.
+- [x] Dynamic repository/map content is HTML-escaped before insertion.
+- [x] Existing API identifiers and governed workflow behavior remain compatible.
+- [x] No gradient declarations or decorative AI effects are introduced.
+- [x] Reduced-motion behavior remains supported.
 
 ## Acceptance status
 
-Pending CI and review.
+Merged after CI passed.
 
 ## Tests / validation performed
 

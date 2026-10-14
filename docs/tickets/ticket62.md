@@ -2,7 +2,7 @@
 
 - PR: https://github.com/Bepoadewale/AgentConstruct/pull/62
 - Branch: `feature/ui-accessibility-hardening`
-- Status: ready for review
+- Status: merged
 
 ## Problem / goal
 
@@ -25,15 +25,15 @@ PR61 added mobile navigation, plan highlights, digest copy, status chips, and pl
 
 ## Acceptance criteria
 
-- [ ] Dynamic integration and audit values are escaped before insertion.
-- [ ] GitHub/AWS workflow messages and audit updates are announced politely.
-- [ ] Existing plan, approval, and execution behavior remains unchanged.
-- [ ] No gradient or decorative AI styling is introduced.
-- [ ] Local lint, tests, browser contract, and customer-plan E2E pass.
+- [x] Dynamic integration and audit values are escaped before insertion.
+- [x] GitHub/AWS workflow messages and audit updates are announced politely.
+- [x] Existing plan, approval, and execution behavior remains unchanged.
+- [x] No gradient or decorative AI styling is introduced.
+- [x] Local lint, tests, browser contract, and customer-plan E2E pass.
 
 ## Acceptance status
 
-Pending CI and review.
+Merged after CI passed.
 
 ## Tests / validation performed
 
