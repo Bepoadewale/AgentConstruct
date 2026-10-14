@@ -54,7 +54,7 @@ Create an evidence-backed strategic review of AgentConstruct and document the go
 
 Met for the documentation-only review. No application behavior or cloud state was changed.
 
-## Validation
+## Tests / validation performed
 
 - `python3 scripts/check_doc_conventions.py` — passed.
 - `git diff --check` — passed.
