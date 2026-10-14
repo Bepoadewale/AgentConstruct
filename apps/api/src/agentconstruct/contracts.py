@@ -170,6 +170,22 @@ class CostEvidence(ContractBase):
         return value
 
 
+class PlanningEvidence(ContractBase):
+    """Evidence inputs used to explain a recommendation."""
+
+    tenant: TenantScope
+    repository: tuple[EvidenceRef, ...] = ()
+    inventory: tuple[EvidenceRef, ...] = ()
+    pricing: CostEvidence | None = None
+    capabilities: tuple[EvidenceRef, ...] = ()
+    limitations: tuple[str, ...] = ()
+    captured_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @property
+    def references(self) -> tuple[EvidenceRef, ...]:
+        return self.repository + self.inventory + self.capabilities
+
+
 class UsageEvent(ContractBase):
     """Metering input; billing is a later consumer, not an authority here."""
 
@@ -182,4 +198,3 @@ class UsageEvent(ContractBase):
     source: str = Field(min_length=1, max_length=120)
     correlation_id: str | None = Field(default=None, max_length=160)
     metadata: dict[str, str] = Field(default_factory=dict)
-

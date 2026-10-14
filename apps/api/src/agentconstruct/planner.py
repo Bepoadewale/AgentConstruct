@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from agentconstruct.contracts import PlanningEvidence
 from agentconstruct.domain import (
     ArchitectureCandidate,
     ArchitectureComponent,
@@ -29,7 +30,10 @@ class AwsV1Planner:
         self.cheapest_viable_band = cheapest_viable_band
 
     def plan(
-        self, spec: WorkloadSpec, inventory: CloudInventorySnapshot | None = None
+        self,
+        spec: WorkloadSpec,
+        inventory: CloudInventorySnapshot | None = None,
+        evidence: PlanningEvidence | None = None,
     ) -> ArchitecturePlan:
         if spec.cloud != "aws":
             raise ValueError("V1 supports AWS only")
@@ -71,6 +75,14 @@ class AwsV1Planner:
             and candidate.operational_complexity <= selected.operational_complexity
         ]
         explanation = self._explanation(selected, simpler_failed)
+        evidence_refs = list(evidence.references) if evidence else []
+        evidence_limitations = list(evidence.limitations) if evidence else [
+            "No typed live evidence bundle supplied; inventory and pricing are fixture assumptions."
+        ]
+        if evidence and evidence.pricing:
+            evidence_limitations.append(
+                "Pricing is an estimate and actual_billing is false; customer billing must be queried separately."
+            )
         monitoring_cost = CostComponent(
             category="monitoring",
             monthly_low=20,
@@ -146,6 +158,8 @@ class AwsV1Planner:
             simplest_viable_explanation=explanation,
             existing_resources_reused=selected.existing_resources_reused,
             new_resources_required=selected.new_resources_required,
+            evidence_refs=evidence_refs,
+            evidence_limitations=evidence_limitations,
         )
 
     def _generate(self, spec: WorkloadSpec, region: str) -> list[ArchitectureCandidate]:

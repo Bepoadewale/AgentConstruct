@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, HttpUrl
 
+from agentconstruct.contracts import EvidenceRef
+
 
 class EnvironmentName(StrEnum):
     STAGING = "staging"
@@ -202,6 +204,8 @@ class ArchitecturePlan(BaseModel):
     simplest_viable_explanation: str | None = None
     existing_resources_reused: list[str] = Field(default_factory=list)
     new_resources_required: list[str] = Field(default_factory=list)
+    evidence_refs: list[EvidenceRef] = Field(default_factory=list)
+    evidence_limitations: list[str] = Field(default_factory=list)
 
 
 class TelemetryEvidence(BaseModel):
