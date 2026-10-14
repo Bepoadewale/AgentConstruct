@@ -58,6 +58,15 @@ configure_tracing()
 FastAPIInstrumentor.instrument_app(app)
 
 
+@app.middleware("http")
+async def prevent_stale_local_ui(request: Request, call_next):
+    """Keep the local demo from serving an older cached HTML/CSS/JS build."""
+    response = await call_next(request)
+    if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"}:
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
+
+
 def product_service(db: Session = Depends(session)) -> ProductService:
     return ProductService(db)
 
