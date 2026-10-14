@@ -13,6 +13,22 @@ let auditSnapshot = [];
 let historyPage = 1;
 let auditPage = 1;
 const PAGE_SIZE = 10;
+let lastFocusedElement = null;
+
+function track(event, detail = {}) {
+  try {
+    const key = "agentconstruct-local-analytics";
+    const events = JSON.parse(localStorage.getItem(key) || "[]");
+    events.push({ event, detail, at: new Date().toISOString() });
+    localStorage.setItem(key, JSON.stringify(events.slice(-100)));
+  } catch { /* local-only analytics never block the UI */ }
+}
+
+function setRegionLoading(node, loading) {
+  if (!node) return;
+  node.setAttribute("aria-busy", String(loading));
+  if (loading) node.innerHTML = '<div class="skeleton-list" aria-label="Loading"><span></span><span></span><span></span></div>';
+}
 
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;")
@@ -87,6 +103,8 @@ function logout() {
 }
 
 async function refreshDashboard() {
+  setRegionLoading(document.querySelector("#dashboard-recent-projects"), true);
+  setRegionLoading(document.querySelector("#dashboard-recent-activity"), true);
   const dashboard = await api("/api/v1/dashboard");
   dashboardSnapshot = dashboard;
   document.querySelector("#dashboard-heading").textContent = `${dashboard.workspace.name} dashboard`;
@@ -154,6 +172,7 @@ function renderHistory(plans) {
     const haystack = `${item.title} ${item.state} ${item.creator_subject || ""}`.toLowerCase();
     return (state === "ALL" || item.state === state) && (!query || haystack.includes(query));
   });
+  renderCompareOptions(plans);
   if (!filtered.length) {
     node.innerHTML = `<div class="empty-state"><strong>${plans.length ? "No matching plans" : "No plans yet"}</strong><span>${plans.length ? "Try a different search or status filter." : "Create a plan to start your workspace history."}</span></div>`;
     return;
@@ -165,6 +184,30 @@ function renderHistory(plans) {
   node.innerHTML = Object.values(groups).map((items) => `<div class="history-group"><div class="history-group-heading"><span>${escapeHtml(items[0].title || "Plan")}</span><small>${items.length} revision${items.length === 1 ? "" : "s"}</small></div>${items.map((item) => `<button class="history-row" type="button" data-history-id="${escapeHtml(item.id)}"><span class="history-title"><b>${escapeHtml(item.title)}</b><small>Revision ${escapeHtml(item.revision)} · ${escapeHtml(formatDate(item.created_at))}</small></span><span class="status-chip status-${escapeHtml(String(item.state).toLowerCase())}">${escapeHtml(item.state)}</span><span class="history-arrow">›</span></button>`).join("")}</div>`).join("");
   node.querySelectorAll("[data-history-id]").forEach((row) => row.addEventListener("click", () => openCustomerReview(row.dataset.historyId).catch((error) => show(error.message, true))));
   renderPagination("history-pagination", historyPage, filtered.length, (nextPage) => { historyPage = nextPage; renderHistory(plans); });
+}
+
+function renderCompareOptions(plans) {
+  ["compare-left", "compare-right"].forEach((id) => {
+    const select = document.querySelector(`#${id}`);
+    if (!select) return;
+    const current = select.value;
+    select.innerHTML = '<option value="">Choose revision</option>' + plans.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title)} · r${escapeHtml(item.revision)} · ${escapeHtml(item.state)}</option>`).join("");
+    if (plans.some((item) => item.id === current)) select.value = current;
+  });
+}
+
+function compareRevisions() {
+  const plans = dashboardSnapshot?.plans || [];
+  const left = plans.find((item) => item.id === document.querySelector("#compare-left")?.value);
+  const right = plans.find((item) => item.id === document.querySelector("#compare-right")?.value);
+  const node = document.querySelector("#revision-comparison");
+  if (!node) return;
+  if (!left || !right) { node.classList.add("hidden"); return; }
+  const fields = [["Title", left.title, right.title], ["Revision", left.revision, right.revision], ["State", left.state, right.state], ["Created", formatDate(left.created_at), formatDate(right.created_at)], ["Creator", left.creator_subject, right.creator_subject]];
+  node.innerHTML = `<div class="comparison-heading"><div><span class="eyebrow">REVISION COMPARISON</span><h3>What changed between these records?</h3></div><button type="button" class="secondary" id="close-comparison">Close</button></div><div class="comparison-grid">${fields.map(([label, a, b]) => `<div><small>${escapeHtml(label)}</small><strong>${escapeHtml(a)}</strong><strong>${escapeHtml(b)}</strong></div>`).join("")}</div><p class="message">This local comparison uses immutable revision metadata. Open either revision for the full architecture and digest.</p>`;
+  node.classList.remove("hidden");
+  node.querySelector("#close-comparison")?.addEventListener("click", () => node.classList.add("hidden"));
+  track("revision_compare", { left: left.id, right: right.id });
 }
 
 function show(message, failure = false) {
@@ -320,10 +363,16 @@ function renderCustomerReview(review) {
   const reviewBoundary = review.state === "DRAFT" ? content.summary.status : "immutable review; not deployed";
   document.querySelector("#review-status").innerHTML = `<span class="status-chip status-${String(review.state).toLowerCase()}">${escapeHtml(review.state)}</span> <span>${escapeHtml(reviewBoundary)} Digest: <code>${escapeHtml(review.content_digest)}</code>.</span>`;
   const copyDigest = document.querySelector("#copy-digest");
+  const exportReview = document.querySelector("#export-review");
+  const copyReviewLink = document.querySelector("#copy-review-link");
   copyDigest.classList.remove("hidden");
+  exportReview.classList.remove("hidden");
+  copyReviewLink.classList.remove("hidden");
   copyDigest.onclick = async () => {
     try { await navigator.clipboard.writeText(review.content_digest); show("Plan digest copied."); } catch { show("Digest: " + review.content_digest); }
   };
+  exportReview.onclick = () => exportReviewSummary(review);
+  copyReviewLink.onclick = async () => { const url = `${window.location.origin}${window.location.pathname}#customer-review:${review.id}`; try { await navigator.clipboard.writeText(url); show("Review link copied."); } catch { show(url); } track("review_link_copy", { id: review.id }); };
   renderPlanTimeline(review.state);
   const summary = review.review_summary || {};
   document.querySelector("#approval-boundary").classList.toggle("hidden", review.state !== "APPROVED");
@@ -400,6 +449,12 @@ function renderCustomerReview(review) {
   else if (review.state === "SUBMITTED") { actionMessage.textContent = isAdministrator() ? "This submitted plan is ready for an administrator decision. It is not deployed." : "Submitted for administrator review. It is not deployed."; nextStep.textContent = isAdministrator() ? "Next: approve or reject this exact digest." : "Next: an administrator must decide this plan."; }
   else if (review.state === "REJECTED") { actionMessage.textContent = `Rejected: ${review.decision?.reason || "reason unavailable"}. The creator can make a new draft revision.`; nextStep.textContent = isCreator ? "Next: create a revised draft with the rejection addressed." : "The creator can revise this plan."; }
   else if (review.state === "APPROVED") { actionMessage.textContent = `Approved by ${review.decision?.approver_subject || "administrator"}${review.decision?.is_self_approval ? " (self-approval recorded)" : ""}. Approved does not mean deployed.`; nextStep.textContent = "Next: run the local dry run, then review the desired-state and plan-only checks."; }
+}
+
+function exportReviewSummary(review) {
+  const summary = { title: `AWS infrastructure plan · revision ${review.revision}`, state: review.state, digest: review.content_digest, review_summary: review.review_summary, content: review.content };
+  const blob = new Blob([JSON.stringify(summary, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `agentconstruct-review-${review.revision}.json`; anchor.click(); URL.revokeObjectURL(url); track("review_export", { id: review.id }); show("Review summary exported locally.");
 }
 
 function renderCloudReadinessPreflights(preflights) {
@@ -503,6 +558,7 @@ async function openCustomerReview(revisionId) {
 }
 
 async function refreshAudit() {
+  setRegionLoading(document.querySelector("#audit-events"), true);
   const events = await api("/api/v1/audit-evidence");
   auditSnapshot = events;
   renderAuditEvents(events);
@@ -510,19 +566,22 @@ async function refreshAudit() {
 
 function openActivityDrawer(event) {
   if (!event) return;
+  lastFocusedElement = document.activeElement;
   document.querySelector("#activity-drawer-title").textContent = event.label || "Activity event";
   document.querySelector("#activity-drawer-meta").textContent = `${formatDate(event.at)} · ${event.actor_subject || "system"} · ${event.actor_role || "system"}`;
   document.querySelector("#activity-drawer-json").textContent = JSON.stringify(event, null, 2);
   document.querySelector("#activity-drawer").classList.remove("hidden");
+  document.querySelector("#close-activity-drawer")?.focus();
 }
 
-function closeActivityDrawer() { document.querySelector("#activity-drawer")?.classList.add("hidden"); }
+function closeActivityDrawer() { document.querySelector("#activity-drawer")?.classList.add("hidden"); lastFocusedElement?.focus?.(); lastFocusedElement = null; }
 
 function renderAuditEvents(events) {
   const node = document.querySelector("#audit-events");
   if (!node) return;
   const query = (document.querySelector("#audit-search")?.value || "").toLowerCase().trim();
   const filter = document.querySelector("#audit-filter")?.value || "ALL";
+  const grouping = document.querySelector("#audit-group")?.value || "date";
   const filtered = events.filter((event) => {
     const haystack = `${event.label} ${event.actor_subject} ${event.entity_type} ${event.decision_reason || ""}`.toLowerCase();
     return (filter === "ALL" || event.label.toLowerCase().includes(filter)) && (!query || haystack.includes(query));
@@ -531,10 +590,13 @@ function renderAuditEvents(events) {
   const pageCount = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
   auditPage = Math.min(auditPage, pageCount);
   const pageItems = ordered.slice((auditPage - 1) * PAGE_SIZE, auditPage * PAGE_SIZE);
-  node.innerHTML = pageItems.length ? pageItems.map((event, index) => `<button class="event" type="button" data-event-index="${index}"><time>${escapeHtml(formatDate(event.at))}</time><div><strong>${escapeHtml(event.label)}</strong><br><span>${escapeHtml(event.actor_subject)} · ${escapeHtml(event.actor_role)} · ${escapeHtml(event.entity_type)}${event.revision ? ` · revision ${escapeHtml(event.revision)}` : ""}${event.plan_digest ? ` · ${escapeHtml(event.plan_digest.slice(0, 12))}…` : ""}${event.decision_reason ? ` · reason: ${escapeHtml(event.decision_reason)}` : ""}</span></div><span class="history-arrow">›</span></button>`).join("") : `<div class="empty-state"><strong>No matching activity</strong><span>Try a different search or event filter.</span></div>`;
+  const groups = pageItems.reduce((map, event, index) => { const key = grouping === "family" ? eventFamily(event.label) : new Date(event.at).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" }); (map[key] ||= []).push({ event, index }); return map; }, {});
+  node.innerHTML = pageItems.length ? Object.entries(groups).map(([group, items]) => `<section class="event-group"><div class="event-group-heading"><span>${escapeHtml(group)}</span><small>${items.length} event${items.length === 1 ? "" : "s"}</small></div>${items.map(({ event, index }) => `<button class="event" type="button" data-event-index="${index}"><time>${escapeHtml(formatDate(event.at))}</time><div><strong>${escapeHtml(event.label)}</strong><br><span>${escapeHtml(event.actor_subject)} · ${escapeHtml(event.actor_role)} · ${escapeHtml(event.entity_type)}${event.revision ? ` · revision ${escapeHtml(event.revision)}` : ""}${event.plan_digest ? ` · ${escapeHtml(event.plan_digest.slice(0, 12))}…` : ""}${event.decision_reason ? ` · reason: ${escapeHtml(event.decision_reason)}` : ""}</span></div><span class="history-arrow">›</span></button>`).join("")}</section>`).join("") : `<div class="empty-state"><strong>No matching activity</strong><span>Try a different search or event filter.</span></div>`;
   node.querySelectorAll("[data-event-index]").forEach((button) => button.addEventListener("click", () => openActivityDrawer(pageItems[Number(button.dataset.eventIndex)])));
   renderPagination("audit-pagination", auditPage, ordered.length, (nextPage) => { auditPage = nextPage; renderAuditEvents(events); });
 }
+
+function eventFamily(label) { const value = String(label || "activity").toLowerCase(); if (value.includes("approval") || value.includes("reject")) return "Decisions"; if (value.includes("plan") || value.includes("intent")) return "Planning"; if (value.includes("cloud") || value.includes("environment") || value.includes("terraform")) return "Execution & readiness"; if (value.includes("repository") || value.includes("github")) return "Repository"; return "Workspace"; }
 
 function renderEnvironments(environments) {
   productionEnvironment = environments.find((environment) => environment.type === "production" && environment.state === "READY") || null;
@@ -623,8 +685,12 @@ document.querySelector("#history-new-plan").addEventListener("click", () => { wi
 document.querySelector("#history-search").addEventListener("input", () => renderHistory(dashboardSnapshot?.plans || []));
 document.querySelector("#history-filter").addEventListener("change", () => { historyPage = 1; renderHistory(dashboardSnapshot?.plans || []); });
 document.querySelector("#history-density").addEventListener("change", (event) => document.querySelector("#history-list")?.classList.toggle("compact-density", event.target.value === "compact"));
+document.querySelector("#compare-revisions")?.addEventListener("click", compareRevisions);
 document.querySelector("#audit-search").addEventListener("input", () => renderAuditEvents(auditSnapshot));
 document.querySelector("#audit-filter").addEventListener("change", () => { auditPage = 1; renderAuditEvents(auditSnapshot); });
+document.querySelector("#audit-group").addEventListener("change", () => renderAuditEvents(auditSnapshot));
+document.querySelector("#refresh-dashboard")?.addEventListener("click", () => refreshDashboard().then(() => { show("Workspace refreshed."); track("dashboard_refresh"); }).catch((error) => show(error.message, true)));
+document.querySelector("#load-sample-plan")?.addEventListener("click", () => { document.querySelector("#prompt").value = "Deploy a private support assistant API with staging and production, predictable cost controls, monitoring, and Slack alerts."; window.location.hash = "#describe"; track("sample_plan_loaded"); });
 document.querySelector("#close-activity-drawer")?.addEventListener("click", closeActivityDrawer);
 document.querySelector("#activity-drawer")?.addEventListener("click", (event) => { if (event.target.id === "activity-drawer") closeActivityDrawer(); });
 
@@ -951,8 +1017,9 @@ mobileNav?.querySelectorAll("a").forEach((link) => link.addEventListener("click"
 function syncActiveNavigation() {
   const current = window.location.hash || "#dashboard";
   const screen = current.slice(1) || "dashboard";
-  const validScreens = ["dashboard", "describe", "result", "customer-review", "history", "audit"];
+  const validScreens = ["dashboard", "describe", "result", "customer-review", "history", "audit", "help"];
   const target = validScreens.includes(screen) ? screen : "dashboard";
+  track("route_view", { target });
   document.querySelectorAll("[data-screen]").forEach((node) => {
     const active = node.dataset.screen === target && !node.classList.contains("hidden");
     node.classList.toggle("screen-active", active);
@@ -973,6 +1040,7 @@ function runCommand(command) {
   if (command === "new-plan") window.location.hash = "#describe";
   if (command === "dashboard") window.location.hash = "#dashboard";
   if (command === "audit") window.location.hash = "#audit";
+  if (command === "help") window.location.hash = "#help";
 }
 document.querySelector("#open-command-palette")?.addEventListener("click", openCommandPalette);
 document.querySelector(".workspace-switcher")?.addEventListener("click", openCommandPalette);
