@@ -49,10 +49,14 @@
       <section id="dashboard" class="panel screen" data-screen="dashboard">
         <div class="panel-heading"><div><p class="eyebrow">WORKSPACE OVERVIEW</p><h2 id="dashboard-heading">Your workspace</h2><p class="section-intro">A calm view of plans, connections, and decisions that need your attention.</p></div><span id="identity" class="identity">Not signed in</span></div>
         <div class="dashboard-grid">
-          <div class="metric-card"><span class="metric-icon">⌘</span><strong>Projects</strong><p id="dashboard-projects" class="message">Loading…</p><small>Active workspaces</small></div>
-          <div class="metric-card"><span class="metric-icon">↗</span><strong>AWS connections</strong><p id="dashboard-connections" class="message">Loading…</p><small>Read-only discovery</small></div>
-          <div class="metric-card"><span class="metric-icon">◇</span><strong>Your plan revisions</strong><p id="dashboard-plans" class="message">Loading…</p><small>Immutable decisions</small></div>
+          <div class="metric-card"><span class="metric-icon">⌘</span><strong>Projects</strong><p id="dashboard-projects" class="metric-value">—</p><small>Projects in this workspace</small></div>
+          <div class="metric-card"><span class="metric-icon">↗</span><strong>AWS connections</strong><p id="dashboard-connections" class="metric-value">—</p><small>Read-only account links</small></div>
+          <div class="metric-card"><span class="metric-icon">◇</span><strong>Plan revisions</strong><p id="dashboard-plans" class="metric-value">—</p><small>Immutable review records</small></div>
           <div id="admin-dashboard" class="hidden"><strong>Administrator review queue</strong><select id="admin-plan-filter" aria-label="Admin plan filter"><option value="SUBMITTED">Pending</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option><option value="SELF_APPROVED">Self-approved</option></select><p id="dashboard-pending" class="message">Loading…</p><div id="admin-pending-list"></div></div>
+        </div>
+        <div class="dashboard-lower-grid">
+          <article class="dashboard-list-card"><div class="list-heading"><div><span class="eyebrow">RECENT PROJECTS</span><h3>Work you started</h3></div><a href="#history">View history</a></div><div id="dashboard-recent-projects" class="compact-list"><span class="loading-state">Loading…</span></div></article>
+          <article class="dashboard-list-card"><div class="list-heading"><div><span class="eyebrow">RECENT ACTIVITY</span><h3>Latest decisions</h3></div><a href="#audit">View activity</a></div><div id="dashboard-recent-activity" class="compact-list"><span class="loading-state">Loading…</span></div></article>
         </div>
         <div class="onboarding-card">
           <div><span class="eyebrow">GETTING STARTED</span><h3>Build your first governed plan</h3><p>Three small steps take you from a repository to a reviewable architecture.</p></div>
@@ -191,12 +195,12 @@
       <section id="history" class="panel screen" data-screen="history">
         <div class="panel-heading"><div><p class="eyebrow">PLAN HISTORY</p><h2>Your plans</h2><p class="section-intro">Find every draft, submission, decision, and revision without scanning the activity feed.</p></div><button id="history-new-plan" type="button">Create new plan</button></div>
         <div class="history-toolbar"><label for="history-search">Search plans<input id="history-search" type="search" placeholder="Search by title or state…" /></label><label for="history-filter">Status<select id="history-filter"><option value="ALL">All statuses</option><option value="DRAFT">Draft</option><option value="SUBMITTED">Submitted</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></select></label></div>
-        <div id="history-list" class="history-list" aria-live="polite"><div class="empty-state">No plans yet. Create a plan to start your workspace history.</div></div>
+        <div id="history-list" class="history-list" aria-live="polite"><div class="empty-state">No plans yet. Create a plan to start your workspace history.</div></div><div id="history-pagination" class="pagination" aria-label="Plan history pagination"></div>
       </section>
       <section id="audit" class="panel screen" data-screen="audit">
         <div class="panel-heading"><div><p class="eyebrow">ACTIVITY</p><h2>What happened</h2><p class="section-intro">A chronological record of planning, connection, approval, and execution events.</p></div><button id="refresh-audit" class="secondary">Refresh</button></div>
         <div class="history-toolbar"><label for="audit-search">Search activity<input id="audit-search" type="search" placeholder="Search events, actors, or entities…" /></label><label for="audit-filter">Event type<select id="audit-filter"><option value="ALL">All events</option><option value="plan">Plans</option><option value="approval">Approvals</option><option value="cloud">Cloud</option><option value="repository">Repository</option></select></label></div>
-        <div id="audit-events" aria-live="polite">No events loaded.</div>
+        <div id="audit-events" aria-live="polite">No events loaded.</div><div id="audit-pagination" class="pagination" aria-label="Activity pagination"></div>
       </section>
       <section class="boundary">
         <strong>Evidence boundary.</strong> This local demo uses signed fixture identities, PostgreSQL, live OPA policy, and a bounded fixture executor. It does not create AWS resources, grant cloud credentials, or claim a production deployment.
