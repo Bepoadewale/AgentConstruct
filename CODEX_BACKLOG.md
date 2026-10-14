@@ -58,6 +58,9 @@
 - [x] Plan-only App Runner Terraform renderer for approved customer-plan revisions, including digest-bound module inputs, UI preview, offline validation and fail-closed tests. No apply path exists.
 - [x] Local cloud-readiness guardrails and operator UX: expected account, allowed regions, required tags, budget ceiling, reviewed PR state, runtime identity, dry-run-only mode and blocked/ready preflight evidence. No cloud action exists.
 - [x] Terraform plan-only review gate for approved App Runner revisions: admin-only, exact digest, rendered contract, ready preflight, account/region checks, authenticated-mode `ALLOW_CLOUD_PLAN=true` gate and no apply path.
+- [x] First-class deployment outputs and observed resource inventory for local dry-run environments, including customer-visible URLs/ARNs/log/dashboard references and destroyed-state history.
+- [ ] Ingest real App Runner Terraform outputs and AWS resource observations through the product UI/API execution path.
+- [ ] Add customer workload execution history with attempts, Terraform status, outputs, created resources, destroy proof, failure reason and evidence export.
 - [ ] Scoped GitHub desired-state publication through reviewed pull requests.
 - [ ] Real GitOps/Argo observer and customer-cloud workload agent.
 - [ ] Enterprise OIDC/JWKS adapter and organisation lifecycle.

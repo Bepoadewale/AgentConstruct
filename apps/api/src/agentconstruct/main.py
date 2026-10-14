@@ -8,7 +8,6 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_client import Counter, generate_latest
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from agentconstruct.db import SessionLocal, run_migrations, session
@@ -30,7 +29,6 @@ from agentconstruct.domain import (
     TerraformPlanRenderRequest,
     TerraformPlanReviewRequest,
 )
-from agentconstruct.models import Environment
 from agentconstruct.security import Principal, issue_local_token, verify_token
 from agentconstruct.service import ProductService
 from agentconstruct.telemetry import configure_tracing
@@ -665,20 +663,23 @@ def execute_customer_plan_dry_run(
         translate(error)
     for environment in environments:
         EXECUTION_RESULTS.labels(environment.state).inc()
+    payloads = [service.environment_payload(principal, environment.id) for environment in environments]
     return {
         "execution": "LOCAL_DRY_RUN",
         "boundary": "Queued only against the bounded local fixture executor. No AWS resources are created.",
         "environments": [
             {
-                "id": item.id,
-                "name": item.name,
-                "type": item.environment_type,
-                "state": item.state,
-                "execution_mode": item.desired_state.get("execution_mode"),
-                "cost_estimate": item.desired_state.get("cost_estimate"),
-                "observed_state": item.observed_state,
+                "id": item["id"],
+                "name": item["name"],
+                "type": item["type"],
+                "state": item["state"],
+                "execution_mode": item["execution_mode"],
+                "cost_estimate": item["cost_estimate"],
+                "observed_state": item["observed_state"],
+                "outputs": item["outputs"],
+                "resources": item["resources"],
             }
-            for item in environments
+            for item in payloads
         ],
     }
 
@@ -802,24 +803,12 @@ def execute_plan(
 
 
 @app.get("/api/v1/environments")
-def list_environments(principal: Principal = Depends(verify_token), db: Session = Depends(session)):
+def list_environments(
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
     REQUESTS.labels("environments.list").inc()
-    items = db.scalars(
-        select(Environment).where(Environment.organization_id == principal.organization_id)
-    ).all()
-    return [
-        {
-            "id": item.id,
-            "name": item.name,
-            "type": item.environment_type,
-            "state": item.state,
-            "execution_mode": item.desired_state.get("execution_mode"),
-            "customer_plan_revision_id": item.desired_state.get("customer_plan_revision_id"),
-            "cost_estimate": item.desired_state.get("cost_estimate"),
-            "observed_state": item.observed_state,
-        }
-        for item in items
-    ]
+    return service.environment_payloads(principal)
 
 
 @app.get("/api/v1/environments/{environment_id}")
@@ -830,17 +819,9 @@ def get_environment(
 ):
     REQUESTS.labels("environments.get").inc()
     try:
-        item = service.get_environment(principal, environment_id)
+        return service.environment_payload(principal, environment_id)
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
-    return {
-        "id": item.id,
-        "name": item.name,
-        "type": item.environment_type,
-        "state": item.state,
-        "desired_state": item.desired_state,
-        "observed_state": item.observed_state,
-    }
 
 
 @app.get("/api/v1/environments/{environment_id}/recommendation")

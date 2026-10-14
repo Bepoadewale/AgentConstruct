@@ -142,6 +142,15 @@ def test_approved_customer_review_executes_bounded_local_dry_run_and_observes_re
     states = {environment["state"] for environment in refreshed["local_executions"]}
     assert states == {LifecycleState.READY}
     assert all(environment["cost_estimate"] for environment in refreshed["local_executions"])
+    assert all(environment["outputs"] for environment in refreshed["local_executions"])
+    assert all(environment["resources"] for environment in refreshed["local_executions"])
+    production = next(
+        environment
+        for environment in refreshed["local_executions"]
+        if environment["type"] == "production"
+    )
+    assert any(output["name"] == "application_url" for output in production["outputs"])
+    assert any(resource["type"] == "apprunner_service" for resource in production["resources"])
     assert any(
         event.action == "customer_plan.local_dry_run_queued"
         for event in service.audits(founder())
@@ -208,6 +217,14 @@ def test_customer_review_local_destroy_is_tied_to_revision_and_observed():
         if environment["id"] == production.id
     )
     assert production_execution["state"] == LifecycleState.DESTROYED
+    assert any(
+        output["name"] == "application_url" and output["status"] == "DESTROYED"
+        for output in production_execution["outputs"]
+    )
+    assert any(
+        resource["type"] == "apprunner_service" and resource["status"] == "DESTROYED"
+        for resource in production_execution["resources"]
+    )
     assert any(event.action == "customer_plan.local_destroy_requested" for event in service.audits(founder()))
 
 

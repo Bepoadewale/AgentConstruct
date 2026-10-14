@@ -27,6 +27,11 @@ def healthz():
 @app.post("/deployments")
 def deploy(request: DeployRequest):
     state = "FAILED" if request.should_fail else "DEGRADED" if request.should_degrade else "READY"
+    app_url = f"https://{request.environment_id}.local.agentconstruct.example"
+    service_arn = (
+        "arn:aws:apprunner:us-east-1:000000000000:"
+        f"service/local-{request.profile}/{request.environment_id}"
+    )
     deployments[request.environment_id] = {
         "environment_id": request.environment_id,
         "profile": request.profile,
@@ -34,6 +39,91 @@ def deploy(request: DeployRequest):
         "fixture": "bounded-local-executor",
         "health_checked": not request.should_fail,
         "degradation_detected": request.should_degrade,
+        "outputs": [
+            {
+                "name": "application_url",
+                "type": "https_url",
+                "value": app_url,
+                "visibility": "customer",
+                "sensitive": False,
+                "source": "fixture-observer",
+                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+            },
+            {
+                "name": "app_runner_service_arn",
+                "type": "aws_arn",
+                "value": service_arn,
+                "visibility": "customer",
+                "sensitive": False,
+                "source": "fixture-observer",
+                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+            },
+            {
+                "name": "log_group",
+                "type": "log_group",
+                "value": f"/aws/apprunner/local-{request.profile}/{request.environment_id}",
+                "visibility": "customer",
+                "sensitive": False,
+                "source": "fixture-observer",
+                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+            },
+            {
+                "name": "grafana_dashboard",
+                "type": "dashboard_url",
+                "value": "http://localhost:3000/d/agentconstruct-local",
+                "visibility": "customer",
+                "sensitive": False,
+                "source": "fixture-observer",
+                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+            },
+            {
+                "name": "database_endpoint",
+                "type": "secret_reference",
+                "value": "not-created-for-this-local-dry-run",
+                "visibility": "customer",
+                "sensitive": False,
+                "source": "fixture-observer",
+                "status": "NOT_APPLICABLE",
+            },
+        ],
+        "resources": [
+            {
+                "provider": "aws",
+                "resource_type": "apprunner_service",
+                "name": f"local-{request.profile}",
+                "external_id": service_arn,
+                "region": "us-east-1",
+                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+                "tags": {
+                    "agentconstruct:environment-id": request.environment_id,
+                    "agentconstruct:execution-mode": "LOCAL_DRY_RUN",
+                },
+            },
+            {
+                "provider": "aws",
+                "resource_type": "logs_log_group",
+                "name": f"/aws/apprunner/local-{request.profile}/{request.environment_id}",
+                "external_id": None,
+                "region": "us-east-1",
+                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+                "tags": {
+                    "agentconstruct:environment-id": request.environment_id,
+                    "agentconstruct:execution-mode": "LOCAL_DRY_RUN",
+                },
+            },
+            {
+                "provider": "agentconstruct",
+                "resource_type": "grafana_dashboard",
+                "name": "agentconstruct-local",
+                "external_id": "http://localhost:3000/d/agentconstruct-local",
+                "region": None,
+                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+                "tags": {
+                    "agentconstruct:environment-id": request.environment_id,
+                    "agentconstruct:execution-mode": "LOCAL_DRY_RUN",
+                },
+            },
+        ],
     }
     return deployments[request.environment_id]
 
@@ -42,12 +132,18 @@ def deploy(request: DeployRequest):
 def destroy(environment_id: str):
     if environment_id not in deployments:
         raise HTTPException(404, "fixture deployment missing")
-    deployments.pop(environment_id)
+    previous = deployments.pop(environment_id)
     return {
         "environment_id": environment_id,
         "state": "DESTROYED",
         "fixture": "bounded-local-executor",
         "cleanup_verified": True,
+        "outputs": [
+            {**output, "status": "DESTROYED"} for output in previous.get("outputs", [])
+        ],
+        "resources": [
+            {**resource, "status": "DESTROYED"} for resource in previous.get("resources", [])
+        ],
     }
 
 

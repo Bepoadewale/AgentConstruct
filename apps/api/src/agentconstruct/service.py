@@ -45,6 +45,7 @@ from agentconstruct.models import (
     DeploymentPlan,
     DesiredStatePublication,
     Environment,
+    EnvironmentOutput,
     ExecutionJob,
     GitHubAppInstallationState,
     GitHubWebhookDelivery,
@@ -52,6 +53,7 @@ from agentconstruct.models import (
     InfrastructurePlan,
     InfrastructurePlanDecisionRecord,
     InfrastructurePlanRevision,
+    ObservedResource,
     Organization,
     ProductUser,
     Project,
@@ -882,8 +884,143 @@ class ProductService:
                 "plan_hash": environment.desired_state.get("plan_hash"),
                 "cost_estimate": environment.desired_state.get("cost_estimate"),
                 "observed_state": environment.observed_state,
+                "outputs": self._environment_outputs(environment.id),
+                "resources": self._observed_resources(environment.id),
             }
             for environment in self._customer_plan_environments(principal, revision_id)
+        ]
+
+    def _record_environment_observation_assets(
+        self, environment: Environment, observation: dict[str, Any]
+    ) -> None:
+        forced_status = "DESTROYED" if observation.get("state") == "DESTROYED" else None
+        for item in observation.get("outputs", []):
+            name = str(item.get("name") or "").strip()
+            if not name:
+                continue
+            output = self.db.scalar(
+                select(EnvironmentOutput).where(
+                    EnvironmentOutput.environment_id == environment.id,
+                    EnvironmentOutput.name == name,
+                )
+            )
+            if not output:
+                output = EnvironmentOutput(
+                    organization_id=environment.organization_id,
+                    environment_id=environment.id,
+                    name=name,
+                    output_type=str(item.get("type") or "value"),
+                    value=str(item.get("value") or ""),
+                )
+                self.db.add(output)
+            output.output_type = str(item.get("type") or output.output_type)
+            output.value = str(item.get("value") or output.value)
+            output.visibility = str(item.get("visibility") or "customer")
+            output.sensitive = str(bool(item.get("sensitive", False))).lower()
+            output.source = str(item.get("source") or "fixture-observer")
+            output.status = forced_status or str(item.get("status") or output.status)
+            output.detail = {
+                key: value
+                for key, value in item.items()
+                if key
+                not in {
+                    "name",
+                    "type",
+                    "value",
+                    "visibility",
+                    "sensitive",
+                    "source",
+                    "status",
+                }
+            }
+
+        for item in observation.get("resources", []):
+            provider = str(item.get("provider") or "unknown")
+            resource_type = str(item.get("resource_type") or item.get("type") or "unknown")
+            name = str(item.get("name") or "").strip()
+            if not name:
+                continue
+            resource = self.db.scalar(
+                select(ObservedResource).where(
+                    ObservedResource.environment_id == environment.id,
+                    ObservedResource.provider == provider,
+                    ObservedResource.resource_type == resource_type,
+                    ObservedResource.name == name,
+                )
+            )
+            if not resource:
+                resource = ObservedResource(
+                    organization_id=environment.organization_id,
+                    environment_id=environment.id,
+                    provider=provider,
+                    resource_type=resource_type,
+                    name=name,
+                )
+                self.db.add(resource)
+            resource.external_id = item.get("external_id")
+            resource.region = item.get("region")
+            resource.status = forced_status or str(item.get("status") or resource.status)
+            resource.tags = dict(item.get("tags") or {})
+            resource.detail = {
+                key: value
+                for key, value in item.items()
+                if key
+                not in {
+                    "provider",
+                    "resource_type",
+                    "type",
+                    "name",
+                    "external_id",
+                    "region",
+                    "status",
+                    "tags",
+                }
+            }
+
+    def _environment_outputs(self, environment_id: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": output.id,
+                "name": output.name,
+                "type": output.output_type,
+                "value": "***" if output.sensitive == "true" else output.value,
+                "visibility": output.visibility,
+                "sensitive": output.sensitive == "true",
+                "source": output.source,
+                "status": output.status,
+                "detail": output.detail,
+                "updated_at": output.updated_at.isoformat() if output.updated_at else None,
+            }
+            for output in self.db.scalars(
+                select(EnvironmentOutput)
+                .where(EnvironmentOutput.environment_id == environment_id)
+                .order_by(EnvironmentOutput.name)
+            )
+        ]
+
+    def _observed_resources(self, environment_id: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": resource.id,
+                "provider": resource.provider,
+                "type": resource.resource_type,
+                "name": resource.name,
+                "external_id": resource.external_id,
+                "region": resource.region,
+                "status": resource.status,
+                "tags": resource.tags,
+                "detail": resource.detail,
+                "updated_at": resource.updated_at.isoformat() if resource.updated_at else None,
+            }
+            for resource in self.db.scalars(
+                select(ObservedResource)
+                .where(ObservedResource.environment_id == environment_id)
+                .order_by(
+                    ObservedResource.provider,
+                    ObservedResource.resource_type,
+                    ObservedResource.name,
+                )
+            )
         ]
 
     def decide_infrastructure_plan(
@@ -2997,6 +3134,7 @@ class ProductService:
                         observation.detail,
                     )
             environment.observed_state = observation.detail
+            self._record_environment_observation_assets(environment, observation.detail)
             job.state = (
                 "SUCCEEDED" if observation.state in {"READY", "DEGRADED", "DESTROYED"} else "FAILED"
             )
@@ -3304,6 +3442,37 @@ class ProductService:
 
     def get_environment(self, principal: Principal, environment_id: str) -> Environment:
         return self._environment(principal, environment_id)
+
+    def environment_payload(self, principal: Principal, environment_id: str) -> dict[str, Any]:
+        environment = self._environment(principal, environment_id)
+        return self._environment_payload(environment)
+
+    def environment_payloads(self, principal: Principal) -> list[dict[str, Any]]:
+        return [
+            self._environment_payload(environment)
+            for environment in self.db.scalars(
+                select(Environment)
+                .where(Environment.organization_id == principal.organization_id)
+                .order_by(Environment.created_at)
+            )
+        ]
+
+    def _environment_payload(self, environment: Environment) -> dict[str, Any]:
+        return {
+            "id": environment.id,
+            "name": environment.name,
+            "type": environment.environment_type,
+            "state": environment.state,
+            "execution_mode": environment.desired_state.get("execution_mode"),
+            "customer_plan_revision_id": environment.desired_state.get(
+                "customer_plan_revision_id"
+            ),
+            "cost_estimate": environment.desired_state.get("cost_estimate"),
+            "desired_state": environment.desired_state,
+            "observed_state": environment.observed_state,
+            "outputs": self._environment_outputs(environment.id),
+            "resources": self._observed_resources(environment.id),
+        }
 
     def audits(self, principal: Principal, environment_id: str | None = None) -> list[AuditEvent]:
         statement = select(AuditEvent).where(

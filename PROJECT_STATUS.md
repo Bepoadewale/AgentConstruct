@@ -2,7 +2,7 @@
 
 ## Current state
 
-**AgentConstruct V1 foundation — implemented locally; hosted customer-AWS discovery runtime executed; customer workload deployment not executed.**
+**AgentConstruct V1 foundation — implemented locally; hosted customer-AWS discovery runtime executed; real customer-workload App Runner create → validate → destroy pilot executed twice and torn down.**
 
 The GitHub repository has been renamed from `ai-platform-product-strategy` to `AgentConstruct`. It is a private commercial product repository.
 
@@ -23,6 +23,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - A bounded Day-2 loop: deterministic latency evidence, a transparent replica recommendation, immutable `CHANGE` plan, independent production approval, durable worker, observed result and audit. It is local fixture evidence, not autonomous remediation or cloud monitoring.
 - One selected AWS customer-plan review with durable submit, administrator approval/rejection, editable draft/rejected constraint revisions, filtered administrator review queues, rich review evidence and explicit self-approval audit paths. Approval remains separate from execution.
 - Approved customer-plan revisions can be explicitly executed as bounded local dry runs. The trusted worker independently observes READY, FAILED or DEGRADED evidence, ties each local environment back to the approved revision/digest, and supports a governed local destroy request/approval/observed-destroy path. This is local fixture execution only and does not create or delete AWS resources.
+- Local dry-run environments now persist customer-facing deployment outputs and observed resource inventory as first-class records. The review/API/UI show outputs such as application URL, App Runner service ARN, log group and Grafana dashboard reference plus observed resources and statuses. Destroy keeps the historical records and marks them `DESTROYED`.
 - Approved customer-plan revisions can also create a persisted fixture desired-state PR publication. The package binds the exact approved digest, selected repository/branch, selected architecture profile and profile-specific delivery contract. A workspace administrator can record local fixture check state such as `CHECKS_PASSED`, but AgentConstruct still does not write GitHub, publish real checks, merge code or deploy infrastructure.
 - Approved `aws-app-runner` customer-plan revisions can render a plan-only Terraform deployment contract. The UI/API preview includes service, source/ECR boundary, IAM, environment variables, secret references, HTTPS assumptions, Prometheus/Grafana monitoring, required tags, account, region and exact plan digest. It is offline validation only: no authenticated Terraform plan, apply, destroy, AWS API call or workload deployment occurs.
 - Approved customer-plan revisions can run a workspace-administrator-only local cloud-readiness preflight. It checks exact digest, policy, Terraform contract, no apply command, expected account, allowed region, tags, budget, reviewed PR state, runtime identity and dry-run/plan-only mode, then records a blocked or ready-for-future-plan result. This is guardrail evidence only; it does not execute cloud actions.
@@ -33,7 +34,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 
 ## Boundaries
 
-- This does **not** deploy a customer workload into AWS or a customer account. Customer-AWS discovery is live and read-only; it is not deployment permission. Customer-plan dry runs execute only against the local fixture worker. The hosted App Runner runtime currently uses fixture sign-in, fixture policy and ephemeral SQLite, so it is validation/demo infrastructure rather than production SaaS persistence. Cost Explorer values are delayed billing data, not settled cost evidence.
+- Routine product operation still does **not** deploy a customer workload into AWS or a customer account. Customer-AWS discovery is live and read-only; it is not deployment permission. Customer-plan dry runs execute only against the local fixture worker. PR #42 separately executed and destroyed a guarded App Runner customer workload pilot twice using scripts/Terraform evidence. The hosted App Runner runtime currently uses fixture sign-in, fixture policy and ephemeral SQLite, so it is validation/demo infrastructure rather than production SaaS persistence. Cost Explorer values are delayed billing data, not settled cost evidence.
 - Terraform plan-only review records are governance evidence unless a future operator deliberately enables and runs authenticated plan mode. They are not apply, destroy or workload-readiness evidence.
 - The local identity issuer, intent provider and execution target are fixtures. The JWKS adapter is implemented but not connected to an enterprise issuer.
 - GitHub OAuth/install initiation, real public webhook delivery, live reviewed desired-state PR writes/checks, GitHub-hosted OIDC assumption, profile-specific deployment permission, GitOps/Argo execution, enterprise IdP, external agent-client installation and billing are next work, not evidence.
@@ -47,8 +48,8 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 ## Next delivery sequence
 
 1. Replace hosted fixture sign-in/policy/ephemeral SQLite with production identity, OPA and durable PostgreSQL for the AWS-hosted control plane.
-2. Add an authenticated Terraform plan-only operator workflow for App Runner. It must stop before apply.
-3. Run a separately authorised customer-workload cloud pilot: plan, create, smoke, failure proof, observability, cost query, destroy and absence verification.
+2. Add real App Runner execution from the approved-plan UI/API using the output/resource inventory model.
+3. Add customer workload execution history with attempts, Terraform status, outputs, created resources, destroy proof and evidence export.
 
 ## Clean-room reproducibility
 

@@ -373,6 +373,60 @@ class Environment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class EnvironmentOutput(Base):
+    """Customer-visible outputs from an observed environment.
+
+    Values are safe display values or secret references. Raw secrets are never
+    stored here.
+    """
+
+    __tablename__ = "environment_outputs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    environment_id: Mapped[str] = mapped_column(ForeignKey("environments.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    output_type: Mapped[str] = mapped_column(String(80))
+    value: Mapped[str] = mapped_column(Text)
+    visibility: Mapped[str] = mapped_column(String(40), default="customer")
+    sensitive: Mapped[str] = mapped_column(String(8), default="false")
+    source: Mapped[str] = mapped_column(String(120), default="fixture-observer")
+    status: Mapped[str] = mapped_column(String(40), default="ACTIVE")
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    __table_args__ = (
+        UniqueConstraint("environment_id", "name", name="uq_environment_output_name"),
+    )
+
+
+class ObservedResource(Base):
+    """Observed cloud/local resources tied to an environment lifecycle."""
+
+    __tablename__ = "observed_resources"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    environment_id: Mapped[str] = mapped_column(ForeignKey("environments.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(40))
+    resource_type: Mapped[str] = mapped_column(String(120))
+    name: Mapped[str] = mapped_column(String(180))
+    external_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    region: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="ACTIVE")
+    tags: Mapped[dict] = mapped_column(JSON, default=dict)
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    __table_args__ = (
+        UniqueConstraint(
+            "environment_id", "provider", "resource_type", "name", name="uq_observed_resource"
+        ),
+    )
+
+
 class Incident(Base):
     __tablename__ = "incidents"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
