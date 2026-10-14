@@ -7,12 +7,13 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     <header>
-      <a class="brand" href="/">AgentConstruct</a>
-      <span class="badge">LOCAL PRODUCT DEMO</span>
-      <nav><a href="#dashboard">Dashboard</a><a href="#describe">Describe</a><a href="#result">Plan</a><a href="#audit">Audit</a><button id="logout" class="secondary hidden" type="button">Sign out</button></nav>
+      <a class="brand" href="/" aria-label="AgentConstruct home"><span class="brand-mark">A</span><span>AgentConstruct</span></a>
+      <span class="badge"><span class="status-dot"></span> LOCAL PRODUCT DEMO</span>
+      <nav aria-label="Primary navigation"><a href="#dashboard">Overview</a><a href="#describe">New plan</a><a href="#result">Plan</a><a href="#audit">Activity</a><button id="logout" class="secondary hidden" type="button">Sign out</button></nav>
     </header>
-    <main>
+    <main id="main-content">
       <section id="login" class="panel login-panel">
         <p class="eyebrow">LOCAL IDENTITY FIXTURE</p>
         <h1>Sign in to the local product demo.</h1>
@@ -22,21 +23,22 @@
       </section>
       <div id="product-app" class="hidden">
       <section class="hero">
-        <p class="eyebrow">FROM AI CODE TO GOVERNED PRODUCTION INFRASTRUCTURE</p>
+        <div class="hero-kicker"><span class="pulse"></span> YOUR INFRASTRUCTURE CONTROL PLANE</div>
         <h1>Describe the AI system you want to deploy.</h1>
         <p class="lede">AgentConstruct turns a clear outcome into a reviewed architecture, cost estimate, security controls, and a bounded local deployment plan.</p>
+        <div class="journey" aria-label="Planning journey"><span class="active"><b>01</b> Connect</span><i></i><span class="active"><b>02</b> Describe</span><i></i><span><b>03</b> Review</span><i></i><span><b>04</b> Govern</span><i></i><span><b>05</b> Observe</span></div>
       </section>
       <section id="dashboard" class="panel">
-        <div class="panel-heading"><div><p class="eyebrow">WORKSPACE DASHBOARD</p><h2 id="dashboard-heading">Your workspace</h2></div><span id="identity" class="identity">Not signed in</span></div>
+        <div class="panel-heading"><div><p class="eyebrow">WORKSPACE OVERVIEW</p><h2 id="dashboard-heading">Your workspace</h2><p class="section-intro">A calm view of plans, connections, and decisions that need your attention.</p></div><span id="identity" class="identity">Not signed in</span></div>
         <div class="dashboard-grid">
-          <div><strong>Projects</strong><p id="dashboard-projects" class="message">Loading…</p></div>
-          <div><strong>AWS connections</strong><p id="dashboard-connections" class="message">Loading…</p></div>
-          <div><strong>Your plan revisions</strong><p id="dashboard-plans" class="message">Loading…</p></div>
+          <div class="metric-card"><span class="metric-icon">⌘</span><strong>Projects</strong><p id="dashboard-projects" class="message">Loading…</p><small>Active workspaces</small></div>
+          <div class="metric-card"><span class="metric-icon">↗</span><strong>AWS connections</strong><p id="dashboard-connections" class="message">Loading…</p><small>Read-only discovery</small></div>
+          <div class="metric-card"><span class="metric-icon">◇</span><strong>Your plan revisions</strong><p id="dashboard-plans" class="message">Loading…</p><small>Immutable decisions</small></div>
           <div id="admin-dashboard" class="hidden"><strong>Administrator review queue</strong><select id="admin-plan-filter" aria-label="Admin plan filter"><option value="SUBMITTED">Pending</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option><option value="SELF_APPROVED">Self-approved</option></select><p id="dashboard-pending" class="message">Loading…</p><div id="admin-pending-list"></div></div>
         </div>
       </section>
       <section id="describe" class="panel">
-        <div class="panel-heading"><div><p class="eyebrow">1 · CUSTOMER INTENT</p><h2>What should AgentConstruct build?</h2></div><span class="identity">Plan locally first</span></div>
+        <div class="panel-heading"><div><p class="eyebrow">02 / CUSTOMER INTENT</p><h2>What should AgentConstruct build?</h2><p class="section-intro">Start with the outcome. We’ll translate it into infrastructure requirements you can review.</p></div><span class="mode-pill"><span class="status-dot"></span> Plan locally first</span></div>
         <label for="github-installation">GitHub connection</label>
         <div class="connection-row"><select id="github-installation" aria-label="GitHub installation"><option>Loading GitHub connection…</option></select><button id="refresh-github" type="button" class="secondary">Refresh GitHub</button></div>
         <p id="github-message" class="message">GitHub is not connected yet.</p>
