@@ -153,6 +153,33 @@ class CloudDiscoveryJob(Base):
     )
 
 
+class PlatformJob(Base):
+    """Transport-neutral job record used by the future queue adapter."""
+
+    __tablename__ = "platform_jobs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    workspace_id: Mapped[str] = mapped_column(String(160), index=True)
+    kind: Mapped[str] = mapped_column(String(40), index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(200))
+    state: Mapped[str] = mapped_column(String(32), default="QUEUED", index=True)
+    envelope: Mapped[dict] = mapped_column(JSON)
+    attempt: Mapped[int] = mapped_column(default=0)
+    max_attempts: Mapped[int] = mapped_column(default=3)
+    timeout_seconds: Mapped[int] = mapped_column(default=900)
+    trace_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "idempotency_key", name="uq_platform_job_org_idempotency"
+        ),
+    )
+
+
 class WorkloadIntent(Base):
     __tablename__ = "workload_intents"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
