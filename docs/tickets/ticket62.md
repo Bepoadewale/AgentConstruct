@@ -54,3 +54,7 @@ No `docs/test/test62.md`: no customer workload or AWS resource execution occurs 
 ## Boundaries
 
 No backend, authentication, GitHub write, AWS, Terraform, or deployment behavior changes.
+
+## Follow-up work
+
+Visual browser regression screenshots and hosted UI deployment remain separate work.
