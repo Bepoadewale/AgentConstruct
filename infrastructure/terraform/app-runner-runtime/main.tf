@@ -2,6 +2,10 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
 locals {
   name = "agentconstruct-runtime"
   tags = {
@@ -10,9 +14,9 @@ locals {
     Scope     = "control-plane-runtime"
     Purpose   = "live-customer-aws-connection-verification"
   }
-  secret_prefix = trim(var.connection_secret_prefix, "/")
-  runtime_env = {
-    AGENTCONSTRUCT_DATABASE_URL                 = "sqlite+pysqlite:////tmp/agentconstruct.db"
+  secret_prefix       = trim(var.connection_secret_prefix, "/")
+  database_secret_arn = var.enable_durable_database ? aws_db_instance.control_plane[0].master_user_secret[0].secret_arn : ""
+  runtime_env_common = {
     AGENTCONSTRUCT_WEB_ROOT                     = "/app/apps/web"
     AGENTCONSTRUCT_POLICY_FIXTURE               = "true"
     AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED   = "true"
@@ -24,6 +28,16 @@ locals {
     AWS_DEFAULT_REGION                          = var.region
     AWS_REGION                                  = var.region
   }
+  runtime_env_database = var.enable_durable_database ? {
+    AGENTCONSTRUCT_HOSTED_MODE         = "true"
+    AGENTCONSTRUCT_DATABASE_SECRET_ARN = local.database_secret_arn
+    AGENTCONSTRUCT_DATABASE_NAME       = var.database_name
+    } : {
+    AGENTCONSTRUCT_HOSTED_MODE  = "false"
+    AGENTCONSTRUCT_DATABASE_URL = "sqlite+pysqlite:////tmp/agentconstruct.db"
+  }
+  runtime_env = merge(local.runtime_env_common, local.runtime_env_database)
+  azs         = slice(data.aws_availability_zones.available.names, 0, 2)
 }
 
 resource "random_password" "runtime_signing_key" {
@@ -131,6 +145,16 @@ data "aws_iam_policy_document" "runtime_permissions" {
     actions   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
     resources = [aws_secretsmanager_secret.runtime_signing_key.arn]
   }
+
+  dynamic "statement" {
+    for_each = var.enable_durable_database ? [local.database_secret_arn] : []
+    content {
+      sid       = "ReadControlPlaneDatabaseSecret"
+      effect    = "Allow"
+      actions   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
+      resources = [statement.value]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "runtime_permissions" {
@@ -143,6 +167,152 @@ resource "aws_cloudwatch_log_group" "runtime" {
   name              = "/aws/apprunner/${local.name}"
   retention_in_days = 14
   tags              = local.tags
+}
+
+resource "aws_vpc" "runtime" {
+  count                = var.enable_durable_database ? 1 : 0
+  cidr_block           = var.runtime_vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  tags                 = merge(local.tags, { Name = "${local.name}-vpc" })
+}
+
+resource "aws_internet_gateway" "runtime" {
+  count  = var.enable_durable_database ? 1 : 0
+  vpc_id = aws_vpc.runtime[0].id
+  tags   = merge(local.tags, { Name = "${local.name}-igw" })
+}
+
+resource "aws_subnet" "public" {
+  count                   = var.enable_durable_database ? 2 : 0
+  vpc_id                  = aws_vpc.runtime[0].id
+  cidr_block              = cidrsubnet(var.runtime_vpc_cidr, 8, count.index)
+  availability_zone       = local.azs[count.index]
+  map_public_ip_on_launch = true
+  tags                    = merge(local.tags, { Name = "${local.name}-public-${count.index + 1}" })
+}
+
+resource "aws_subnet" "private" {
+  count             = var.enable_durable_database ? 2 : 0
+  vpc_id            = aws_vpc.runtime[0].id
+  cidr_block        = cidrsubnet(var.runtime_vpc_cidr, 8, count.index + 10)
+  availability_zone = local.azs[count.index]
+  tags              = merge(local.tags, { Name = "${local.name}-private-${count.index + 1}" })
+}
+
+resource "aws_eip" "nat" {
+  count  = var.enable_durable_database ? 1 : 0
+  domain = "vpc"
+  tags   = merge(local.tags, { Name = "${local.name}-nat" })
+}
+
+resource "aws_nat_gateway" "runtime" {
+  count         = var.enable_durable_database ? 1 : 0
+  allocation_id = aws_eip.nat[0].id
+  subnet_id     = aws_subnet.public[0].id
+  tags          = merge(local.tags, { Name = "${local.name}-nat" })
+  depends_on    = [aws_internet_gateway.runtime]
+}
+
+resource "aws_route_table" "public" {
+  count  = var.enable_durable_database ? 1 : 0
+  vpc_id = aws_vpc.runtime[0].id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.runtime[0].id
+  }
+  tags = merge(local.tags, { Name = "${local.name}-public" })
+}
+
+resource "aws_route_table_association" "public" {
+  count          = var.enable_durable_database ? 2 : 0
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public[0].id
+}
+
+resource "aws_route_table" "private" {
+  count  = var.enable_durable_database ? 1 : 0
+  vpc_id = aws_vpc.runtime[0].id
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.runtime[0].id
+  }
+  tags = merge(local.tags, { Name = "${local.name}-private" })
+}
+
+resource "aws_route_table_association" "private" {
+  count          = var.enable_durable_database ? 2 : 0
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[0].id
+}
+
+resource "aws_security_group" "runtime" {
+  count       = var.enable_durable_database ? 1 : 0
+  name        = "${local.name}-app-runner"
+  description = "App Runner VPC connector egress for AgentConstruct hosted runtime."
+  vpc_id      = aws_vpc.runtime[0].id
+
+  egress {
+    description = "Allow runtime egress through private subnets for AWS APIs and approved integrations."
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.tags, { Name = "${local.name}-app-runner" })
+}
+
+resource "aws_security_group" "database" {
+  count       = var.enable_durable_database ? 1 : 0
+  name        = "${local.name}-database"
+  description = "Private PostgreSQL access from AgentConstruct App Runner only."
+  vpc_id      = aws_vpc.runtime[0].id
+
+  ingress {
+    description     = "PostgreSQL from AgentConstruct runtime."
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.runtime[0].id]
+  }
+
+  tags = merge(local.tags, { Name = "${local.name}-database" })
+}
+
+resource "aws_db_subnet_group" "control_plane" {
+  count      = var.enable_durable_database ? 1 : 0
+  name       = "${local.name}-database"
+  subnet_ids = aws_subnet.private[*].id
+  tags       = local.tags
+}
+
+resource "aws_db_instance" "control_plane" {
+  count                       = var.enable_durable_database ? 1 : 0
+  identifier                  = "${local.name}-postgres"
+  engine                      = "postgres"
+  engine_version              = "16"
+  instance_class              = var.database_instance_class
+  allocated_storage           = var.database_allocated_storage
+  db_name                     = var.database_name
+  username                    = "agentconstruct"
+  manage_master_user_password = true
+  publicly_accessible         = false
+  skip_final_snapshot         = false
+  deletion_protection         = var.database_deletion_protection
+  db_subnet_group_name        = aws_db_subnet_group.control_plane[0].name
+  vpc_security_group_ids      = [aws_security_group.database[0].id]
+  storage_encrypted           = true
+  backup_retention_period     = var.database_backup_retention_days
+  tags                        = local.tags
+}
+
+resource "aws_apprunner_vpc_connector" "runtime" {
+  count              = var.enable_durable_database ? 1 : 0
+  vpc_connector_name = "${local.name}-database"
+  subnets            = aws_subnet.private[*].id
+  security_groups    = [aws_security_group.runtime[0].id]
+  tags               = local.tags
 }
 
 resource "aws_apprunner_service" "runtime" {
@@ -176,6 +346,16 @@ resource "aws_apprunner_service" "runtime" {
     instance_role_arn = aws_iam_role.runtime.arn
   }
 
+  dynamic "network_configuration" {
+    for_each = var.enable_durable_database ? [1] : []
+    content {
+      egress_configuration {
+        egress_type       = "VPC"
+        vpc_connector_arn = aws_apprunner_vpc_connector.runtime[0].arn
+      }
+    }
+  }
+
   health_check_configuration {
     protocol            = "HTTP"
     path                = "/healthz"
@@ -190,5 +370,6 @@ resource "aws_apprunner_service" "runtime" {
     aws_iam_role_policy.runtime_permissions,
     aws_iam_role_policy_attachment.apprunner_ecr_access,
     aws_secretsmanager_secret_version.runtime_signing_key,
+    aws_db_instance.control_plane,
   ]
 }
