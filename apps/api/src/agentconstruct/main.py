@@ -82,6 +82,8 @@ def metrics():
 @app.post("/api/v1/auth/local-login")
 def local_login(request: LocalLoginRequest):
     """Local fixture only. Production uses a trusted external OIDC issuer."""
+    if os.getenv("AGENTCONSTRUCT_HOSTED_MODE", "false").lower() == "true":
+        raise HTTPException(404, "local fixture login is disabled in hosted mode")
     return {
         "access_token": issue_local_token(request.username),
         "token_type": "bearer",

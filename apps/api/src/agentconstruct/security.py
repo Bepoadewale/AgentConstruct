@@ -9,6 +9,9 @@ import boto3
 import jwt
 from fastapi import Header, HTTPException
 
+from agentconstruct.db import SessionLocal
+from agentconstruct.models import ProductUser
+
 
 def local_signing_key() -> str:
     secret_arn = os.getenv("AGENTCONSTRUCT_LOCAL_SIGNING_KEY_SECRET_ARN")
@@ -63,7 +66,17 @@ def issue_local_token(username: str) -> str:
     )
 
 
-def principal_from_claims(payload: dict) -> Principal:
+def principal_from_claims(payload: dict, *, server_membership: bool = False) -> Principal:
+    if server_membership:
+        with SessionLocal() as db:
+            membership = db.query(ProductUser).filter(ProductUser.subject == payload["sub"]).one_or_none()
+        if membership is None:
+            raise HTTPException(403, "identity is not a member of an AgentConstruct workspace")
+        return Principal(
+            subject=membership.subject,
+            organization_id=membership.organization_id,
+            role=membership.role,
+        )
     role = payload["role"]
     if role not in {"developer", "operator", "administrator"}:
         raise HTTPException(403, "role not allowed")
@@ -107,7 +120,7 @@ class JwksIdentityVerifier:
             )
         except jwt.PyJWTError as error:
             raise HTTPException(401, "invalid trusted identity") from error
-        return principal_from_claims(payload)
+        return principal_from_claims(payload, server_membership=True)
 
 
 def configured_verifier() -> IdentityVerifier:
@@ -116,6 +129,8 @@ def configured_verifier() -> IdentityVerifier:
         issuer = os.environ["AGENTCONSTRUCT_OIDC_ISSUER"]
         audience = os.environ["AGENTCONSTRUCT_OIDC_AUDIENCE"]
         return JwksIdentityVerifier(jwks_url, issuer, audience)
+    if os.getenv("AGENTCONSTRUCT_HOSTED_MODE", "false").lower() == "true":
+        raise HTTPException(503, "hosted identity is not configured; JWKS/OIDC settings are required")
     return LocalIdentityVerifier()
 
 
