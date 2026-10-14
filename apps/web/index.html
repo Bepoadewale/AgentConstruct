@@ -155,6 +155,12 @@
           <div class="connection-row"><button id="run-terraform-plan-review" type="button">Run plan-only review</button></div>
           <div id="terraform-plan-review-result">No Terraform plan-only review yet.</div>
         </div>
+        <div id="cloud-execution-run" class="connection-card hidden">
+          <strong>AWS execution run</strong>
+          <p class="message">Administrators can request a guarded App Runner execution run from the approved digest. Local/default mode records history and command evidence only; it does not apply Terraform or create AWS resources.</p>
+          <div class="connection-row"><button id="request-cloud-execution-run" type="button">Request guarded AWS execution</button></div>
+          <div id="cloud-execution-run-result">No cloud execution run requested yet.</div>
+        </div>
       </section>
       <section id="audit" class="panel">
         <div class="panel-heading"><div><p class="eyebrow">AUDIT</p><h2>What happened</h2></div><button id="refresh-audit" class="secondary">Refresh</button></div>

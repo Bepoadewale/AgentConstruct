@@ -707,6 +707,99 @@ def test_terraform_plan_review_records_local_plan_only_evidence_after_ready_pref
     )
 
 
+def test_cloud_execution_run_is_admin_only_and_blocked_by_default():
+    service, db = make_service()
+    approved = approved_app_runner_customer_review(service)
+    preflight = ready_app_runner_preflight(service, db, approved)
+    review = service.create_terraform_plan_review_for_revision(
+        operator(),
+        approved.id,
+        content_digest=approved.content_digest,
+        preflight_id=preflight["id"],
+        expected_account_id=None,
+        expected_region="us-east-1",
+        mode="LOCAL_CONTRACT_ONLY",
+        allow_cloud_plan=False,
+    )
+
+    with pytest.raises(PermissionError, match="workspace administrator"):
+        service.create_cloud_execution_run_for_revision(
+            founder(),
+            approved.id,
+            content_digest=approved.content_digest,
+            terraform_render_id=review["terraform_render_id"],
+            preflight_id=preflight["id"],
+            terraform_plan_review_id=review["id"],
+            expected_account_id=None,
+            expected_region="us-east-1",
+            mode="GUARDED_CLOUD_EXECUTION",
+            confirmation=None,
+        )
+
+    run = service.create_cloud_execution_run_for_revision(
+        operator(),
+        approved.id,
+        content_digest=approved.content_digest,
+        terraform_render_id=review["terraform_render_id"],
+        preflight_id=preflight["id"],
+        terraform_plan_review_id=review["id"],
+        expected_account_id=None,
+        expected_region="us-east-1",
+        mode="GUARDED_CLOUD_EXECUTION",
+        confirmation=None,
+    )
+    detail = service.infrastructure_plan_revision_detail(operator(), approved.id)
+
+    assert run["state"] == "BLOCKED_CLOUD_EXECUTION_NOT_ENABLED"
+    assert run["command"]["apply_command_available"] is False
+    assert run["outputs"]["status"] == "not_executed"
+    assert run["content_digest"] == approved.content_digest
+    assert detail["cloud_execution_runs"][0]["id"] == run["id"]
+    assert any(
+        event.action == "cloud_execution.run_requested"
+        for event in service.audits(operator())
+    )
+
+
+def test_cloud_execution_run_blocks_stale_digest_and_missing_plan_review():
+    service, db = make_service()
+    approved = approved_app_runner_customer_review(service)
+    preflight = ready_app_runner_preflight(service, db, approved)
+
+    with pytest.raises(ValueError, match="stale cloud execution"):
+        service.create_cloud_execution_run_for_revision(
+            operator(),
+            approved.id,
+            content_digest="0" * 64,
+            terraform_render_id=None,
+            preflight_id=preflight["id"],
+            terraform_plan_review_id=None,
+            expected_account_id=None,
+            expected_region="us-east-1",
+            mode="GUARDED_CLOUD_EXECUTION",
+            confirmation=None,
+        )
+
+    run = service.create_cloud_execution_run_for_revision(
+        operator(),
+        approved.id,
+        content_digest=approved.content_digest,
+        terraform_render_id=None,
+        preflight_id=preflight["id"],
+        terraform_plan_review_id=None,
+        expected_account_id=None,
+        expected_region="us-east-1",
+        mode="GUARDED_CLOUD_EXECUTION",
+        confirmation=None,
+    )
+
+    assert run["state"] == "BLOCKED_TERRAFORM_PLAN_REVIEW_REQUIRED"
+    assert any(
+        "Record Terraform plan-only review first" in blocker
+        for blocker in run["evidence"]["blockers"]
+    )
+
+
 def test_authenticated_terraform_plan_review_requires_explicit_operator_flag(monkeypatch):
     service, db = make_service()
     approved = approved_app_runner_customer_review(service)

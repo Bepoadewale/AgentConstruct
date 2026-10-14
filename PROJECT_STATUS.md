@@ -24,6 +24,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - One selected AWS customer-plan review with durable submit, administrator approval/rejection, editable draft/rejected constraint revisions, filtered administrator review queues, rich review evidence and explicit self-approval audit paths. Approval remains separate from execution.
 - Approved customer-plan revisions can be explicitly executed as bounded local dry runs. The trusted worker independently observes READY, FAILED or DEGRADED evidence, ties each local environment back to the approved revision/digest, and supports a governed local destroy request/approval/observed-destroy path. This is local fixture execution only and does not create or delete AWS resources.
 - Local dry-run environments now persist customer-facing deployment outputs and observed resource inventory as first-class records. The review/API/UI show outputs such as application URL, App Runner service ARN, log group and Grafana dashboard reference plus observed resources and statuses. Destroy keeps the historical records and marks them `DESTROYED`.
+- Approved App Runner customer-plan revisions can now create administrator-only cloud execution run records from the product UI/API. Each run is bound to the exact approved digest, Terraform render, cloud-readiness preflight and Terraform plan-only review. Local/default mode records execution-history and command evidence only; it does not apply Terraform or create AWS resources.
 - Approved customer-plan revisions can also create a persisted fixture desired-state PR publication. The package binds the exact approved digest, selected repository/branch, selected architecture profile and profile-specific delivery contract. A workspace administrator can record local fixture check state such as `CHECKS_PASSED`, but AgentConstruct still does not write GitHub, publish real checks, merge code or deploy infrastructure.
 - Approved `aws-app-runner` customer-plan revisions can render a plan-only Terraform deployment contract. The UI/API preview includes service, source/ECR boundary, IAM, environment variables, secret references, HTTPS assumptions, Prometheus/Grafana monitoring, required tags, account, region and exact plan digest. It is offline validation only: no authenticated Terraform plan, apply, destroy, AWS API call or workload deployment occurs.
 - Approved customer-plan revisions can run a workspace-administrator-only local cloud-readiness preflight. It checks exact digest, policy, Terraform contract, no apply command, expected account, allowed region, tags, budget, reviewed PR state, runtime identity and dry-run/plan-only mode, then records a blocked or ready-for-future-plan result. This is guardrail evidence only; it does not execute cloud actions.
@@ -44,12 +45,13 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - `make seed-demo-data` can populate a fresh local workspace with realistic draft, submitted, approved, rejected, self-approved and dry-run records for hand demos. It uses only the local API and fixture executor.
 - The generated App Runner Terraform contract preview appears only after approval and remains labeled `PLAN_ONLY_NOT_APPLIED`.
 - The cloud-readiness preflight appears only after approval for workspace administrators and remains labeled local/preflight-only. In the local fixture demo, an administrator can record reviewed PR/check state and enable the runtime-identity checkbox to produce `READY_FOR_AUTHORIZED_CLOUD_PLAN`; this remains governance evidence only, not cloud execution.
+- The AWS execution run card appears only after approval for workspace administrators and remains blocked by default as `BLOCKED_CLOUD_EXECUTION_NOT_ENABLED`. It records command/evidence history and the required App Runner execution sequence, but automated/local mode cannot run Terraform apply.
 
 ## Next delivery sequence
 
 1. Replace hosted fixture sign-in/policy/ephemeral SQLite with production identity, OPA and durable PostgreSQL for the AWS-hosted control plane.
-2. Add real App Runner execution from the approved-plan UI/API using the output/resource inventory model.
-3. Add customer workload execution history with attempts, Terraform status, outputs, created resources, destroy proof and evidence export.
+2. Wire the guarded App Runner execution run to an explicitly enabled operator apply/destroy path and ingest real Terraform/AWS outputs into the output/resource inventory model.
+3. Add downloadable customer workload execution evidence export with attempts, Terraform status, outputs, created resources, destroy proof and failure reason.
 
 ## Clean-room reproducibility
 

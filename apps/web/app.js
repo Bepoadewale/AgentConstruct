@@ -203,9 +203,11 @@ function renderCustomerReview(review) {
   const terraformPlanContract = document.querySelector("#terraform-plan-contract");
   const cloudReadiness = document.querySelector("#cloud-readiness");
   const terraformPlanReview = document.querySelector("#terraform-plan-review");
+  const cloudExecutionRun = document.querySelector("#cloud-execution-run");
   const markDesiredStateReviewed = document.querySelector("#mark-desired-state-reviewed");
   const runCloudPreflight = document.querySelector("#run-cloud-preflight");
   const runTerraformPlanReview = document.querySelector("#run-terraform-plan-review");
+  const requestCloudExecutionRun = document.querySelector("#request-cloud-execution-run");
   const isCreator = currentUser?.user?.subject === review.creator_subject;
   const isAdmin = isAdministrator();
   const editable = ["DRAFT", "REJECTED"].includes(review.state) && isCreator;
@@ -219,14 +221,17 @@ function renderCustomerReview(review) {
   terraformPlanContract.classList.toggle("hidden", review.state !== "APPROVED");
   cloudReadiness.classList.toggle("hidden", review.state !== "APPROVED");
   terraformPlanReview.classList.toggle("hidden", review.state !== "APPROVED");
+  cloudExecutionRun.classList.toggle("hidden", review.state !== "APPROVED");
   markDesiredStateReviewed.classList.toggle("hidden", !(review.state === "APPROVED" && isAdmin));
   runCloudPreflight.classList.toggle("hidden", !(review.state === "APPROVED" && isAdmin));
   runTerraformPlanReview.classList.toggle("hidden", !(review.state === "APPROVED" && isAdmin));
+  requestCloudExecutionRun.classList.toggle("hidden", !(review.state === "APPROVED" && isAdmin));
   renderReviewEnvironments(review.local_executions || []);
   renderDesiredStatePublications(review.desired_state_publications || []);
   renderTerraformPlanRenders(review.terraform_plan_renders || []);
   renderCloudReadinessPreflights(review.cloud_readiness_preflights || []);
   renderTerraformPlanReviews(review.terraform_plan_reviews || []);
+  renderCloudExecutionRuns(review.cloud_execution_runs || []);
   document.querySelector("#guard-account").value = content.target?.account_id || "";
   document.querySelector("#guard-regions").value = content.target?.region || "us-east-1";
   const highEstimate = content.cost_estimate?.range?.monthly_high;
@@ -268,6 +273,19 @@ function renderTerraformPlanReviews(reviews) {
     command: review.command,
     evidence: review.evidence,
     boundary: review.boundary,
+  }, null, 2)}</pre>`).join("");
+}
+
+function renderCloudExecutionRuns(runs) {
+  const node = document.querySelector("#cloud-execution-run-result");
+  if (!runs.length) {
+    node.textContent = "No cloud execution run requested yet. Approval still does not deploy anything.";
+    return;
+  }
+  node.innerHTML = runs.map((run) => `<div class="component"><strong>Attempt ${run.attempt}: ${run.state}</strong><span>${run.mode} · ${run.boundary}</span></div><pre>${JSON.stringify({
+    command: run.command,
+    evidence: run.evidence,
+    outputs: run.outputs,
   }, null, 2)}</pre>`).join("");
 }
 
@@ -588,6 +606,34 @@ document.querySelector("#run-terraform-plan-review").addEventListener("click", a
     await refreshOpenCustomerReview();
     await refreshAudit();
     show(`Terraform plan-only review recorded: ${review.state}. Apply remains unavailable.`);
+  } catch (error) { show(error.message, true); }
+});
+
+document.querySelector("#request-cloud-execution-run").addEventListener("click", async () => {
+  try {
+    if (!customerReview || customerReview.state !== "APPROVED") throw new Error("Approve the customer plan before requesting AWS execution.");
+    show("Requesting guarded App Runner execution run. Local/default mode cannot apply Terraform…");
+    const account = document.querySelector("#guard-account").value.trim();
+    const renders = customerReview.terraform_plan_renders || [];
+    const preflights = customerReview.cloud_readiness_preflights || [];
+    const planReviews = customerReview.terraform_plan_reviews || [];
+    const run = await api(`/api/v1/customer-plan-revisions/${customerReview.id}/cloud-execution-runs`, {
+      method: "POST",
+      body: JSON.stringify({
+        content_digest: customerReview.content_digest,
+        terraform_render_id: renders[0]?.id || null,
+        preflight_id: preflights[0]?.id || null,
+        terraform_plan_review_id: planReviews[0]?.id || null,
+        expected_account_id: account || null,
+        expected_region: document.querySelector("#guard-regions").value.split(",").map((item) => item.trim()).filter(Boolean)[0] || null,
+        mode: "GUARDED_CLOUD_EXECUTION",
+        confirmation: null,
+      }),
+    });
+    renderCloudExecutionRuns([run]);
+    await refreshOpenCustomerReview();
+    await refreshAudit();
+    show(`Cloud execution run recorded: ${run.state}. No AWS resources were created.`);
   } catch (error) { show(error.message, true); }
 });
 

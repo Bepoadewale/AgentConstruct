@@ -311,6 +311,20 @@ class TerraformPlanReviewRequest(BaseModel):
     allow_cloud_plan: bool = False
 
 
+class CloudExecutionRunRequest(BaseModel):
+    content_digest: str = Field(min_length=64, max_length=64)
+    terraform_render_id: str | None = None
+    preflight_id: str | None = None
+    terraform_plan_review_id: str | None = None
+    expected_account_id: str | None = Field(default=None, pattern=r"^[0-9]{12}$")
+    expected_region: str | None = Field(default=None, pattern=r"^[a-z]{2}-[a-z]+-\d$")
+    mode: str = Field(
+        default="GUARDED_CLOUD_EXECUTION",
+        pattern=r"^(GUARDED_CLOUD_EXECUTION|AUTHENTICATED_APP_RUNNER_APPLY)$",
+    )
+    confirmation: str | None = None
+
+
 class InfrastructurePlanRevisionRequest(BaseModel):
     """New customer-plan draft content. The preceding revision is never edited."""
 
