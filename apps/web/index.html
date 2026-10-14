@@ -11,9 +11,9 @@
     <header>
       <a class="brand" href="/" aria-label="AgentConstruct home"><span class="brand-mark">A</span><span>AgentConstruct</span></a>
       <span class="badge"><span class="status-dot"></span> LOCAL PRODUCT DEMO</span>
-      <nav aria-label="Primary navigation"><a href="#dashboard">Overview</a><a href="#describe">New plan</a><a href="#result">Plan</a><a href="#audit">Activity</a><button id="logout" class="secondary hidden" type="button">Sign out</button></nav>
+      <nav aria-label="Primary navigation"><a href="#dashboard">Overview</a><a href="#describe">New plan</a><a href="#result">Plan</a><a href="#customer-review">Review</a><a href="#history">History</a><a href="#audit">Activity</a><button id="logout" class="secondary hidden" type="button">Sign out</button></nav>
       <button id="mobile-menu-toggle" class="mobile-menu-toggle secondary" type="button" aria-expanded="false" aria-controls="mobile-nav">Menu</button>
-      <nav id="mobile-nav" class="mobile-nav hidden" aria-label="Mobile navigation"><a href="#dashboard">Overview</a><a href="#describe">New plan</a><a href="#result">Plan</a><a href="#audit">Activity</a></nav>
+      <nav id="mobile-nav" class="mobile-nav hidden" aria-label="Mobile navigation"><a href="#dashboard">Overview</a><a href="#describe">New plan</a><a href="#result">Plan</a><a href="#customer-review">Review</a><a href="#history">History</a><a href="#audit">Activity</a></nav>
     </header>
     <main id="main-content">
       <section id="login" class="panel login-panel">
@@ -32,19 +32,21 @@
         <a class="sidebar-link" href="#describe"><span>＋</span> New plan <kbd>N</kbd></a>
         <a class="sidebar-link" href="#result"><span>◇</span> Current plan</a>
         <div class="sidebar-label">GOVERN</div>
+        <a class="sidebar-link" href="#customer-review"><span>✓</span> Review</a>
+        <a class="sidebar-link" href="#history"><span>▤</span> History</a>
         <a class="sidebar-link" href="#audit"><span>≡</span> Activity</a>
         <a class="sidebar-link" href="#describe"><span>⊙</span> Connections</a>
         <div class="sidebar-spacer"></div>
         <button class="sidebar-command" id="open-command-palette" type="button"><span>⌕</span> Quick actions <kbd>⌘ K</kbd></button>
         <div class="sidebar-boundary"><span class="status-dot"></span><div><b>Local mode</b><small>No cloud mutations</small></div></div>
       </aside>
-      <section class="hero">
+      <section class="hero screen" data-screen="dashboard">
         <div class="hero-kicker"><span class="pulse"></span> YOUR INFRASTRUCTURE CONTROL PLANE</div>
         <h1>Describe the AI system you want to deploy.</h1>
         <p class="lede">AgentConstruct turns a clear outcome into a reviewed architecture, cost estimate, security controls, and a bounded local deployment plan.</p>
         <div class="journey" aria-label="Planning journey"><span class="active"><b>01</b> Connect</span><i></i><span class="active"><b>02</b> Describe</span><i></i><span><b>03</b> Review</span><i></i><span><b>04</b> Govern</span><i></i><span><b>05</b> Observe</span></div>
       </section>
-      <section id="dashboard" class="panel">
+      <section id="dashboard" class="panel screen" data-screen="dashboard">
         <div class="panel-heading"><div><p class="eyebrow">WORKSPACE OVERVIEW</p><h2 id="dashboard-heading">Your workspace</h2><p class="section-intro">A calm view of plans, connections, and decisions that need your attention.</p></div><span id="identity" class="identity">Not signed in</span></div>
         <div class="dashboard-grid">
           <div class="metric-card"><span class="metric-icon">⌘</span><strong>Projects</strong><p id="dashboard-projects" class="message">Loading…</p><small>Active workspaces</small></div>
@@ -57,7 +59,7 @@
           <div class="onboarding-steps"><a href="#describe"><span class="step-check">1</span><span><b>Connect your code</b><small>Choose a GitHub repository</small></span></a><a href="#describe"><span class="step-check">2</span><span><b>Set constraints</b><small>Budget, region, data, availability</small></span></a><a href="#describe"><span class="step-check">3</span><span><b>Review the plan</b><small>Cost, security, and trade-offs</small></span></a></div>
         </div>
       </section>
-      <section id="describe" class="panel">
+      <section id="describe" class="panel screen" data-screen="describe">
         <div class="panel-heading"><div><p class="eyebrow">02 / CUSTOMER INTENT</p><h2>What should AgentConstruct build?</h2><p class="section-intro">Start with the outcome. We’ll translate it into infrastructure requirements you can review.</p></div><span class="mode-pill"><span class="status-dot"></span> Plan locally first</span></div>
         <label for="github-installation">GitHub connection</label>
         <div class="connection-row"><select id="github-installation" aria-label="GitHub installation"><option>Loading GitHub connection…</option></select><button id="refresh-github" type="button" class="secondary">Refresh GitHub</button></div>
@@ -92,15 +94,15 @@
         <button id="create">Analyze and create plan</button>
         <p id="message" class="message" role="status" aria-live="polite"></p>
       </section>
-      <section id="result" class="grid hidden">
+      <section id="result" class="grid screen hidden" data-screen="result">
         <article class="panel"><p class="eyebrow">2 · INTERPRETED REQUIREMENTS</p><h2>Workload specification</h2><pre id="spec"></pre></article>
         <article class="panel"><p class="eyebrow">REPOSITORY INTELLIGENCE</p><h2>What AgentConstruct found</h2><div id="repository-analysis"></div></article>
         <article class="panel"><p class="eyebrow">3 · SELECTED AWS DESIGN</p><h2 id="profile">Awaiting request</h2><div id="plan-highlights" class="plan-highlights"><span>Generate a plan to see the decision summary.</span></div><div id="architecture"></div></article>
-        <article class="panel"><p class="eyebrow">4 · GOVERNANCE</p><h2 id="policy">Awaiting policy</h2><p id="risk"></p><p class="message">This creates a review draft only. It does not approve or deploy anything.</p></article>
+        <article class="panel"><p class="eyebrow">4 · GOVERNANCE</p><h2 id="policy">Awaiting policy</h2><p id="risk"></p><p class="message">This creates a review draft only. It does not approve or deploy anything.</p><button id="open-review" class="secondary hidden" type="button">Open review</button></article>
         <article class="panel wide"><p class="eyebrow">WHY THIS DESIGN</p><h2>The simplest AWS design that meets the request</h2><p id="recommendation-reason">Awaiting request</p><p id="assumptions" class="message"></p></article>
         <article class="panel wide architecture-map-panel"><div class="panel-heading"><div><p class="eyebrow">ARCHITECTURE MAP</p><h2>How the pieces fit together</h2></div><span class="mode-pill">Selected design</span></div><div id="architecture-map" class="architecture-map"><div class="map-placeholder">Generate a plan to see the resource flow.</div></div></article>
       </section>
-      <section id="customer-review" class="panel hidden">
+      <section id="customer-review" class="panel screen hidden" data-screen="customer-review">
         <p class="eyebrow">5 · CUSTOMER PLAN REVIEW</p><h2 id="review-title">AWS infrastructure plan</h2>
         <div class="review-status-row"><p id="review-status" class="message"></p><button id="copy-digest" class="secondary hidden" type="button">Copy digest</button></div>
         <div id="plan-timeline" class="plan-timeline" aria-label="Plan lifecycle"></div>
@@ -186,8 +188,14 @@
           <div id="cloud-execution-run-result">No cloud execution run requested yet.</div>
         </div>
       </section>
-      <section id="audit" class="panel">
-        <div class="panel-heading"><div><p class="eyebrow">AUDIT</p><h2>What happened</h2></div><button id="refresh-audit" class="secondary">Refresh</button></div>
+      <section id="history" class="panel screen" data-screen="history">
+        <div class="panel-heading"><div><p class="eyebrow">PLAN HISTORY</p><h2>Your plans</h2><p class="section-intro">Find every draft, submission, decision, and revision without scanning the activity feed.</p></div><button id="history-new-plan" type="button">Create new plan</button></div>
+        <div class="history-toolbar"><label for="history-search">Search plans<input id="history-search" type="search" placeholder="Search by title or state…" /></label><label for="history-filter">Status<select id="history-filter"><option value="ALL">All statuses</option><option value="DRAFT">Draft</option><option value="SUBMITTED">Submitted</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></select></label></div>
+        <div id="history-list" class="history-list" aria-live="polite"><div class="empty-state">No plans yet. Create a plan to start your workspace history.</div></div>
+      </section>
+      <section id="audit" class="panel screen" data-screen="audit">
+        <div class="panel-heading"><div><p class="eyebrow">ACTIVITY</p><h2>What happened</h2><p class="section-intro">A chronological record of planning, connection, approval, and execution events.</p></div><button id="refresh-audit" class="secondary">Refresh</button></div>
+        <div class="history-toolbar"><label for="audit-search">Search activity<input id="audit-search" type="search" placeholder="Search events, actors, or entities…" /></label><label for="audit-filter">Event type<select id="audit-filter"><option value="ALL">All events</option><option value="plan">Plans</option><option value="approval">Approvals</option><option value="cloud">Cloud</option><option value="repository">Repository</option></select></label></div>
         <div id="audit-events" aria-live="polite">No events loaded.</div>
       </section>
       <section class="boundary">
