@@ -2,6 +2,8 @@
 
 ## Executed locally
 
+| Scale-ready platform boundaries | Versioned tenant, evidence, model, job, capability, cost and usage contracts are implemented. Durable PostgreSQL jobs, provider-neutral model gateway, typed planning evidence, fail-closed isolated execution context/cell placement, tenant entitlements and deterministic planner regression scenarios are locally tested. These boundaries support future scale evolution; they do not claim million-customer capacity today. |
+
 | Capability | Evidence |
 | --- | --- |
 | Intent to typed specification | Provider interface, deterministic fixture, schema validation, provenance and material follow-up questions |
