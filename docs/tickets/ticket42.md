@@ -1,4 +1,4 @@
-# ticket1 — Hosted AWS discovery runtime and customer workload App Runner pilot
+# ticket42 — Hosted AWS discovery runtime and customer workload App Runner pilot
 
 PR: [#42 — feat: deploy hosted AWS discovery runtime](https://github.com/Bepoadewale/AgentConstruct/pull/42)
 

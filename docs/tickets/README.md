@@ -2,22 +2,23 @@
 
 This directory stores one ticket file per pull request.
 
-Use this naming rule:
+Use the GitHub PR number as the naming rule:
 
 ```text
-docs/tickets/ticket1.md
-docs/tickets/ticket2.md
-docs/tickets/ticket3.md
+docs/tickets/ticket42.md  # PR #42
+docs/tickets/ticket43.md  # PR #43
+docs/tickets/ticket44.md  # PR #44
 ...
 ```
 
 For every new PR:
 
-1. Find the highest existing `ticketN.md`.
-2. Create the next numbered ticket before implementation work starts.
-3. Do not overwrite or renumber older tickets.
-4. Keep the ticket updated as the PR changes.
-5. Before marking the PR ready, update the acceptance-criteria checklist with met/not met evidence.
+1. Open a draft PR early enough to know the PR number.
+2. Create `docs/tickets/ticketN.md`, where `N` is that PR number.
+3. Create the ticket before substantive implementation work starts.
+4. Do not overwrite or renumber older tickets.
+5. Keep the ticket updated as the PR changes.
+6. Before marking the PR ready, update the acceptance-criteria checklist with met/not met evidence.
 
 Each ticket must include:
 

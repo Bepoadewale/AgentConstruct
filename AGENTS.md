@@ -35,8 +35,9 @@ Build and maintain **AgentConstruct**, the private commercial product. Use plain
 
 ## PR tickets
 
-- Every PR must have a numbered ticket file under `docs/tickets/`.
-- Create the next ticket file before implementation work starts: `ticket1.md`, `ticket2.md`, `ticket3.md`, and so on.
+- Every PR must have a PR-numbered ticket file under `docs/tickets/`.
+- Use the GitHub PR number as the filename: PR #42 uses `ticket42.md`, PR #43 uses `ticket43.md`, and so on.
+- Create the ticket file before implementation work starts whenever the PR number is already known. If the PR does not exist yet, create the branch, open a draft PR early to get the number, then add the matching ticket before substantive implementation.
 - Do not overwrite, rename, or renumber older tickets.
 - Each ticket must include the PR goal, current repo state relevant to the PR, research/references, work to be done, acceptance criteria, whether each criterion was met, validation performed, evidence files, boundaries, and follow-up work.
 - Keep the ticket updated as implementation changes. Before marking the PR review-ready, update the acceptance status truthfully.
