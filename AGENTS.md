@@ -24,6 +24,15 @@ Build and maintain **AgentConstruct**, the private commercial product. Use plain
 - Use bounded readiness checks, useful failures and project-scoped cleanup.
 - Do not push directly to `main`; use a focused branch and reviewable PR.
 
+## Customer workload evidence
+
+- Every customer workload test run must get its own numbered evidence file under `docs/test/`.
+- Use the next available name: `test1.md`, `test2.md`, `test3.md`, and so on.
+- Do not overwrite, rename, or renumber older test evidence.
+- Each file must state whether the run was local, simulated, statically validated, or real AWS execution.
+- For real AWS workload runs, record the exact repository, commit, account, region, commands, resources created, observed readiness result, teardown command, absence check, retained resources, and limitations.
+- `docs/VALIDATION.md` may summarize multiple runs, but `docs/test/testN.md` is the per-run source of truth.
+
 ## Clean-room gate
 
 Before calling a runnable change review-ready, execute and record:

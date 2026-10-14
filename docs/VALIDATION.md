@@ -813,6 +813,11 @@ Date: 2026-10-14. Environment: macOS, AWS CLI, Terraform, Docker Desktop, AWS ac
 
 Purpose: prove a real customer workload lifecycle twice using the customer repository `https://github.com/Bepoadewale/ai-platform-control-plane` at commit `de60dfe2e24930d76e6be8a5fb2c428e35f483c6`.
 
+Per-run evidence files:
+
+- `docs/test/test1.md` — customer workload App Runner pilot, cycle 1.
+- `docs/test/test2.md` — customer workload App Runner pilot, cycle 2.
+
 Execution boundary:
 
 - This was a real AWS customer-workload pilot.
