@@ -8,6 +8,8 @@ let currentUser = null;
 let githubConnection = null;
 let currentProject = null;
 let customerReview = null;
+let dashboardSnapshot = null;
+let auditSnapshot = [];
 
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;")
@@ -83,6 +85,7 @@ function logout() {
 
 async function refreshDashboard() {
   const dashboard = await api("/api/v1/dashboard");
+  dashboardSnapshot = dashboard;
   document.querySelector("#dashboard-heading").textContent = `${dashboard.workspace.name} dashboard`;
   document.querySelector("#dashboard-projects").textContent = dashboard.projects.length
     ? dashboard.projects.map((project) => project.name).join(", ") : "No projects yet.";
@@ -90,6 +93,7 @@ async function refreshDashboard() {
     ? dashboard.cloud_connections.map((connection) => `${connection.display_name} (${connection.setup_state})`).join(", ") : "No AWS account connected yet.";
   document.querySelector("#dashboard-plans").textContent = dashboard.plans.length
     ? dashboard.plans.map((item) => `${item.title} · ${item.state}`).join("; ") : "No customer plan revisions yet.";
+  renderHistory(dashboard.plans || []);
   document.querySelector("#admin-dashboard").classList.toggle("hidden", !isAdministrator());
   if (isAdministrator()) {
     const filter = document.querySelector("#admin-plan-filter").value;
@@ -108,6 +112,23 @@ async function refreshDashboard() {
       list.append(button);
     });
   }
+}
+
+function renderHistory(plans) {
+  const node = document.querySelector("#history-list");
+  if (!node) return;
+  const query = (document.querySelector("#history-search")?.value || "").toLowerCase().trim();
+  const state = document.querySelector("#history-filter")?.value || "ALL";
+  const filtered = plans.filter((item) => {
+    const haystack = `${item.title} ${item.state} ${item.creator_subject || ""}`.toLowerCase();
+    return (state === "ALL" || item.state === state) && (!query || haystack.includes(query));
+  });
+  if (!filtered.length) {
+    node.innerHTML = `<div class="empty-state"><strong>${plans.length ? "No matching plans" : "No plans yet"}</strong><span>${plans.length ? "Try a different search or status filter." : "Create a plan to start your workspace history."}</span></div>`;
+    return;
+  }
+  node.innerHTML = filtered.map((item) => `<button class="history-row" type="button" data-history-id="${escapeHtml(item.id)}"><span class="history-title"><b>${escapeHtml(item.title)}</b><small>Revision ${escapeHtml(item.revision)} · ${escapeHtml(item.created_at ? new Date(item.created_at).toLocaleString() : "date unavailable")}</small></span><span class="status-chip status-${escapeHtml(String(item.state).toLowerCase())}">${escapeHtml(item.state)}</span><span class="history-arrow">›</span></button>`).join("");
+  node.querySelectorAll("[data-history-id]").forEach((row) => row.addEventListener("click", () => openCustomerReview(row.dataset.historyId).catch((error) => show(error.message, true))));
 }
 
 function show(message, failure = false) {
@@ -417,12 +438,25 @@ function renderReviewEnvironments(environments) {
 async function openCustomerReview(revisionId) {
   const review = await api(`/api/v1/customer-plan-revisions/${revisionId}`);
   renderCustomerReview(review);
-  document.querySelector("#customer-review").scrollIntoView({ behavior: "smooth", block: "start" });
+  window.location.hash = "#customer-review";
 }
 
 async function refreshAudit() {
   const events = await api("/api/v1/audit-evidence");
-  document.querySelector("#audit-events").innerHTML = events.length ? events.reverse().map((event) => `<div class="event"><time>${escapeHtml(new Date(event.at).toLocaleString())}</time><div><strong>${escapeHtml(event.label)}</strong><br><span>${escapeHtml(event.actor_subject)} · ${escapeHtml(event.actor_role)} · ${escapeHtml(event.entity_type)}${event.revision ? ` · revision ${escapeHtml(event.revision)}` : ""}${event.plan_digest ? ` · ${escapeHtml(event.plan_digest)}` : ""}${event.decision_reason ? ` · reason: ${escapeHtml(event.decision_reason)}` : ""}</span></div></div>`).join("") : "No events yet.";
+  auditSnapshot = events;
+  renderAuditEvents(events);
+}
+
+function renderAuditEvents(events) {
+  const node = document.querySelector("#audit-events");
+  if (!node) return;
+  const query = (document.querySelector("#audit-search")?.value || "").toLowerCase().trim();
+  const filter = document.querySelector("#audit-filter")?.value || "ALL";
+  const filtered = events.filter((event) => {
+    const haystack = `${event.label} ${event.actor_subject} ${event.entity_type} ${event.decision_reason || ""}`.toLowerCase();
+    return (filter === "ALL" || event.label.toLowerCase().includes(filter)) && (!query || haystack.includes(query));
+  });
+  node.innerHTML = filtered.length ? filtered.slice().reverse().map((event) => `<div class="event"><time>${escapeHtml(new Date(event.at).toLocaleString())}</time><div><strong>${escapeHtml(event.label)}</strong><br><span>${escapeHtml(event.actor_subject)} · ${escapeHtml(event.actor_role)} · ${escapeHtml(event.entity_type)}${event.revision ? ` · revision ${escapeHtml(event.revision)}` : ""}${event.plan_digest ? ` · ${escapeHtml(event.plan_digest)}` : ""}${event.decision_reason ? ` · reason: ${escapeHtml(event.decision_reason)}` : ""}</span></div></div>`).join("") : `<div class="empty-state"><strong>No matching activity</strong><span>Try a different search or event filter.</span></div>`;
 }
 
 function renderEnvironments(environments) {
@@ -496,14 +530,23 @@ document.querySelector("#create").addEventListener("click", async () => {
     document.querySelector("#assumptions").textContent = `Assumptions: ${architecture.assumptions.join(" ")}`;
     document.querySelector("#policy").textContent = `${plan.policy_result.replaceAll("_", " ")} · immutable plan`;
     document.querySelector("#risk").textContent = architecture.risks.join(" ") || "No additional V1 planner risk was found. Review all assumptions before approval.";
+    document.querySelector("#open-review").classList.remove("hidden");
     document.querySelector("#result").classList.remove("hidden");
     const review = await api(`/api/v1/deployment-plans/${plan.id}/customer-review`, { method: "POST" });
     renderCustomerReview(review);
+    window.location.hash = "#result";
     show(`One AWS review draft created. Policy result: ${plan.policy_result}. It has not been submitted, approved, or deployed.`);
     await Promise.all([refreshAudit(), refreshDashboard()]);
   } catch (error) { show(error.message, true); }
   finally { setButtonBusy(createButton, false); }
 });
+
+document.querySelector("#open-review").addEventListener("click", () => { window.location.hash = "#customer-review"; });
+document.querySelector("#history-new-plan").addEventListener("click", () => { window.location.hash = "#describe"; });
+document.querySelector("#history-search").addEventListener("input", () => renderHistory(dashboardSnapshot?.plans || []));
+document.querySelector("#history-filter").addEventListener("change", () => renderHistory(dashboardSnapshot?.plans || []));
+document.querySelector("#audit-search").addEventListener("input", () => renderAuditEvents(auditSnapshot));
+document.querySelector("#audit-filter").addEventListener("change", () => renderAuditEvents(auditSnapshot));
 
 document.querySelector("#submit-review").addEventListener("click", async () => {
   try {
@@ -827,8 +870,15 @@ mobileNav?.querySelectorAll("a").forEach((link) => link.addEventListener("click"
 
 function syncActiveNavigation() {
   const current = window.location.hash || "#dashboard";
+  const screen = current.slice(1) || "dashboard";
+  const validScreens = ["dashboard", "describe", "result", "customer-review", "history", "audit"];
+  const target = validScreens.includes(screen) ? screen : "dashboard";
+  document.querySelectorAll("[data-screen]").forEach((node) => {
+    const active = node.dataset.screen === target && !node.classList.contains("hidden");
+    node.classList.toggle("screen-active", active);
+  });
   document.querySelectorAll(".sidebar-link, header nav a, .mobile-nav a").forEach((link) => {
-    link.classList.toggle("active", link.getAttribute("href") === current);
+    link.classList.toggle("active", link.getAttribute("href") === `#${target}`);
   });
 }
 window.addEventListener("hashchange", syncActiveNavigation);
@@ -840,9 +890,9 @@ function closeCommandPalette() { commandPalette.classList.add("hidden"); }
 function openCommandPalette() { commandPalette.classList.remove("hidden"); commandSearch.value = ""; commandSearch.focus(); }
 function runCommand(command) {
   closeCommandPalette();
-  if (command === "new-plan") document.querySelector("#describe").scrollIntoView({ behavior: "smooth" });
-  if (command === "dashboard") document.querySelector("#dashboard").scrollIntoView({ behavior: "smooth" });
-  if (command === "audit") document.querySelector("#audit").scrollIntoView({ behavior: "smooth" });
+  if (command === "new-plan") window.location.hash = "#describe";
+  if (command === "dashboard") window.location.hash = "#dashboard";
+  if (command === "audit") window.location.hash = "#audit";
 }
 document.querySelector("#open-command-palette")?.addEventListener("click", openCommandPalette);
 document.querySelector(".workspace-switcher")?.addEventListener("click", openCommandPalette);

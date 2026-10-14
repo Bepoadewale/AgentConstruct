@@ -62,6 +62,18 @@ code { padding:2px 4px; color:#344054; background:#f2f4f7; border-radius:4px; fo
 @media (max-width:720px) { .mobile-menu-toggle { display:block; margin:0 0 0 auto; padding:7px 10px; font-size:11px; }.mobile-nav { position:absolute; top:59px; left:0; right:0; display:flex; flex-direction:column; gap:2px; padding:10px 16px; background:#fff; border-bottom:1px solid var(--line); box-shadow:0 8px 18px rgba(16,24,40,.08); }.mobile-nav a { padding:10px; color:#475467; border-radius:6px; text-decoration:none; font-size:13px; font-weight:700; }.mobile-nav.hidden { display:none; } }
 @media (max-width:620px) { .onboarding-steps { grid-template-columns:1fr; }.architecture-map { flex-direction:column; gap:9px; }.map-node { min-width:0; }.map-node + .map-node { margin-left:0; }.map-node + .map-node::before { top:-10px; left:50%; width:1px; height:9px; }.plan-timeline { overflow:auto; }.timeline-step { min-width:74px; }.plan-highlights { grid-template-columns:1fr 1fr; }.review-status-row { align-items:flex-start; flex-direction:column; gap:4px; } }
 
+.screen { display:none; }
+.screen.screen-active { display:block; }
+.screen.screen-active.grid { display:grid; }
+.history-toolbar { display:grid; grid-template-columns:minmax(0,1fr) 220px; gap:12px; margin:20px 0; padding:14px; border:1px solid var(--line); border-radius:9px; background:#fcfcfd; }
+.history-toolbar label { margin:0; }
+.history-list { display:grid; gap:6px; }
+.history-row { display:flex; align-items:center; gap:16px; width:100%; margin:0; padding:14px 16px; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:9px; box-shadow:none; text-align:left; }
+.history-row:hover,.history-row:focus-visible { background:#f8fbff; border-color:#84adff; box-shadow:none; transform:none; }
+.history-title { display:flex; flex:1; flex-direction:column; gap:3px; }.history-title b { font-size:13px; }.history-title small { color:var(--muted); font-size:11px; }.history-arrow { color:#98a2b3; font-size:20px; }
+.empty-state { display:flex; flex-direction:column; gap:5px; }.empty-state strong { color:#344054; font-size:13px; }.empty-state span { font-size:12px; }
+@media (max-width:620px) { .history-toolbar { grid-template-columns:1fr; }.history-row { align-items:flex-start; gap:9px; }.history-row .status-chip { margin-left:auto; } }
+
 /* UI Designer system: semantic tokens, predictable states, and WCAG-oriented defaults. */
 :root {
   --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-6:24px; --space-8:32px; --space-12:48px;
