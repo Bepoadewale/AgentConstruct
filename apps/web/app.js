@@ -170,6 +170,31 @@ async function showCloudConnectionDetail(connectionId) {
   document.querySelector("#disconnect-aws").classList.remove("hidden");
 }
 
+function renderArchitectureMap(architecture) {
+  const node = document.querySelector("#architecture-map");
+  if (!node) return;
+  const components = architecture.components || [];
+  const application = components.find((item) => /application|service|compute/i.test(item.name)) || components[0];
+  const data = components.find((item) => /database|storage|data/i.test(`${item.name} ${item.service}`));
+  const monitoring = components.filter((item) => /prometheus|grafana|metric/i.test(`${item.name} ${item.service}`));
+  const nodes = [
+    { title: "Your repository", detail: "GitHub source", className: "primary" },
+    { title: application?.service || architecture.profile, detail: application?.purpose || "Selected compute profile", className: "primary" },
+    ...(data ? [{ title: data.service, detail: data.purpose, className: "" }] : []),
+    { title: "Prometheus + Grafana", detail: monitoring.length ? "Metrics and dashboards" : "Monitoring contract", className: "monitoring" },
+  ];
+  node.innerHTML = nodes.map((item) => `<div class="map-node ${item.className}"><b>${item.title}</b><small>${item.detail}</small></div>`).join("");
+}
+
+function renderPlanTimeline(state) {
+  const node = document.querySelector("#plan-timeline");
+  if (!node) return;
+  const states = ["DRAFT", "SUBMITTED", "APPROVED", "OBSERVED"];
+  const current = state === "READY" || state === "DEGRADED" ? "OBSERVED" : state;
+  const currentIndex = states.indexOf(current);
+  node.innerHTML = states.map((item, index) => `<div class="timeline-step ${index <= currentIndex ? "active" : ""} ${item === current ? "current" : ""}"><span>${index + 1}</span>${item[0] + item.slice(1).toLowerCase()}<small>${item === "APPROVED" ? "Decision recorded" : item === "OBSERVED" ? "Evidence required" : ""}</small></div>`).join("");
+}
+
 function renderCustomerReview(review) {
   customerReview = review;
   const content = review.content;
@@ -178,6 +203,7 @@ function renderCustomerReview(review) {
   document.querySelector("#review-title").textContent = `AWS infrastructure plan · revision ${review.revision}`;
   const reviewBoundary = review.state === "DRAFT" ? content.summary.status : "immutable review; not deployed";
   document.querySelector("#review-status").textContent = `${review.state} · ${reviewBoundary} Digest: ${review.content_digest}.`;
+  renderPlanTimeline(review.state);
   const summary = review.review_summary || {};
   document.querySelector("#approval-boundary").classList.toggle("hidden", review.state !== "APPROVED");
   const adminSummary = document.querySelector("#admin-review-summary");
@@ -422,6 +448,7 @@ document.querySelector("#create").addEventListener("click", async () => {
     const architecture = plan.payload.architecture;
     document.querySelector("#profile").textContent = `${architecture.profile} · ${architecture.region}`;
     document.querySelector("#architecture").innerHTML = architecture.components.map((item) => `<div class="component"><strong>${item.name}</strong><span>${item.service} · ${item.purpose}</span></div>`).join("") + `<p><strong>Estimated monthly cost including Prometheus and Grafana:</strong> $${architecture.cost_estimate.monthly_low}–$${architecture.cost_estimate.monthly_high}/month</p>`;
+    renderArchitectureMap(architecture);
     document.querySelector("#recommendation-reason").textContent = architecture.recommendation_reason;
     document.querySelector("#assumptions").textContent = `Assumptions: ${architecture.assumptions.join(" ")}`;
     document.querySelector("#policy").textContent = `${plan.policy_result.replaceAll("_", " ")} · immutable plan`;
@@ -742,3 +769,28 @@ document.querySelector("#disconnect-repository").addEventListener("click", async
 document.querySelector("#login-developer").addEventListener("click", () => startSession("founder"));
 document.querySelector("#login-administrator").addEventListener("click", () => startSession("administrator"));
 document.querySelector("#logout").addEventListener("click", logout);
+
+const commandPalette = document.querySelector("#command-palette");
+const commandSearch = document.querySelector("#command-search");
+function closeCommandPalette() { commandPalette.classList.add("hidden"); }
+function openCommandPalette() { commandPalette.classList.remove("hidden"); commandSearch.value = ""; commandSearch.focus(); }
+function runCommand(command) {
+  closeCommandPalette();
+  if (command === "new-plan") document.querySelector("#describe").scrollIntoView({ behavior: "smooth" });
+  if (command === "dashboard") document.querySelector("#dashboard").scrollIntoView({ behavior: "smooth" });
+  if (command === "audit") document.querySelector("#audit").scrollIntoView({ behavior: "smooth" });
+}
+document.querySelector("#open-command-palette")?.addEventListener("click", openCommandPalette);
+document.querySelector(".workspace-switcher")?.addEventListener("click", openCommandPalette);
+document.querySelector("#close-command-palette")?.addEventListener("click", closeCommandPalette);
+commandPalette?.addEventListener("click", (event) => { if (event.target === commandPalette) closeCommandPalette(); });
+document.querySelectorAll("[data-command]").forEach((item) => item.addEventListener("click", () => runCommand(item.dataset.command)));
+commandSearch?.addEventListener("input", () => {
+  const query = commandSearch.value.toLowerCase();
+  document.querySelectorAll("#command-list button").forEach((item) => { item.classList.toggle("hidden", !item.textContent.toLowerCase().includes(query)); });
+});
+document.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommandPalette(); }
+  if (event.key === "Escape") closeCommandPalette();
+  if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === "n" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") runCommand("new-plan");
+});
