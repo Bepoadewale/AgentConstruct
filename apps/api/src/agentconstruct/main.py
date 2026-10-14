@@ -16,6 +16,7 @@ from agentconstruct.domain import (
     AwsConnectionVerificationRequest,
     AwsQuickCreateRequest,
     CloudConnectionRequest,
+    CloudExecutionExecuteRequest,
     CloudExecutionRunRequest,
     CloudInventorySnapshotRequest,
     CloudReadinessPreflightRequest,
@@ -584,6 +585,25 @@ def list_cloud_execution_runs(
     REQUESTS.labels("cloud_execution.runs_list").inc()
     try:
         return service.cloud_execution_runs(principal)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post("/api/v1/cloud-execution-runs/{run_id}/execute")
+def execute_cloud_execution_run(
+    run_id: str,
+    request: CloudExecutionExecuteRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("cloud_execution.queue").inc()
+    try:
+        return service.queue_cloud_execution_run(
+            principal,
+            run_id,
+            content_digest=request.content_digest,
+            confirmation=request.confirmation,
+        )
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
 
