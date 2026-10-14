@@ -12,6 +12,8 @@
       <a class="brand" href="/" aria-label="AgentConstruct home"><span class="brand-mark">A</span><span>AgentConstruct</span></a>
       <span class="badge"><span class="status-dot"></span> LOCAL PRODUCT DEMO</span>
       <nav aria-label="Primary navigation"><a href="#dashboard">Overview</a><a href="#describe">New plan</a><a href="#result">Plan</a><a href="#audit">Activity</a><button id="logout" class="secondary hidden" type="button">Sign out</button></nav>
+      <button id="mobile-menu-toggle" class="mobile-menu-toggle secondary" type="button" aria-expanded="false" aria-controls="mobile-nav">Menu</button>
+      <nav id="mobile-nav" class="mobile-nav hidden" aria-label="Mobile navigation"><a href="#dashboard">Overview</a><a href="#describe">New plan</a><a href="#result">Plan</a><a href="#audit">Activity</a></nav>
     </header>
     <main id="main-content">
       <section id="login" class="panel login-panel">
@@ -93,14 +95,14 @@
       <section id="result" class="grid hidden">
         <article class="panel"><p class="eyebrow">2 · INTERPRETED REQUIREMENTS</p><h2>Workload specification</h2><pre id="spec"></pre></article>
         <article class="panel"><p class="eyebrow">REPOSITORY INTELLIGENCE</p><h2>What AgentConstruct found</h2><div id="repository-analysis"></div></article>
-        <article class="panel"><p class="eyebrow">3 · SELECTED AWS DESIGN</p><h2 id="profile">Awaiting request</h2><div id="architecture"></div></article>
+        <article class="panel"><p class="eyebrow">3 · SELECTED AWS DESIGN</p><h2 id="profile">Awaiting request</h2><div id="plan-highlights" class="plan-highlights"><span>Generate a plan to see the decision summary.</span></div><div id="architecture"></div></article>
         <article class="panel"><p class="eyebrow">4 · GOVERNANCE</p><h2 id="policy">Awaiting policy</h2><p id="risk"></p><p class="message">This creates a review draft only. It does not approve or deploy anything.</p></article>
         <article class="panel wide"><p class="eyebrow">WHY THIS DESIGN</p><h2>The simplest AWS design that meets the request</h2><p id="recommendation-reason">Awaiting request</p><p id="assumptions" class="message"></p></article>
         <article class="panel wide architecture-map-panel"><div class="panel-heading"><div><p class="eyebrow">ARCHITECTURE MAP</p><h2>How the pieces fit together</h2></div><span class="mode-pill">Selected design</span></div><div id="architecture-map" class="architecture-map"><div class="map-placeholder">Generate a plan to see the resource flow.</div></div></article>
       </section>
       <section id="customer-review" class="panel hidden">
         <p class="eyebrow">5 · CUSTOMER PLAN REVIEW</p><h2 id="review-title">AWS infrastructure plan</h2>
-        <p id="review-status" class="message"></p>
+        <div class="review-status-row"><p id="review-status" class="message"></p><button id="copy-digest" class="secondary hidden" type="button">Copy digest</button></div>
         <div id="plan-timeline" class="plan-timeline" aria-label="Plan lifecycle"></div>
         <div id="approval-boundary" class="boundary hidden"><strong>Approved, not deployed.</strong> Approval records an exact plan decision only. It does not create or change AWS resources.</div>
         <div id="admin-review-summary" class="connection-card hidden"></div>

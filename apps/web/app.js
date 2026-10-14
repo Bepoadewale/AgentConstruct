@@ -9,6 +9,27 @@ let githubConnection = null;
 let currentProject = null;
 let customerReview = null;
 
+const escapeHtml = (value) => String(value ?? "")
+  .replaceAll("&", "&amp;")
+  .replaceAll("<", "&lt;")
+  .replaceAll(">", "&gt;")
+  .replaceAll('"', "&quot;")
+  .replaceAll("'", "&#039;");
+
+function setButtonBusy(button, busy, busyLabel = "Working…") {
+  if (!button) return;
+  if (busy) {
+    button.dataset.defaultLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = busyLabel;
+    button.setAttribute("aria-busy", "true");
+  } else {
+    button.disabled = false;
+    button.textContent = button.dataset.defaultLabel || button.textContent;
+    button.removeAttribute("aria-busy");
+  }
+}
+
 function idempotencyKey() {
   return globalThis.crypto?.randomUUID?.() || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -183,7 +204,21 @@ function renderArchitectureMap(architecture) {
     ...(data ? [{ title: data.service, detail: data.purpose, className: "" }] : []),
     { title: "Prometheus + Grafana", detail: monitoring.length ? "Metrics and dashboards" : "Monitoring contract", className: "monitoring" },
   ];
-  node.innerHTML = nodes.map((item) => `<div class="map-node ${item.className}"><b>${item.title}</b><small>${item.detail}</small></div>`).join("");
+  node.innerHTML = nodes.map((item) => `<div class="map-node ${item.className}"><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.detail)}</small></div>`).join("");
+}
+
+function renderPlanHighlights(architecture) {
+  const node = document.querySelector("#plan-highlights");
+  if (!node || !architecture) return;
+  const componentCount = (architecture.components || []).length;
+  const low = architecture.cost_estimate?.monthly_low;
+  const high = architecture.cost_estimate?.monthly_high;
+  node.innerHTML = [
+    `<span class="highlight"><b>Profile</b>${escapeHtml(architecture.profile || "AWS")}</span>`,
+    `<span class="highlight"><b>Monthly estimate</b>${low != null ? `$${escapeHtml(low)}–$${escapeHtml(high)}` : "Range pending"}</span>`,
+    `<span class="highlight"><b>Components</b>${componentCount}</span>`,
+    `<span class="highlight"><b>Decision</b>One selected plan</span>`,
+  ].join("");
 }
 
 function renderPlanTimeline(state) {
@@ -202,7 +237,12 @@ function renderCustomerReview(review) {
   document.querySelector("#customer-review").classList.remove("hidden");
   document.querySelector("#review-title").textContent = `AWS infrastructure plan · revision ${review.revision}`;
   const reviewBoundary = review.state === "DRAFT" ? content.summary.status : "immutable review; not deployed";
-  document.querySelector("#review-status").textContent = `${review.state} · ${reviewBoundary} Digest: ${review.content_digest}.`;
+  document.querySelector("#review-status").innerHTML = `<span class="status-chip status-${String(review.state).toLowerCase()}">${escapeHtml(review.state)}</span> <span>${escapeHtml(reviewBoundary)} Digest: <code>${escapeHtml(review.content_digest)}</code>.</span>`;
+  const copyDigest = document.querySelector("#copy-digest");
+  copyDigest.classList.remove("hidden");
+  copyDigest.onclick = async () => {
+    try { await navigator.clipboard.writeText(review.content_digest); show("Plan digest copied."); } catch { show("Digest: " + review.content_digest); }
+  };
   renderPlanTimeline(review.state);
   const summary = review.review_summary || {};
   document.querySelector("#approval-boundary").classList.toggle("hidden", review.state !== "APPROVED");
@@ -421,6 +461,8 @@ async function refreshOpenCustomerReview() {
 }
 
 document.querySelector("#create").addEventListener("click", async () => {
+  const createButton = document.querySelector("#create");
+  setButtonBusy(createButton, true, "Building plan…");
   try {
     show("Interpreting your request and building an auditable plan…");
     const repository = document.querySelector("#repository").value;
@@ -443,11 +485,12 @@ document.querySelector("#create").addEventListener("click", async () => {
       ["Data stores", analysis.database_hints],
       ["Deployment hints", analysis.deployment_hints],
       ["Limitations", analysis.limitations],
-    ].map(([label, values]) => `<div class="component"><strong>${label}</strong><span>${(values || []).join(", ") || "No signal found"}</span></div>`).join("");
+    ].map(([label, values]) => `<div class="component"><strong>${escapeHtml(label)}</strong><span>${escapeHtml((values || []).join(", ") || "No signal found")}</span></div>`).join("");
     plan = await api(`/api/v1/intents/${intent.id}/plans`, { method: "POST" });
     const architecture = plan.payload.architecture;
     document.querySelector("#profile").textContent = `${architecture.profile} · ${architecture.region}`;
-    document.querySelector("#architecture").innerHTML = architecture.components.map((item) => `<div class="component"><strong>${item.name}</strong><span>${item.service} · ${item.purpose}</span></div>`).join("") + `<p><strong>Estimated monthly cost including Prometheus and Grafana:</strong> $${architecture.cost_estimate.monthly_low}–$${architecture.cost_estimate.monthly_high}/month</p>`;
+    document.querySelector("#architecture").innerHTML = architecture.components.map((item) => `<div class="component"><strong>${escapeHtml(item.name)}</strong><span><b class="service-tag">${escapeHtml(item.service)}</b> ${escapeHtml(item.purpose)}</span></div>`).join("") + `<p class="estimate-callout"><strong>Estimated monthly cost including Prometheus and Grafana:</strong> $${escapeHtml(architecture.cost_estimate.monthly_low)}–$${escapeHtml(architecture.cost_estimate.monthly_high)}/month</p>`;
+    renderPlanHighlights(architecture);
     renderArchitectureMap(architecture);
     document.querySelector("#recommendation-reason").textContent = architecture.recommendation_reason;
     document.querySelector("#assumptions").textContent = `Assumptions: ${architecture.assumptions.join(" ")}`;
@@ -459,6 +502,7 @@ document.querySelector("#create").addEventListener("click", async () => {
     show(`One AWS review draft created. Policy result: ${plan.policy_result}. It has not been submitted, approved, or deployed.`);
     await Promise.all([refreshAudit(), refreshDashboard()]);
   } catch (error) { show(error.message, true); }
+  finally { setButtonBusy(createButton, false); }
 });
 
 document.querySelector("#submit-review").addEventListener("click", async () => {
@@ -769,6 +813,26 @@ document.querySelector("#disconnect-repository").addEventListener("click", async
 document.querySelector("#login-developer").addEventListener("click", () => startSession("founder"));
 document.querySelector("#login-administrator").addEventListener("click", () => startSession("administrator"));
 document.querySelector("#logout").addEventListener("click", logout);
+
+const mobileMenuToggle = document.querySelector("#mobile-menu-toggle");
+const mobileNav = document.querySelector("#mobile-nav");
+mobileMenuToggle?.addEventListener("click", () => {
+  const open = mobileNav.classList.toggle("hidden") === false;
+  mobileMenuToggle.setAttribute("aria-expanded", String(open));
+});
+mobileNav?.querySelectorAll("a").forEach((link) => link.addEventListener("click", () => {
+  mobileNav.classList.add("hidden");
+  mobileMenuToggle.setAttribute("aria-expanded", "false");
+}));
+
+function syncActiveNavigation() {
+  const current = window.location.hash || "#dashboard";
+  document.querySelectorAll(".sidebar-link, header nav a, .mobile-nav a").forEach((link) => {
+    link.classList.toggle("active", link.getAttribute("href") === current);
+  });
+}
+window.addEventListener("hashchange", syncActiveNavigation);
+syncActiveNavigation();
 
 const commandPalette = document.querySelector("#command-palette");
 const commandSearch = document.querySelector("#command-search");
