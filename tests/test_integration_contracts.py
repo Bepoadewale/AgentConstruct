@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+
+import pytest
 from agentconstruct.execution_profiles import execution_profile
 from agentconstruct.integrations import (
     FixtureAwsDiscovery,
@@ -22,12 +25,90 @@ def test_github_fixture_models_reviewed_desired_state_and_webhook_contracts():
 def test_live_github_adapter_parses_repository_and_refuses_writes():
     connection = GitHubAppReadOnlyConnection("123", "456", "/private/key.pem")
     assert connection._repository_name("https://github.com/example/service.git") == "example/service"
+    with pytest.raises(PermissionError, match="disabled"):
+        connection.publish_reviewed_desired_state(
+            "456",
+            "example/service",
+            "agentconstruct/package.json",
+            json.dumps({"approved_digest": "a" * 64, "branch": "main", "files": []}),
+        )
     try:
         connection.publish_desired_state("456", "example/service", "state.yaml", "content")
     except PermissionError as error:
-        assert "read-only" in str(error)
+        assert "disabled" in str(error)
     else:
         raise AssertionError("read-only GitHub App adapter allowed a write")
+
+
+def test_live_github_adapter_publishes_reviewed_pr_when_explicitly_enabled(monkeypatch):
+    calls: list[tuple[str, str, dict | None]] = []
+
+    class Response:
+        def __init__(self, payload: dict, status_code: int = 200):
+            self._payload = payload
+            self.status_code = status_code
+
+        def json(self):
+            return self._payload
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise AssertionError(f"unexpected HTTP {self.status_code}")
+
+    def fake_get(url, **kwargs):
+        calls.append(("GET", url, kwargs.get("json")))
+        if url.endswith("/git/ref/heads/main"):
+            return Response({"object": {"sha": "base-sha"}})
+        if "/git/ref/heads/agentconstruct/desired-state-" in url:
+            return Response({"object": {"sha": "head-sha"}})
+        raise AssertionError(f"unexpected GET {url}")
+
+    def fake_post(url, **kwargs):
+        calls.append(("POST", url, kwargs.get("json")))
+        if url.endswith("/git/refs"):
+            return Response({"ref": kwargs["json"]["ref"]}, 201)
+        if url.endswith("/pulls"):
+            return Response({"html_url": "https://github.com/example/service/pull/7"}, 201)
+        if url.endswith("/statuses/head-sha"):
+            return Response({"state": kwargs["json"]["state"]}, 201)
+        raise AssertionError(f"unexpected POST {url}")
+
+    def fake_put(url, **kwargs):
+        calls.append(("PUT", url, kwargs.get("json")))
+        assert kwargs["json"]["branch"].startswith("agentconstruct/desired-state-")
+        return Response({"content": {"path": url.rsplit("/", 1)[-1]}}, 201)
+
+    connection = GitHubAppReadOnlyConnection("123", "456", "/private/key.pem")
+    monkeypatch.setenv("AGENTCONSTRUCT_GITHUB_APP_WRITES_ENABLED", "true")
+    monkeypatch.setattr(connection, "_installation_token", lambda: "installation-token")
+    monkeypatch.setattr("agentconstruct.integrations.httpx.get", fake_get)
+    monkeypatch.setattr("agentconstruct.integrations.httpx.post", fake_post)
+    monkeypatch.setattr("agentconstruct.integrations.httpx.put", fake_put)
+    digest = "b" * 64
+    pull_request = connection.publish_reviewed_desired_state(
+        "456",
+        "https://github.com/example/service",
+        "agentconstruct/package.json",
+        json.dumps(
+            {
+                "approved_digest": digest,
+                "branch": "main",
+                "files": [
+                    {
+                        "path": "agentconstruct/approved-plan.json",
+                        "content": {"digest": digest},
+                    }
+                ],
+            }
+        ),
+    )
+
+    assert pull_request.status == "EXECUTED_GITHUB_PR_CREATED"
+    assert pull_request.pull_request_url == "https://github.com/example/service/pull/7"
+    assert pull_request.required_checks == ("agentconstruct/desired-state-review",)
+    assert any(call[0] == "POST" and call[1].endswith("/pulls") for call in calls)
+    assert any(call[0] == "POST" and call[1].endswith("/statuses/head-sha") for call in calls)
+    assert not any(call[1].endswith("/merge") for call in calls)
 
 
 def test_aws_fixture_byoc_contract_never_returns_credentials():

@@ -31,6 +31,7 @@ from agentconstruct.execution_profiles import execution_profile
 from agentconstruct.executor import FixtureExecutor
 from agentconstruct.integrations import (
     FixtureAwsDiscovery,
+    GitHubConnection,
     StsAwsDiscovery,
     configured_github_connection,
     verify_github_webhook_signature,
@@ -87,12 +88,13 @@ class ProductService:
         executor: FixtureExecutor | None = None,
         intent_provider: IntentProvider | None = None,
         connection_secrets: ConnectionSecretStore | None = None,
+        github: GitHubConnection | None = None,
     ):
         self.db = db
         self.intent_provider = intent_provider or DeterministicIntentProvider()
         self.planner = AwsV1Planner()
         self.cloud_discovery = FixtureAwsDiscovery()
-        self.github = configured_github_connection()
+        self.github = github or configured_github_connection()
         self.day2_advisor = FixtureDay2Advisor()
         self.policy = policy or PolicyClient()
         self.executor = executor or FixtureExecutor()
@@ -1813,8 +1815,9 @@ class ProductService:
             repository_url=str(repository_url),
             branch=str(branch),
         )
+        installation = self.github.installations()[0]
         publication = self.github.publish_reviewed_desired_state(
-            "fixture-installation",
+            installation.id,
             str(repository_url),
             f"agentconstruct/{revision.id}/desired-state-package.json",
             json.dumps(package, sort_keys=True),
@@ -1844,7 +1847,10 @@ class ProductService:
                 "digest": revision.content_digest,
                 "profile": package["profile"],
                 "state": stored.state,
-                "boundary": "fixture PR only; AgentConstruct cannot merge or write live GitHub content",
+                "boundary": (
+                    "reviewed desired-state PR only; AgentConstruct cannot merge or deploy "
+                    "from this publication"
+                ),
             },
         )
         self.db.commit()
@@ -2045,7 +2051,11 @@ class ProductService:
             "content_digest": publication.content_digest,
             "created_by_subject": publication.created_by_subject,
             "created_at": publication.created_at.isoformat() if publication.created_at else None,
-            "execution": "SIMULATED_FIXTURE_PR",
+            "execution": (
+                "SIMULATED_FIXTURE_PR"
+                if str(publication.publication_url or "").startswith("fixture-pr://")
+                else "EXECUTED_GITHUB_PR_CREATED"
+            ),
             "merge_boundary": "AgentConstruct never merges the desired-state PR itself.",
         }
 

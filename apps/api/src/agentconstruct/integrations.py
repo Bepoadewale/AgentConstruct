@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -116,6 +117,10 @@ class GitHubConnection(Protocol):
     def publish_desired_state(
         self, installation_id: str, repository: str, path: str, content: str
     ) -> str: ...
+
+    def publish_reviewed_desired_state(
+        self, installation_id: str, repository: str, path: str, content: str
+    ) -> DesiredStatePullRequest: ...
 
     def validate_webhook(
         self, event: str, delivery_id: str, signature: str
@@ -471,9 +476,149 @@ class GitHubAppReadOnlyConnection:
     def publish_desired_state(
         self, installation_id: str, repository: str, path: str, content: str
     ) -> str:
-        raise PermissionError(
-            "live GitHub App integration is read-only until reviewed-write is approved"
+        return self.publish_reviewed_desired_state(
+            installation_id, repository, path, content
+        ).pull_request_url
+
+    def publish_reviewed_desired_state(
+        self, installation_id: str, repository: str, path: str, content: str
+    ) -> DesiredStatePullRequest:
+        if os.getenv("AGENTCONSTRUCT_GITHUB_APP_WRITES_ENABLED", "false").lower() != "true":
+            raise PermissionError(
+                "live GitHub App desired-state writes are disabled; set "
+                "AGENTCONSTRUCT_GITHUB_APP_WRITES_ENABLED=true after review"
+            )
+        if installation_id != self.installation_id:
+            raise PermissionError("GitHub installation is not configured for this connection")
+        package = self._desired_state_package(path, content)
+        repository_name = self._repository_name(repository)
+        base_branch = str(package.get("branch") or "main")
+        digest = str(package.get("approved_digest") or hashlib.sha256(content.encode()).hexdigest())
+        branch = f"agentconstruct/desired-state-{digest[:12]}"
+        token = self._installation_token()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        base_ref = httpx.get(
+            f"{self.api_url}/repos/{repository_name}/git/ref/heads/{base_branch}",
+            headers=headers,
+            timeout=10,
         )
+        base_ref.raise_for_status()
+        base_sha = str(base_ref.json()["object"]["sha"])
+        create_ref = httpx.post(
+            f"{self.api_url}/repos/{repository_name}/git/refs",
+            headers=headers,
+            json={"ref": f"refs/heads/{branch}", "sha": base_sha},
+            timeout=10,
+        )
+        if create_ref.status_code not in {201, 422}:
+            create_ref.raise_for_status()
+        for file in self._desired_state_files(package, path, content):
+            put = httpx.put(
+                f"{self.api_url}/repos/{repository_name}/contents/{file['path']}",
+                headers=headers,
+                json={
+                    "message": f"Add AgentConstruct desired state for {digest[:12]}",
+                    "content": file["content"],
+                    "branch": branch,
+                },
+                timeout=10,
+            )
+            put.raise_for_status()
+        head_ref = httpx.get(
+            f"{self.api_url}/repos/{repository_name}/git/ref/heads/{branch}",
+            headers=headers,
+            timeout=10,
+        )
+        head_ref.raise_for_status()
+        head_sha = str(head_ref.json()["object"]["sha"])
+        pr = httpx.post(
+            f"{self.api_url}/repos/{repository_name}/pulls",
+            headers=headers,
+            json={
+                "title": f"AgentConstruct desired state for approved plan {digest[:12]}",
+                "head": branch,
+                "base": base_branch,
+                "body": (
+                    "AgentConstruct generated this desired-state package from an approved "
+                    f"plan digest `{digest}`.\n\n"
+                    "Human review is required. AgentConstruct will not merge this pull request."
+                ),
+                "maintainer_can_modify": False,
+            },
+            timeout=10,
+        )
+        pr.raise_for_status()
+        pr_payload = pr.json()
+        status = httpx.post(
+            f"{self.api_url}/repos/{repository_name}/statuses/{head_sha}",
+            headers=headers,
+            json={
+                "state": "pending",
+                "target_url": pr_payload.get("html_url"),
+                "description": "Review AgentConstruct desired state before execution.",
+                "context": "agentconstruct/desired-state-review",
+            },
+            timeout=10,
+        )
+        status.raise_for_status()
+        return DesiredStatePullRequest(
+            pull_request_url=str(pr_payload["html_url"]),
+            branch=branch,
+            required_checks=("agentconstruct/desired-state-review",),
+            status="EXECUTED_GITHUB_PR_CREATED",
+        )
+
+    @staticmethod
+    def _desired_state_package(path: str, content: str) -> dict:
+        try:
+            package = json.loads(content)
+        except json.JSONDecodeError:
+            return {
+                "approved_digest": hashlib.sha256(content.encode()).hexdigest(),
+                "branch": "main",
+                "files": [{"path": path, "content": content}],
+            }
+        if not isinstance(package, dict):
+            raise TypeError("desired-state package must be a JSON object")
+        return package
+
+    @staticmethod
+    def _desired_state_files(package: dict, fallback_path: str, fallback_content: str) -> list[dict[str, str]]:
+        import base64
+
+        files = package.get("files")
+        rendered: list[dict[str, str]] = []
+        if isinstance(files, list):
+            for item in files:
+                if not isinstance(item, dict) or not item.get("path"):
+                    continue
+                path = str(item["path"]).lstrip("/")
+                if ".." in Path(path).parts:
+                    raise ValueError("desired-state file path cannot contain parent traversal")
+                content = item.get("content", "")
+                if not isinstance(content, str):
+                    content = json.dumps(content, indent=2, sort_keys=True) + "\n"
+                rendered.append(
+                    {
+                        "path": path,
+                        "content": base64.b64encode(content.encode()).decode(),
+                    }
+                )
+        rendered.append(
+            {
+                "path": fallback_path.lstrip("/"),
+                "content": base64.b64encode(
+                    (json.dumps(package, indent=2, sort_keys=True) + "\n").encode()
+                    if isinstance(package, dict)
+                    else fallback_content.encode()
+                ).decode(),
+            }
+        )
+        return rendered
 
     def validate_webhook(
         self, event: str, delivery_id: str, signature: str
