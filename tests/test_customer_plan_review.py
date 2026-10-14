@@ -6,6 +6,7 @@ from agentconstruct.domain import (
     InfrastructurePlanState,
     LifecycleState,
 )
+from agentconstruct.integrations import DesiredStatePullRequest
 from agentconstruct.models import (
     DesiredStatePublication,
     GitHubAppInstallationState,
@@ -13,6 +14,23 @@ from agentconstruct.models import (
 )
 from sqlalchemy import select
 from test_product import complete_prompt, founder, make_service, operator
+
+
+class LivePublishingGitHubFixture:
+    def installations(self):
+        return [type("Installation", (), {"id": "live-installation"})()]
+
+    def publish_reviewed_desired_state(self, installation_id, repository, path, content):
+        assert installation_id == "live-installation"
+        assert repository == "https://github.com/example/review-dry-run"
+        assert path.startswith("agentconstruct/")
+        assert "approved_digest" in content
+        return DesiredStatePullRequest(
+            pull_request_url="https://github.com/example/review-dry-run/pull/42",
+            branch="agentconstruct/desired-state-live",
+            required_checks=("agentconstruct/desired-state-review",),
+            status="EXECUTED_GITHUB_PR_CREATED",
+        )
 
 
 def test_simple_fastapi_customer_review_selects_one_non_eks_aws_plan_with_monitoring():
@@ -249,6 +267,31 @@ def test_approved_customer_review_publishes_fixture_desired_state_pr_contract():
     assert detail["desired_state_publications"][0]["id"] == publication["id"]
     assert any(
         event.action == "desired_state.fixture_pr_published"
+        for event in service.audits(founder())
+    )
+
+
+def test_approved_customer_review_can_publish_live_github_pr_record():
+    service, _ = make_service()
+    service.github = LivePublishingGitHubFixture()
+    approved = approved_customer_review(service)
+
+    publication = service.create_desired_state_publication_for_revision(
+        founder(), approved.id, approved.content_digest
+    )
+
+    assert publication["state"] == "PUBLISHED"
+    assert publication["publication_url"] == "https://github.com/example/review-dry-run/pull/42"
+    assert publication["branch"] == "main"
+    assert publication["required_checks"] == ["agentconstruct/desired-state-review"]
+    assert publication["execution"] == "EXECUTED_GITHUB_PR_CREATED"
+    assert publication["merge_boundary"] == "AgentConstruct never merges the desired-state PR itself."
+    assert service.create_desired_state_publication_for_revision(
+        founder(), approved.id, approved.content_digest
+    )["id"] == publication["id"]
+    assert any(
+        event.action == "desired_state.fixture_pr_published"
+        and "cannot merge or deploy" in event.detail["boundary"]
         for event in service.audits(founder())
     )
 

@@ -516,7 +516,7 @@ document.querySelector("#execute-review-dry-run").addEventListener("click", asyn
 document.querySelector("#publish-desired-state").addEventListener("click", async () => {
   try {
     if (!customerReview || customerReview.state !== "APPROVED") throw new Error("Approve the customer plan before creating a desired-state PR contract.");
-    show("Creating fixture desired-state PR contract. No GitHub write or merge will occur…");
+    show("Creating reviewed desired-state PR publication. Fixture mode stores it locally; live mode opens a GitHub PR when explicitly enabled…");
     const publication = await api(`/api/v1/customer-plan-revisions/${customerReview.id}/desired-state-publications`, {
       method: "POST",
       body: JSON.stringify({ content_digest: customerReview.content_digest }),
@@ -524,17 +524,17 @@ document.querySelector("#publish-desired-state").addEventListener("click", async
     renderDesiredStatePublications([publication]);
     await refreshOpenCustomerReview();
     await refreshAudit();
-    show("Fixture desired-state PR contract created. Human review remains required before any future cloud execution.");
+    show("Desired-state publication recorded. Human review remains required before any future cloud execution.");
   } catch (error) { show(error.message, true); }
 });
 
 document.querySelector("#mark-desired-state-reviewed").addEventListener("click", async () => {
   try {
-    if (!customerReview || customerReview.state !== "APPROVED") throw new Error("Approve the customer plan before recording fixture PR checks.");
+    if (!customerReview || customerReview.state !== "APPROVED") throw new Error("Approve the customer plan before recording PR checks.");
     const publication = (customerReview.desired_state_publications || [])[0];
-    if (!publication) throw new Error("Create the fixture desired-state PR first.");
-    if (!isAdministrator()) throw new Error("Only an administrator can record fixture PR checks.");
-    show("Recording fixture PR checks passed. No GitHub write, merge or deployment will occur…");
+    if (!publication) throw new Error("Create the desired-state PR publication first.");
+    if (!isAdministrator()) throw new Error("Only an administrator can record PR checks.");
+    show("Recording PR checks passed. AgentConstruct will not merge or deploy…");
     const updated = await api(`/api/v1/customer-plan-revisions/${customerReview.id}/desired-state-publications/${publication.id}/state`, {
       method: "POST",
       body: JSON.stringify({ content_digest: customerReview.content_digest, state: "CHECKS_PASSED" }),
@@ -542,7 +542,7 @@ document.querySelector("#mark-desired-state-reviewed").addEventListener("click",
     renderDesiredStatePublications([updated]);
     await refreshOpenCustomerReview();
     await refreshAudit();
-    show("Fixture PR checks passed were recorded locally. AgentConstruct still cannot merge or deploy.");
+    show("PR checks passed were recorded. AgentConstruct still cannot merge or deploy.");
   } catch (error) { show(error.message, true); }
 });
 
