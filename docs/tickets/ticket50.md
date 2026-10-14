@@ -6,7 +6,7 @@ Branch: `strategy/product-architecture-review`
 
 Status: draft review.
 
-## Goal
+## Problem / goal
 
 Create an evidence-backed strategic review of AgentConstruct and document the goal of eventually supporting millions of customers without prematurely overbuilding the platform.
 
@@ -51,4 +51,3 @@ Create an evidence-backed strategic review of AgentConstruct and document the go
 ## Boundaries
 
 This PR is analysis and documentation only. It does not add a model provider, change planner behavior, deploy infrastructure, or claim production scale.
-
