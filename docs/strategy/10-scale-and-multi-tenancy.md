@@ -4,6 +4,18 @@
 
 AgentConstruct is being designed to support millions of customer identities over time without turning every customer into a bespoke deployment. The goal is not to provision million-customer infrastructure now. The goal is to make the boundaries that determine future scale explicit before implementation hardens around a single tenant, single queue, single database, or single execution process.
 
+## Current implementation checkpoint
+
+The local product now has versioned tenant/evidence/model/job/usage contracts, a durable
+PostgreSQL queue seam, a provider-neutral model gateway, typed planning evidence, fail-closed
+execution contexts with cell/region placement, tenant-scoped entitlements, and deterministic
+planner regression scenarios. These are the scale seams we can validate locally before paying
+for a distributed hosted topology.
+
+They are not a claim that the current single-process Compose stack serves millions of customers.
+Hosted scale still requires production identity, durable RDS operations, partitioning/cell
+routing, quota storage, worker autoscaling, live provider evidence, and load/failure testing.
+
 ## Scale dimensions
 
 Capacity must be measured separately for:
@@ -84,4 +96,3 @@ The scalable asset is not only the API fleet. It is the customer-specific infras
 - No per-customer VPC or account by default.
 - No autonomous remediation of protected production environments.
 - No foundation-model training.
-
