@@ -34,21 +34,21 @@ The current worker and intent provider are useful local implementations but are 
 
 ## Acceptance criteria
 
-- [ ] Duplicate tenant/idempotency submissions return one durable job.
-- [ ] Queue claims are tenant-scoped and transition through retry/dead-letter states.
-- [ ] Job timeout, attempt and trace metadata are persisted.
-- [ ] Model gateway returns typed validated responses and usage metadata.
-- [ ] Disabled model mode fails closed without execution authority.
-- [ ] Existing local workflow and tests remain green.
-- [ ] No AWS resources or external model calls occur in CI.
+- [x] Duplicate tenant/idempotency submissions return one durable job.
+- [x] Queue claims are tenant-scoped and transition through retry/dead-letter states.
+- [x] Job timeout, attempt and trace metadata are persisted.
+- [x] Model gateway returns typed validated responses and usage metadata.
+- [x] Disabled model mode fails closed without execution authority.
+- [x] Existing local workflow and tests remain green.
+- [x] No AWS resources or external model calls occur in CI.
 
 ## Acceptance status
 
-Pending implementation and validation.
+Met for the PostgreSQL and in-memory queue adapters plus deterministic/disabled model gateway. Existing worker wiring and a real external model provider remain follow-up work.
 
 ## Tests / validation performed
 
-To run after implementation:
+Validation performed:
 
 ```bash
 make lint
@@ -56,6 +56,8 @@ make test
 python3 scripts/check_doc_conventions.py
 git diff --check
 ```
+
+Results: lint passed; 133 tests passed; documentation conventions passed; diff check passed.
 
 ## Evidence files produced
 
@@ -68,4 +70,3 @@ This PR does not replace the existing worker loop, add SQS/EventBridge, call a p
 ## Follow-up work
 
 Wire the queue into the worker, add an actual model provider behind customer data controls, and add evidence-backed planning in separate PRs.
-
