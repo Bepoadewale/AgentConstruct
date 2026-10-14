@@ -14,8 +14,9 @@ def main() -> None:
         db = SessionLocal()
         try:
             service = ProductService(db)
-            # Both queues are durable. Discovery is deliberately read-only.
-            if not service.run_next_discovery_job():
+            # All queues are durable. Cloud execution is separately gated and
+            # uses only the configured profile adapter.
+            if not service.run_next_discovery_job() and not service.run_next_cloud_execution():
                 service.run_next_job()
         finally:
             db.close()

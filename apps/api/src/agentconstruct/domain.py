@@ -325,6 +325,11 @@ class CloudExecutionRunRequest(BaseModel):
     confirmation: str | None = None
 
 
+class CloudExecutionExecuteRequest(BaseModel):
+    content_digest: str = Field(min_length=64, max_length=64)
+    confirmation: str = Field(min_length=1, max_length=80)
+
+
 class InfrastructurePlanRevisionRequest(BaseModel):
     """New customer-plan draft content. The preceding revision is never edited."""
 

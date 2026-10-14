@@ -13,6 +13,10 @@ from opentelemetry import trace
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from agentconstruct.cloud_execution import (
+    CloudExecutionAdapter,
+    configured_cloud_execution_adapter,
+)
 from agentconstruct.connection_secrets import (
     ConnectionSecretStore,
     configured_connection_secret_store,
@@ -89,6 +93,7 @@ class ProductService:
         intent_provider: IntentProvider | None = None,
         connection_secrets: ConnectionSecretStore | None = None,
         github: GitHubConnection | None = None,
+        cloud_execution: CloudExecutionAdapter | None = None,
     ):
         self.db = db
         self.intent_provider = intent_provider or DeterministicIntentProvider()
@@ -99,6 +104,7 @@ class ProductService:
         self.policy = policy or PolicyClient()
         self.executor = executor or FixtureExecutor()
         self.connection_secrets = connection_secrets or configured_connection_secret_store()
+        self.cloud_execution = cloud_execution or configured_cloud_execution_adapter()
 
     def _trace(self, name: str):
         return trace.get_tracer("agentconstruct.product").start_as_current_span(name)
@@ -2836,6 +2842,83 @@ class ProductService:
         )
         self.db.commit()
         return self._cloud_execution_run_payload(run)
+
+    def queue_cloud_execution_run(
+        self,
+        principal: Principal,
+        run_id: str,
+        content_digest: str,
+        confirmation: str,
+    ) -> dict[str, Any]:
+        """Queue an already-ready run; the trusted worker performs execution."""
+        if not self._is_workspace_administrator(principal):
+            raise PermissionError("only a workspace administrator can execute cloud runs")
+        run = self.db.get(CloudExecutionRun, run_id)
+        if not run or run.organization_id != principal.organization_id:
+            raise PermissionError("cloud execution run not found in this organization")
+        if run.content_digest != content_digest:
+            raise ValueError("stale cloud execution run digest")
+        if run.state != "READY_FOR_OPERATOR_APP_RUNNER_EXECUTION":
+            raise ValueError(f"cloud execution run is not ready: {run.state}")
+        if confirmation != "EXECUTE_APP_RUNNER_WORKLOAD":
+            raise ValueError("explicit App Runner execution confirmation is required")
+        run.state = "QUEUED"
+        run.evidence = {
+            **(run.evidence or {}),
+            "queued_by_subject": principal.subject,
+            "queue_confirmation": "EXECUTE_APP_RUNNER_WORKLOAD",
+            "boundary": "Queued for the trusted App Runner adapter; no user-supplied command is accepted.",
+        }
+        self.audit(
+            principal,
+            "cloud_execution.queued",
+            "cloud_execution_run",
+            run.id,
+            {"digest": run.content_digest, "profile": run.profile},
+        )
+        self.db.commit()
+        return self._cloud_execution_run_payload(run)
+
+    def run_next_cloud_execution(self) -> bool:
+        """Run one durable cloud execution job through the configured adapter."""
+        run = self.db.scalar(
+            select(CloudExecutionRun)
+            .where(CloudExecutionRun.state == "QUEUED")
+            .order_by(CloudExecutionRun.created_at)
+            .limit(1)
+        )
+        if not run:
+            return False
+        run.state = "RUNNING"
+        self.db.commit()
+        context = {
+            "run_id": run.id,
+            "profile": run.profile,
+            "digest": run.content_digest,
+            "environment": (run.evidence or {}).get("execution_environment", {}),
+        }
+        result = self.cloud_execution.execute(context)
+        run.state = result.state
+        run.outputs = {
+            **(run.outputs or {}),
+            **result.outputs,
+            "operations": list(result.operations),
+            "failure_reason": result.failure_reason,
+        }
+        run.evidence = {
+            **(run.evidence or {}),
+            "observed_by": "trusted-cloud-execution-worker",
+            "observed_state": result.state,
+        }
+        self.audit(
+            Principal("system-cloud-worker", run.organization_id, "operator"),
+            "cloud_execution.observed",
+            "cloud_execution_run",
+            run.id,
+            {"state": result.state, "failure_reason": result.failure_reason},
+        )
+        self.db.commit()
+        return True
 
     def _latest_execution_dependency(
         self,
