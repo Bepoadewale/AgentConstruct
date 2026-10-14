@@ -36,20 +36,20 @@ The planner currently accepts inventory but does not expose a unified evidence b
 
 ## Acceptance criteria
 
-- [ ] Planning evidence includes repository, inventory, pricing and capability references.
-- [ ] Pricing identifies catalog version, timestamp, assumptions and actual-billing status.
-- [ ] Architecture plans expose evidence references and limitations.
-- [ ] Missing evidence is labeled fixture/unknown, not silently treated as live.
-- [ ] Existing planner decisions remain unchanged.
-- [ ] No AWS API or billing call occurs in CI.
+- [x] Planning evidence includes repository, inventory, pricing and capability references.
+- [x] Pricing identifies catalog version, timestamp, assumptions and actual-billing status.
+- [x] Architecture plans expose evidence references and limitations.
+- [x] Missing evidence is labeled fixture/unknown, not silently treated as live.
+- [x] Existing planner decisions remain unchanged.
+- [x] No AWS API or billing call occurs in CI.
 
 ## Acceptance status
 
-Pending implementation and validation.
+Met for the typed evidence bundle and deterministic catalog boundary. Live AWS pricing, quotas and availability remain follow-up adapters.
 
 ## Tests / validation performed
 
-To run after implementation:
+Validation performed:
 
 ```bash
 make lint
@@ -57,6 +57,8 @@ make test
 python3 scripts/check_doc_conventions.py
 git diff --check
 ```
+
+Results: lint passed; 136 tests passed; documentation conventions passed; diff check passed.
 
 ## Evidence files produced
 
@@ -69,4 +71,3 @@ This PR does not claim live pricing, quota, service availability or AWS deployme
 ## Follow-up work
 
 Add live read-only AWS pricing/catalog, quotas, regional availability and inventory adapters after the evidence contract is accepted.
-
