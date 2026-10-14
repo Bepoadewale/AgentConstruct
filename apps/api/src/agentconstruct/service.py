@@ -41,6 +41,7 @@ from agentconstruct.models import (
     AuditEvent,
     CloudConnection,
     CloudDiscoveryJob,
+    CloudExecutionRun,
     CloudReadinessPreflight,
     DeploymentPlan,
     DesiredStatePublication,
@@ -663,6 +664,17 @@ class ProductService:
                 .order_by(TerraformPlanReview.created_at.desc())
             )
         ]
+        cloud_execution_runs = [
+            self._cloud_execution_run_payload(run)
+            for run in self.db.scalars(
+                select(CloudExecutionRun)
+                .where(
+                    CloudExecutionRun.organization_id == principal.organization_id,
+                    CloudExecutionRun.revision_id == revision.id,
+                )
+                .order_by(CloudExecutionRun.created_at.desc())
+            )
+        ]
         return {
             "id": revision.id,
             "plan_id": plan.id,
@@ -691,6 +703,7 @@ class ProductService:
             "terraform_plan_renders": terraform_plan_renders,
             "cloud_readiness_preflights": cloud_preflights,
             "terraform_plan_reviews": terraform_plan_reviews,
+            "cloud_execution_runs": cloud_execution_runs,
             "submitted_by_subject": revision.submitted_by_subject,
             "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
             "decision": None
@@ -2630,6 +2643,230 @@ class ProductService:
             "apply_available": False,
             "execution": "PLAN_ONLY_REVIEW_NO_APPLY",
             "boundary": "Terraform apply/destroy is unavailable. This record does not create AWS resources.",
+        }
+
+    def create_cloud_execution_run_for_revision(
+        self,
+        principal: Principal,
+        revision_id: str,
+        *,
+        content_digest: str,
+        terraform_render_id: str | None,
+        preflight_id: str | None,
+        terraform_plan_review_id: str | None,
+        expected_account_id: str | None,
+        expected_region: str | None,
+        mode: str,
+        confirmation: str | None,
+    ) -> dict[str, Any]:
+        """Record a guarded App Runner execution run request.
+
+        Default/local mode cannot mutate AWS. Authenticated execution remains
+        gated by explicit process environment and request confirmation.
+        """
+        if not self._is_workspace_administrator(principal):
+            raise PermissionError("only a workspace administrator can request cloud execution")
+        revision, infrastructure_plan, _ = self._approved_customer_revision(principal, revision_id)
+        if revision.content_digest != content_digest or plan_hash(revision.content) != content_digest:
+            raise ValueError("stale cloud execution request: approved digest changed")
+        profile_name = revision.content.get("summary", {}).get("selected_profile")
+        if profile_name != "aws-app-runner":
+            raise ValueError("cloud execution run currently supports approved aws-app-runner plans only")
+
+        render = self._latest_execution_dependency(
+            TerraformPlanRender,
+            principal.organization_id,
+            revision.id,
+            revision.content_digest,
+            terraform_render_id,
+        )
+        preflight = self._latest_execution_dependency(
+            CloudReadinessPreflight,
+            principal.organization_id,
+            revision.id,
+            revision.content_digest,
+            preflight_id,
+        )
+        plan_review = self._latest_execution_dependency(
+            TerraformPlanReview,
+            principal.organization_id,
+            revision.id,
+            revision.content_digest,
+            terraform_plan_review_id,
+        )
+
+        blockers: list[str] = []
+        state = "BLOCKED_CLOUD_EXECUTION_NOT_ENABLED"
+        render_inputs = render.render.get("module_inputs", {}) if render else {}
+        account_id = render_inputs.get("aws_account_id")
+        region = render_inputs.get("aws_region")
+        if render is None:
+            blockers.append("Generate an App Runner Terraform contract first.")
+            state = "BLOCKED_TERRAFORM_CONTRACT_REQUIRED"
+        if preflight is None:
+            blockers.append("Run cloud-readiness preflight first.")
+            state = "BLOCKED_PREFLIGHT_REQUIRED"
+        elif preflight.state != "READY_FOR_AUTHORIZED_CLOUD_PLAN":
+            blockers.append(f"Cloud-readiness preflight is {preflight.state}.")
+            state = "BLOCKED_PREFLIGHT"
+        if plan_review is None:
+            blockers.append("Record Terraform plan-only review first.")
+            state = "BLOCKED_TERRAFORM_PLAN_REVIEW_REQUIRED"
+        elif plan_review.state not in {
+            "LOCAL_CONTRACT_PLAN_REVIEWED",
+            "AUTHENTICATED_PLAN_ALLOWED_NOT_EXECUTED",
+        }:
+            blockers.append(f"Terraform plan review is {plan_review.state}.")
+            state = "BLOCKED_TERRAFORM_PLAN_REVIEW"
+        if expected_account_id and account_id not in {
+            expected_account_id,
+            "customer-account-selected-at-apply-time",
+        }:
+            blockers.append(f"Expected AWS account {expected_account_id}; render targets {account_id}.")
+            state = "BLOCKED_ACCOUNT_GUARD"
+        if expected_region and region != expected_region:
+            blockers.append(f"Expected AWS region {expected_region}; render targets {region}.")
+            state = "BLOCKED_REGION_GUARD"
+
+        cloud_apply_env = os.getenv("ALLOW_CLOUD_APPLY", "").lower() == "true"
+        runtime_enabled = os.getenv("AGENTCONSTRUCT_ENABLE_APP_RUNNER_EXECUTION", "").lower() == "true"
+        confirmation_ok = confirmation == "EXECUTE_APP_RUNNER_WORKLOAD"
+        if mode == "AUTHENTICATED_APP_RUNNER_APPLY":
+            if not cloud_apply_env or not runtime_enabled or not confirmation_ok:
+                blockers.append(
+                    "Authenticated App Runner execution requires ALLOW_CLOUD_APPLY=true, "
+                    "AGENTCONSTRUCT_ENABLE_APP_RUNNER_EXECUTION=true and confirmation "
+                    "EXECUTE_APP_RUNNER_WORKLOAD."
+                )
+                state = "BLOCKED_CLOUD_EXECUTION_NOT_ENABLED"
+            elif not blockers:
+                state = "READY_FOR_OPERATOR_APP_RUNNER_EXECUTION"
+        elif not blockers:
+            blockers.append("Local/default mode records execution history only; cloud apply is disabled.")
+            state = "BLOCKED_CLOUD_EXECUTION_NOT_ENABLED"
+
+        previous = self.db.scalar(
+            select(CloudExecutionRun)
+            .where(
+                CloudExecutionRun.organization_id == principal.organization_id,
+                CloudExecutionRun.revision_id == revision.id,
+            )
+            .order_by(CloudExecutionRun.attempt.desc())
+            .limit(1)
+        )
+        attempt_number = 1 if not previous else previous.attempt + 1
+        command = {
+            "profile": "aws-app-runner",
+            "terraform_root": "infrastructure/terraform/customer-workload-app-runner-pilot",
+            "script": "scripts/customer-workload-app-runner-pilot.sh",
+            "steps": [
+                "plan",
+                "apply-foundation",
+                "build-push-image",
+                "apply-service",
+                "wait-ready",
+                "smoke",
+                "destroy",
+                "verify-absent",
+            ],
+            "apply_command_available": state == "READY_FOR_OPERATOR_APP_RUNNER_EXECUTION",
+            "destroy_required": True,
+        }
+        evidence = {
+            "revision_id": revision.id,
+            "digest": revision.content_digest,
+            "profile": "aws-app-runner",
+            "terraform_render_id": render.id if render else None,
+            "preflight_id": preflight.id if preflight else None,
+            "terraform_plan_review_id": plan_review.id if plan_review else None,
+            "aws_account_id": account_id,
+            "aws_region": region,
+            "mode": mode,
+            "runtime_enabled": runtime_enabled,
+            "allow_cloud_apply_env": cloud_apply_env,
+            "confirmation_ok": confirmation_ok,
+            "blockers": blockers,
+            "boundary": (
+                "This run records a guarded execution request. It does not deploy unless the "
+                "explicit cloud-apply gates are enabled and an operator proceeds with the "
+                "App Runner execution profile."
+            ),
+        }
+        run = CloudExecutionRun(
+            organization_id=principal.organization_id,
+            revision_id=revision.id,
+            project_id=infrastructure_plan.project_id,
+            terraform_render_id=render.id if render else None,
+            preflight_id=preflight.id if preflight else None,
+            terraform_plan_review_id=plan_review.id if plan_review else None,
+            profile="aws-app-runner",
+            state=state,
+            mode=mode,
+            attempt=attempt_number,
+            command=command,
+            evidence=evidence,
+            outputs={"status": "not_executed", "resources_created": []},
+            content_digest=revision.content_digest,
+            requested_by_subject=principal.subject,
+        )
+        self.db.add(run)
+        self.db.flush()
+        self.audit(
+            principal,
+            "cloud_execution.run_requested",
+            "cloud_execution_run",
+            run.id,
+            {
+                "revision_id": revision.id,
+                "digest": revision.content_digest,
+                "state": state,
+                "attempt": attempt_number,
+                "profile": "aws-app-runner",
+            },
+        )
+        self.db.commit()
+        return self._cloud_execution_run_payload(run)
+
+    def _latest_execution_dependency(
+        self,
+        model: Any,
+        organization_id: str,
+        revision_id: str,
+        content_digest: str,
+        item_id: str | None,
+    ) -> Any | None:
+        query = select(model).where(
+            model.organization_id == organization_id,
+            model.revision_id == revision_id,
+            model.content_digest == content_digest,
+        )
+        if item_id:
+            query = query.where(model.id == item_id)
+        return self.db.scalar(query.order_by(model.created_at.desc()).limit(1))
+
+    @staticmethod
+    def _cloud_execution_run_payload(run: CloudExecutionRun) -> dict[str, Any]:
+        return {
+            "id": run.id,
+            "revision_id": run.revision_id,
+            "profile": run.profile,
+            "state": run.state,
+            "mode": run.mode,
+            "attempt": run.attempt,
+            "terraform_render_id": run.terraform_render_id,
+            "preflight_id": run.preflight_id,
+            "terraform_plan_review_id": run.terraform_plan_review_id,
+            "command": run.command,
+            "evidence": run.evidence,
+            "outputs": run.outputs,
+            "content_digest": run.content_digest,
+            "requested_by_subject": run.requested_by_subject,
+            "created_at": run.created_at.isoformat() if run.created_at else None,
+            "execution": "CLOUD_EXECUTION_REQUEST_RECORD",
+            "boundary": (
+                "This is execution-history/governance evidence. It is not proof of AWS "
+                "deployment unless a later run records observed AWS outputs/resources."
+            ),
         }
 
     def cloud_role_contract(self, principal: Principal, connection_id: str) -> dict[str, str | int]:

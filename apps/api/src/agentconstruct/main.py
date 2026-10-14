@@ -16,6 +16,7 @@ from agentconstruct.domain import (
     AwsConnectionVerificationRequest,
     AwsQuickCreateRequest,
     CloudConnectionRequest,
+    CloudExecutionRunRequest,
     CloudInventorySnapshotRequest,
     CloudReadinessPreflightRequest,
     DesiredStatePublicationRequest,
@@ -543,6 +544,31 @@ def create_customer_plan_terraform_plan_review(
             expected_region=request.expected_region,
             mode=request.mode,
             allow_cloud_plan=request.allow_cloud_plan,
+        )
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.post("/api/v1/customer-plan-revisions/{revision_id}/cloud-execution-runs")
+def create_customer_plan_cloud_execution_run(
+    revision_id: str,
+    request: CloudExecutionRunRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("cloud_execution.customer_plan_run").inc()
+    try:
+        return service.create_cloud_execution_run_for_revision(
+            principal,
+            revision_id,
+            content_digest=request.content_digest,
+            terraform_render_id=request.terraform_render_id,
+            preflight_id=request.preflight_id,
+            terraform_plan_review_id=request.terraform_plan_review_id,
+            expected_account_id=request.expected_account_id,
+            expected_region=request.expected_region,
+            mode=request.mode,
+            confirmation=request.confirmation,
         )
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)

@@ -325,6 +325,40 @@ class TerraformPlanReview(Base):
     )
 
 
+class CloudExecutionRun(Base):
+    """Customer-workload execution run requested through the product boundary."""
+
+    __tablename__ = "cloud_execution_runs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    revision_id: Mapped[str] = mapped_column(
+        ForeignKey("infrastructure_plan_revisions.id"), index=True
+    )
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    terraform_render_id: Mapped[str | None] = mapped_column(
+        ForeignKey("terraform_plan_renders.id"), nullable=True, index=True
+    )
+    preflight_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cloud_readiness_preflights.id"), nullable=True, index=True
+    )
+    terraform_plan_review_id: Mapped[str | None] = mapped_column(
+        ForeignKey("terraform_plan_reviews.id"), nullable=True, index=True
+    )
+    profile: Mapped[str] = mapped_column(String(80), index=True)
+    state: Mapped[str] = mapped_column(String(80), index=True)
+    mode: Mapped[str] = mapped_column(String(80), default="GUARDED_CLOUD_EXECUTION")
+    attempt: Mapped[int] = mapped_column(default=1)
+    command: Mapped[dict] = mapped_column(JSON, default=dict)
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+    outputs: Mapped[dict] = mapped_column(JSON, default=dict)
+    content_digest: Mapped[str] = mapped_column(String(64), index=True)
+    requested_by_subject: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class DeploymentPlan(Base):
     __tablename__ = "deployment_plans"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
