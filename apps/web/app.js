@@ -161,7 +161,8 @@ function renderHistory(plans) {
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   historyPage = Math.min(historyPage, pageCount);
   const pageItems = filtered.slice((historyPage - 1) * PAGE_SIZE, historyPage * PAGE_SIZE);
-  node.innerHTML = pageItems.map((item) => `<button class="history-row" type="button" data-history-id="${escapeHtml(item.id)}"><span class="history-title"><b>${escapeHtml(item.title)}</b><small>Revision ${escapeHtml(item.revision)} · ${escapeHtml(formatDate(item.created_at))}</small></span><span class="status-chip status-${escapeHtml(String(item.state).toLowerCase())}">${escapeHtml(item.state)}</span><span class="history-arrow">›</span></button>`).join("");
+  const groups = pageItems.reduce((map, item) => { const key = item.project_id || item.title || "Plans"; (map[key] ||= []).push(item); return map; }, {});
+  node.innerHTML = Object.values(groups).map((items) => `<div class="history-group"><div class="history-group-heading"><span>${escapeHtml(items[0].title || "Plan")}</span><small>${items.length} revision${items.length === 1 ? "" : "s"}</small></div>${items.map((item) => `<button class="history-row" type="button" data-history-id="${escapeHtml(item.id)}"><span class="history-title"><b>${escapeHtml(item.title)}</b><small>Revision ${escapeHtml(item.revision)} · ${escapeHtml(formatDate(item.created_at))}</small></span><span class="status-chip status-${escapeHtml(String(item.state).toLowerCase())}">${escapeHtml(item.state)}</span><span class="history-arrow">›</span></button>`).join("")}</div>`).join("");
   node.querySelectorAll("[data-history-id]").forEach((row) => row.addEventListener("click", () => openCustomerReview(row.dataset.historyId).catch((error) => show(error.message, true))));
   renderPagination("history-pagination", historyPage, filtered.length, (nextPage) => { historyPage = nextPage; renderHistory(plans); });
 }
@@ -344,6 +345,7 @@ function renderCustomerReview(review) {
   const revisionControls = document.querySelector("#revision-controls");
   const decisions = document.querySelector("#administrator-decisions");
   const actionMessage = document.querySelector("#review-action-message");
+  const nextStep = document.querySelector("#review-next-step");
   const localExecution = document.querySelector("#local-execution");
   const desiredStatePr = document.querySelector("#desired-state-pr");
   const terraformPlanContract = document.querySelector("#terraform-plan-contract");
@@ -394,10 +396,10 @@ function renderCustomerReview(review) {
   document.querySelector("#review-diff").textContent = content.revision_diff && Object.keys(content.revision_diff).length
     ? JSON.stringify(content.revision_diff, null, 2)
     : "No revised constraint differences yet.";
-  if (review.state === "DRAFT") actionMessage.textContent = isCreator ? "Review the exact digest, then submit it for administrator approval. Submission never deploys infrastructure." : "Only the plan creator can submit this draft.";
-  else if (review.state === "SUBMITTED") actionMessage.textContent = isAdministrator() ? "This submitted plan is ready for an administrator decision. It is not deployed." : "Submitted for administrator review. It is not deployed.";
-  else if (review.state === "REJECTED") actionMessage.textContent = `Rejected: ${review.decision?.reason || "reason unavailable"}. The creator can make a new draft revision.`;
-  else if (review.state === "APPROVED") actionMessage.textContent = `Approved by ${review.decision?.approver_subject || "administrator"}${review.decision?.is_self_approval ? " (self-approval recorded)" : ""}. Approved does not mean deployed.`;
+  if (review.state === "DRAFT") { actionMessage.textContent = isCreator ? "Review the exact digest, then submit it for administrator approval. Submission never deploys infrastructure." : "Only the plan creator can submit this draft."; nextStep.textContent = isCreator ? "Next: confirm the assumptions, then submit for approval." : "Waiting for the plan creator to submit this draft."; }
+  else if (review.state === "SUBMITTED") { actionMessage.textContent = isAdministrator() ? "This submitted plan is ready for an administrator decision. It is not deployed." : "Submitted for administrator review. It is not deployed."; nextStep.textContent = isAdministrator() ? "Next: approve or reject this exact digest." : "Next: an administrator must decide this plan."; }
+  else if (review.state === "REJECTED") { actionMessage.textContent = `Rejected: ${review.decision?.reason || "reason unavailable"}. The creator can make a new draft revision.`; nextStep.textContent = isCreator ? "Next: create a revised draft with the rejection addressed." : "The creator can revise this plan."; }
+  else if (review.state === "APPROVED") { actionMessage.textContent = `Approved by ${review.decision?.approver_subject || "administrator"}${review.decision?.is_self_approval ? " (self-approval recorded)" : ""}. Approved does not mean deployed.`; nextStep.textContent = "Next: run the local dry run, then review the desired-state and plan-only checks."; }
 }
 
 function renderCloudReadinessPreflights(preflights) {
@@ -506,6 +508,16 @@ async function refreshAudit() {
   renderAuditEvents(events);
 }
 
+function openActivityDrawer(event) {
+  if (!event) return;
+  document.querySelector("#activity-drawer-title").textContent = event.label || "Activity event";
+  document.querySelector("#activity-drawer-meta").textContent = `${formatDate(event.at)} · ${event.actor_subject || "system"} · ${event.actor_role || "system"}`;
+  document.querySelector("#activity-drawer-json").textContent = JSON.stringify(event, null, 2);
+  document.querySelector("#activity-drawer").classList.remove("hidden");
+}
+
+function closeActivityDrawer() { document.querySelector("#activity-drawer")?.classList.add("hidden"); }
+
 function renderAuditEvents(events) {
   const node = document.querySelector("#audit-events");
   if (!node) return;
@@ -519,7 +531,8 @@ function renderAuditEvents(events) {
   const pageCount = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
   auditPage = Math.min(auditPage, pageCount);
   const pageItems = ordered.slice((auditPage - 1) * PAGE_SIZE, auditPage * PAGE_SIZE);
-  node.innerHTML = pageItems.length ? pageItems.map((event) => `<div class="event"><time>${escapeHtml(formatDate(event.at))}</time><div><strong>${escapeHtml(event.label)}</strong><br><span>${escapeHtml(event.actor_subject)} · ${escapeHtml(event.actor_role)} · ${escapeHtml(event.entity_type)}${event.revision ? ` · revision ${escapeHtml(event.revision)}` : ""}${event.plan_digest ? ` · ${escapeHtml(event.plan_digest.slice(0, 12))}…` : ""}${event.decision_reason ? ` · reason: ${escapeHtml(event.decision_reason)}` : ""}</span></div></div>`).join("") : `<div class="empty-state"><strong>No matching activity</strong><span>Try a different search or event filter.</span></div>`;
+  node.innerHTML = pageItems.length ? pageItems.map((event, index) => `<button class="event" type="button" data-event-index="${index}"><time>${escapeHtml(formatDate(event.at))}</time><div><strong>${escapeHtml(event.label)}</strong><br><span>${escapeHtml(event.actor_subject)} · ${escapeHtml(event.actor_role)} · ${escapeHtml(event.entity_type)}${event.revision ? ` · revision ${escapeHtml(event.revision)}` : ""}${event.plan_digest ? ` · ${escapeHtml(event.plan_digest.slice(0, 12))}…` : ""}${event.decision_reason ? ` · reason: ${escapeHtml(event.decision_reason)}` : ""}</span></div><span class="history-arrow">›</span></button>`).join("") : `<div class="empty-state"><strong>No matching activity</strong><span>Try a different search or event filter.</span></div>`;
+  node.querySelectorAll("[data-event-index]").forEach((button) => button.addEventListener("click", () => openActivityDrawer(pageItems[Number(button.dataset.eventIndex)])));
   renderPagination("audit-pagination", auditPage, ordered.length, (nextPage) => { auditPage = nextPage; renderAuditEvents(events); });
 }
 
@@ -609,8 +622,11 @@ document.querySelector("#open-review").addEventListener("click", () => { window.
 document.querySelector("#history-new-plan").addEventListener("click", () => { window.location.hash = "#describe"; });
 document.querySelector("#history-search").addEventListener("input", () => renderHistory(dashboardSnapshot?.plans || []));
 document.querySelector("#history-filter").addEventListener("change", () => { historyPage = 1; renderHistory(dashboardSnapshot?.plans || []); });
+document.querySelector("#history-density").addEventListener("change", (event) => document.querySelector("#history-list")?.classList.toggle("compact-density", event.target.value === "compact"));
 document.querySelector("#audit-search").addEventListener("input", () => renderAuditEvents(auditSnapshot));
 document.querySelector("#audit-filter").addEventListener("change", () => { auditPage = 1; renderAuditEvents(auditSnapshot); });
+document.querySelector("#close-activity-drawer")?.addEventListener("click", closeActivityDrawer);
+document.querySelector("#activity-drawer")?.addEventListener("click", (event) => { if (event.target.id === "activity-drawer") closeActivityDrawer(); });
 
 document.querySelector("#submit-review").addEventListener("click", async () => {
   try {
@@ -968,6 +984,7 @@ commandSearch?.addEventListener("input", () => {
   document.querySelectorAll("#command-list button").forEach((item) => { item.classList.toggle("hidden", !item.textContent.toLowerCase().includes(query)); });
 });
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeActivityDrawer();
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommandPalette(); }
   if (event.key === "Escape") closeCommandPalette();
   if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === "n" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") runCommand("new-plan");

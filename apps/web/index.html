@@ -11,7 +11,7 @@
     <header>
       <a class="brand" href="/" aria-label="AgentConstruct home"><span class="brand-mark">A</span><span>AgentConstruct</span></a>
       <span class="badge"><span class="status-dot"></span> LOCAL PRODUCT DEMO</span>
-      <nav aria-label="Primary navigation"><a href="#dashboard">Overview</a><a href="#describe">New plan</a><a href="#result">Plan</a><a href="#customer-review">Review</a><a href="#history">History</a><a href="#audit">Activity</a><button id="logout" class="secondary hidden" type="button">Sign out</button></nav>
+      <nav aria-label="Primary navigation"><a href="#dashboard">Overview</a><a href="#describe">New plan</a><a href="#history">History</a><button id="logout" class="secondary hidden" type="button">Sign out</button></nav>
       <button id="mobile-menu-toggle" class="mobile-menu-toggle secondary" type="button" aria-expanded="false" aria-controls="mobile-nav">Menu</button>
       <nav id="mobile-nav" class="mobile-nav hidden" aria-label="Mobile navigation"><a href="#dashboard">Overview</a><a href="#describe">New plan</a><a href="#result">Plan</a><a href="#customer-review">Review</a><a href="#history">History</a><a href="#audit">Activity</a></nav>
     </header>
@@ -85,14 +85,14 @@
           <div class="connection-row"><button id="open-aws-setup" type="button">Open AWS setup</button><button id="verify-aws" type="button" class="secondary hidden">Verify connection</button><button id="disconnect-aws" type="button" class="secondary hidden">Disconnect</button></div>
           <p id="aws-connect-message" class="message"></p>
         </div>
-        <div class="grid controls">
+        <details class="advanced-settings"><summary>Advanced constraints <span>Region, data, budget, availability</span></summary><div class="grid controls">
           <label for="region">Region<select id="region"><option>us-east-1</option><option>eu-west-1</option></select></label>
           <label for="data-classification">Data<select id="data-classification"><option value="restricted">Restricted</option><option value="internal">Internal</option></select></label>
           <label for="budget">Monthly budget (USD)<input id="budget" type="number" min="1" value="1500" /></label>
           <label for="environment">Environment<select id="environment"><option value="staging and production">Staging and production</option><option value="production">Production</option><option value="staging">Staging</option></select></label>
           <label for="availability">Availability target<select id="availability"><option>99.9%</option><option>99.99%</option></select></label>
           <label for="workload-type">Workload<select id="workload-type"><option value="AI API">AI API</option><option value="event-driven document processor">Event-driven processor</option><option value="static AI application">Static application</option></select></label>
-        </div>
+        </div></details>
         <label for="prompt">Deployment goal</label>
         <textarea id="prompt" rows="7">Deploy this AI API in AWS. Keep customer data private. Support 20 requests per second and peak at 100 requests per second. Create staging and production. Enable monitoring and Slack alerts.</textarea>
         <button id="create">Analyze and create plan</button>
@@ -126,6 +126,7 @@
         </div>
         <div id="review-actions" class="connection-card">
           <strong>Plan decision</strong>
+          <p id="review-next-step" class="review-next-step"></p>
           <p id="review-action-message" class="message">Create a review draft before taking an action.</p>
           <div id="revision-controls" class="hidden">
             <div class="grid controls">
@@ -195,7 +196,7 @@
       </section>
       <section id="history" class="panel screen" data-screen="history">
         <div class="panel-heading"><div><p class="eyebrow">PLAN HISTORY</p><h2>Your plans</h2><p class="section-intro">Find every draft, submission, decision, and revision without scanning the activity feed.</p></div><button id="history-new-plan" type="button">Create new plan</button></div>
-        <div class="history-toolbar"><label for="history-search">Search plans<input id="history-search" type="search" placeholder="Search by title or state…" /></label><label for="history-filter">Status<select id="history-filter"><option value="ALL">All statuses</option><option value="DRAFT">Draft</option><option value="SUBMITTED">Submitted</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></select></label></div>
+        <div class="history-toolbar"><label for="history-search">Search plans<input id="history-search" type="search" placeholder="Search by title or state…" /></label><label for="history-filter">Status<select id="history-filter"><option value="ALL">All statuses</option><option value="DRAFT">Draft</option><option value="SUBMITTED">Submitted</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></select></label><label for="history-density">Density<select id="history-density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label></div>
         <div id="history-list" class="history-list" aria-live="polite"><div class="empty-state">No plans yet. Create a plan to start your workspace history.</div></div><div id="history-pagination" class="pagination" aria-label="Plan history pagination"></div>
       </section>
       <section id="audit" class="panel screen" data-screen="audit">
@@ -207,6 +208,7 @@
       <div id="command-palette" class="command-palette hidden" role="dialog" aria-modal="true" aria-labelledby="command-title">
         <div class="command-dialog"><div class="command-header"><div><span class="eyebrow">QUICK ACTIONS</span><h2 id="command-title">What do you want to do?</h2></div><button id="close-command-palette" class="secondary" type="button" aria-label="Close quick actions">Esc</button></div><input id="command-search" type="search" placeholder="Search actions…" autocomplete="off" /><div id="command-list" class="command-list"><button type="button" data-command="new-plan"><span class="command-key">＋</span><span><b>Create a new plan</b><small>Describe an outcome and review the architecture</small></span><kbd>N</kbd></button><button type="button" data-command="dashboard"><span class="command-key">◈</span><span><b>Open overview</b><small>See projects, connections, and decisions</small></span><kbd>G O</kbd></button><button type="button" data-command="audit"><span class="command-key">≡</span><span><b>View activity</b><small>Review the audit trail</small></span><kbd>G A</kbd></button></div></div>
       </div>
+      <aside id="activity-drawer" class="activity-drawer hidden" aria-label="Activity details" aria-live="polite"><div class="activity-drawer-card"><div class="panel-heading"><div><span class="eyebrow">EVENT DETAIL</span><h2 id="activity-drawer-title">Activity event</h2></div><button id="close-activity-drawer" class="secondary" type="button">Close</button></div><p id="activity-drawer-meta" class="message"></p><pre id="activity-drawer-json"></pre></div></aside>
     </main>
     <script src="/app.js?v=20261014-1"></script>
   </body>
