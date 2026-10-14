@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Generator
 from pathlib import Path
+from urllib.parse import quote
 
+import boto3
 from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -11,7 +14,22 @@ from agentconstruct.models import Base
 
 
 def database_url() -> str:
-    return os.getenv("AGENTCONSTRUCT_DATABASE_URL", "sqlite+pysqlite:///./.local/agentconstruct.db")
+    secret_arn = os.getenv("AGENTCONSTRUCT_DATABASE_SECRET_ARN")
+    if secret_arn:
+        payload = boto3.client("secretsmanager").get_secret_value(SecretId=secret_arn)
+        secret = json.loads(str(payload["SecretString"]))
+        username = quote(str(secret["username"]))
+        password = quote(str(secret["password"]))
+        host = str(secret["host"])
+        port = str(secret.get("port", 5432))
+        database = str(os.getenv("AGENTCONSTRUCT_DATABASE_NAME", secret.get("dbname", "agentconstruct")))
+        return f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
+    resolved = os.getenv("AGENTCONSTRUCT_DATABASE_URL", "sqlite+pysqlite:///./.local/agentconstruct.db")
+    if os.getenv("AGENTCONSTRUCT_HOSTED_MODE", "false").lower() == "true" and resolved.startswith(
+        "sqlite"
+    ):
+        raise RuntimeError("hosted AgentConstruct runtime requires durable PostgreSQL; SQLite is not allowed")
+    return resolved
 
 
 def make_engine(url: str | None = None) -> Engine:
