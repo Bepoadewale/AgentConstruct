@@ -33,6 +33,14 @@ Build and maintain **AgentConstruct**, the private commercial product. Use plain
 - For real AWS workload runs, record the exact repository, commit, account, region, commands, resources created, observed readiness result, teardown command, absence check, retained resources, and limitations.
 - `docs/VALIDATION.md` may summarize multiple runs, but `docs/test/testN.md` is the per-run source of truth.
 
+## PR tickets
+
+- Every PR must have a numbered ticket file under `docs/tickets/`.
+- Create the next ticket file before implementation work starts: `ticket1.md`, `ticket2.md`, `ticket3.md`, and so on.
+- Do not overwrite, rename, or renumber older tickets.
+- Each ticket must include the PR goal, current repo state relevant to the PR, research/references, work to be done, acceptance criteria, whether each criterion was met, validation performed, evidence files, boundaries, and follow-up work.
+- Keep the ticket updated as implementation changes. Before marking the PR review-ready, update the acceptance status truthfully.
+
 ## Clean-room gate
 
 Before calling a runnable change review-ready, execute and record:
