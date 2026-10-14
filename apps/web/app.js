@@ -286,6 +286,29 @@ function renderPlanTimeline(state) {
   node.innerHTML = states.map((item, index) => `<div class="timeline-step ${index <= currentIndex ? "active" : ""} ${item === current ? "current" : ""}"><span>${index + 1}</span>${item[0] + item.slice(1).toLowerCase()}<small>${item === "APPROVED" ? "Decision recorded" : item === "OBSERVED" ? "Evidence required" : ""}</small></div>`).join("");
 }
 
+function humanLabel(key) {
+  return String(key || "").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function renderReadableValue(value) {
+  if (value === null || value === undefined || value === "") return "Not provided";
+  if (Array.isArray(value)) {
+    if (!value.length) return "None recorded";
+    return `<ul class="detail-list-items">${value.map((item) => `<li>${renderReadableValue(item)}</li>`).join("")}</ul>`;
+  }
+  if (typeof value === "object") {
+    return `<div class="detail-pairs">${Object.entries(value).map(([key, item]) => `<div class="detail-pair"><dt>${escapeHtml(humanLabel(key))}</dt><dd>${renderReadableValue(item)}</dd></div>`).join("")}</div>`;
+  }
+  return escapeHtml(String(value));
+}
+
+function renderReadableDetail(nodeId, value, rawNodeId) {
+  const node = document.querySelector(`#${nodeId}`);
+  const raw = document.querySelector(`#${rawNodeId}`);
+  if (node) node.innerHTML = renderReadableValue(value);
+  if (raw) raw.textContent = JSON.stringify(value, null, 2);
+}
+
 function renderCustomerReview(review) {
   customerReview = review;
   const content = review.content;
@@ -306,14 +329,14 @@ function renderCustomerReview(review) {
   adminSummary.classList.toggle("hidden", !isAdministrator());
   adminSummary.innerHTML = `<strong>Review evidence</strong><p>Requester: ${summary.requester || review.creator_subject}<br>Repository: ${summary.repository || "unknown"} · ${summary.branch || "branch unknown"}<br>AWS target: ${summary.aws_account_id || "local fixture"} · ${summary.region || "region unknown"}<br>Policy: ${summary.policy_result || "unknown"}<br>Monitoring: ${summary.prometheus || "Prometheus-compatible metrics"} + ${summary.grafana || "Grafana"}<br>Digest: ${review.content_digest}<br>Boundary: ${summary.execution_boundary || "Approval does not deploy."}</p>`;
   document.querySelector("#review-summary").textContent = `${content.summary.selected_profile}: ${content.summary.why}`;
-  document.querySelector("#review-application").textContent = JSON.stringify(content.application_analysis, null, 2);
-  document.querySelector("#review-target").textContent = JSON.stringify(content.target, null, 2);
+  renderReadableDetail("review-application", content.application_analysis, "review-application-raw");
+  renderReadableDetail("review-target", content.target, "review-target-raw");
   document.querySelector("#review-resources").innerHTML = content.resource_breakdown.map((resource) => `<div class="component"><strong>${resource.name}</strong><span>${resource.service} · ${resource.purpose}</span></div>`).join("");
   document.querySelector("#review-security").innerHTML = content.security.map((control) => `<div class="component">${control}</div>`).join("");
-  document.querySelector("#review-observability").textContent = JSON.stringify(content.observability, null, 2);
-  document.querySelector("#review-cost").textContent = JSON.stringify(content.cost_estimate, null, 2);
-  document.querySelector("#review-deployment").textContent = JSON.stringify(content.deployment_strategy, null, 2);
-  document.querySelector("#review-risks").textContent = JSON.stringify({ risks: content.risks_and_limitations, policy: content.policy_findings }, null, 2);
+  renderReadableDetail("review-observability", content.observability, "review-observability-raw");
+  renderReadableDetail("review-cost", content.cost_estimate, "review-cost-raw");
+  renderReadableDetail("review-deployment", content.deployment_strategy, "review-deployment-raw");
+  renderReadableDetail("review-risks", { risks: content.risks_and_limitations, policy: content.policy_findings }, "review-risks-raw");
   const submit = document.querySelector("#submit-review");
   const revise = document.querySelector("#revise-review");
   const regenerate = document.querySelector("#regenerate-review");
