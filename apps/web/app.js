@@ -282,7 +282,9 @@ function renderCloudExecutionRuns(runs) {
     node.textContent = "No cloud execution run requested yet. Approval still does not deploy anything.";
     return;
   }
-  node.innerHTML = runs.map((run) => `<div class="component"><strong>Attempt ${run.attempt}: ${run.state}</strong><span>${run.mode} · ${run.boundary}</span></div><pre>${JSON.stringify({
+  node.innerHTML = runs.map((run) => `<div class="component"><strong>Attempt ${run.attempt}: ${run.state}</strong><span>${run.mode} · evidence: /api/v1/cloud-execution-runs/${run.id}/evidence<br>${run.boundary}</span></div><pre>${JSON.stringify({
+    digest: run.content_digest,
+    profile: run.profile,
     command: run.command,
     evidence: run.evidence,
     outputs: run.outputs,

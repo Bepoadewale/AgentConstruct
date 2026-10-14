@@ -2869,6 +2869,80 @@ class ProductService:
             ),
         }
 
+    def cloud_execution_runs(self, principal: Principal) -> list[dict[str, Any]]:
+        return [
+            self._cloud_execution_run_payload(run)
+            for run in self.db.scalars(
+                select(CloudExecutionRun)
+                .where(CloudExecutionRun.organization_id == principal.organization_id)
+                .order_by(CloudExecutionRun.created_at.desc())
+            )
+        ]
+
+    def cloud_execution_run_evidence(
+        self, principal: Principal, run_id: str
+    ) -> dict[str, Any]:
+        run = self.db.get(CloudExecutionRun, run_id)
+        if not run or run.organization_id != principal.organization_id:
+            raise PermissionError("cloud execution run not found in this organization")
+        revision = self.db.get(InfrastructurePlanRevision, run.revision_id)
+        if not revision or revision.organization_id != principal.organization_id:
+            raise PermissionError("cloud execution revision not found in this organization")
+        plan = self.db.get(InfrastructurePlan, revision.infrastructure_plan_id)
+        if not plan or plan.organization_id != principal.organization_id:
+            raise PermissionError("cloud execution plan not found in this organization")
+        content = revision.content
+        application = content.get("application_analysis", {})
+        target = content.get("target", {})
+        outputs = run.outputs or {}
+        blockers = list((run.evidence or {}).get("blockers") or [])
+        return {
+            "kind": "agentconstruct.cloud_execution_evidence.v1",
+            "run": self._cloud_execution_run_payload(run),
+            "project": {
+                "id": plan.project_id,
+                "title": plan.title,
+                "creator_subject": plan.creator_subject,
+            },
+            "approved_plan": {
+                "revision_id": revision.id,
+                "revision": revision.revision_number,
+                "digest": revision.content_digest,
+                "state": revision.state,
+                "submitted_by_subject": revision.submitted_by_subject,
+                "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
+            },
+            "source": {
+                "repository": application.get("repository"),
+                "branch": application.get("branch"),
+                "commit": application.get("commit_sha") or "unresolved-local-fixture",
+            },
+            "target": {
+                "provider": "aws",
+                "account_id": target.get("account_id"),
+                "region": target.get("region"),
+                "profile": run.profile,
+            },
+            "terraform": {
+                "render_id": run.terraform_render_id,
+                "preflight_id": run.preflight_id,
+                "plan_review_id": run.terraform_plan_review_id,
+                "command": run.command,
+                "state": run.state,
+            },
+            "observed": {
+                "outputs": outputs,
+                "resources": outputs.get("resources_created", []),
+                "destroy_proof": outputs.get("destroy_proof")
+                or "not_executed_no_destroy_proof",
+                "failure_reason": "; ".join(blockers) if blockers else None,
+            },
+            "boundary": (
+                "This evidence reflects AgentConstruct product records. It is not cloud execution "
+                "proof unless the run contains observed AWS outputs/resources from an enabled apply path."
+            ),
+        }
+
     def cloud_role_contract(self, principal: Principal, connection_id: str) -> dict[str, str | int]:
         connection = self.db.get(CloudConnection, connection_id)
         if not connection or connection.organization_id != principal.organization_id:

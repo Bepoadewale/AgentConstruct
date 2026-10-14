@@ -760,6 +760,28 @@ def test_cloud_execution_run_is_admin_only_and_blocked_by_default():
         for event in service.audits(operator())
     )
 
+    history = service.cloud_execution_runs(operator())
+    assert history[0]["id"] == run["id"]
+    evidence = service.cloud_execution_run_evidence(operator(), run["id"])
+    assert evidence["kind"] == "agentconstruct.cloud_execution_evidence.v1"
+    assert evidence["run"]["attempt"] == 1
+    assert evidence["approved_plan"]["digest"] == approved.content_digest
+    assert evidence["source"]["repository"] == "https://github.com/example/review-dry-run"
+    assert evidence["source"]["branch"] == "main"
+    assert evidence["source"]["commit"] == "unresolved-local-fixture"
+    assert evidence["target"]["provider"] == "aws"
+    assert evidence["terraform"]["state"] == "BLOCKED_CLOUD_EXECUTION_NOT_ENABLED"
+    assert evidence["observed"]["destroy_proof"] == "not_executed_no_destroy_proof"
+    assert "Local/default mode" in evidence["observed"]["failure_reason"]
+
+    other_org = operator().__class__(
+        subject=operator().subject,
+        organization_id="org-other",
+        role=operator().role,
+    )
+    with pytest.raises(PermissionError, match="not found in this organization"):
+        service.cloud_execution_run_evidence(other_org, run["id"])
+
 
 def test_cloud_execution_run_blocks_stale_digest_and_missing_plan_review():
     service, db = make_service()

@@ -60,8 +60,9 @@
 - [x] Terraform plan-only review gate for approved App Runner revisions: admin-only, exact digest, rendered contract, ready preflight, account/region checks, authenticated-mode `ALLOW_CLOUD_PLAN=true` gate and no apply path.
 - [x] First-class deployment outputs and observed resource inventory for local dry-run environments, including customer-visible URLs/ARNs/log/dashboard references and destroyed-state history.
 - [x] Product-side cloud execution run history for approved App Runner revisions: admin-only, exact digest, rendered contract, ready preflight, plan-review binding and blocked-by-default command evidence.
+- [x] Execution-history and evidence-export APIs for customer workload runs, including attempt, digest, source, target, Terraform state, output/resource placeholders, destroy proof and failure reason.
 - [ ] Ingest real App Runner Terraform outputs and AWS resource observations through the product UI/API execution path.
-- [ ] Add customer workload execution history with attempts, Terraform status, outputs, created resources, destroy proof, failure reason and evidence export.
+- [ ] Add browser-side downloadable evidence export and timeline grouping by project/environment.
 - [ ] Scoped GitHub desired-state publication through reviewed pull requests.
 - [ ] Real GitOps/Argo observer and customer-cloud workload agent.
 - [ ] Enterprise OIDC/JWKS adapter and organisation lifecycle.
