@@ -242,3 +242,29 @@ class UsageEvent(ContractBase):
     source: str = Field(min_length=1, max_length=120)
     correlation_id: str | None = Field(default=None, max_length=160)
     metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class Entitlement(ContractBase):
+    """Tenant-scoped admission rule; billing systems may consume it later."""
+
+    entitlement_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1)
+    tenant: TenantScope
+    event_type: str = Field(min_length=1, max_length=120)
+    limit: float = Field(gt=0)
+    unit: str = Field(min_length=1, max_length=60)
+    window_seconds: int = Field(default=86_400, ge=1, le=31_536_000)
+    policy_version: str = Field(default="local-v1", min_length=1, max_length=80)
+
+
+class UsageDecision(ContractBase):
+    """Deterministic admission result. It is not a billing invoice."""
+
+    tenant: TenantScope
+    event_type: str
+    allowed: bool
+    consumed: float = Field(ge=0)
+    limit: float = Field(gt=0)
+    unit: str
+    remaining: float = Field(ge=0)
+    reason: str = Field(min_length=1, max_length=240)
+    policy_version: str = Field(min_length=1, max_length=80)
