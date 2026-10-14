@@ -25,6 +25,14 @@ Create an evidence-backed strategic review of AgentConstruct and document the go
 - Spacelift drift detection and worker limits: https://docs.spacelift.io/concepts/stack/drift-detection
 - Repository source paths and tests cited directly in `docs/strategy/01-current-state-audit.md`.
 
+## Work planned for the PR
+
+- Audit the current repository and classify capabilities by evidence level.
+- Assess the proposed AWS-specialized AI product direction and model options.
+- Research adjacent infrastructure AI and SaaS control-plane products.
+- Define an incremental architecture, MVP, evaluation/security strategy and roadmap.
+- Document the long-term millions-customer scalability goal without claiming current scale.
+
 ## Work completed
 
 - Added current-state audit.
@@ -42,12 +50,24 @@ Create an evidence-backed strategic review of AgentConstruct and document the go
 - [x] Millions-customer scalability goal is documented without claiming current scale.
 - [x] No application code or AWS resources are changed.
 
+## Acceptance status
+
+Met for the documentation-only review. No application behavior or cloud state was changed.
+
 ## Validation
 
 - `python3 scripts/check_doc_conventions.py` — passed.
 - `git diff --check` — passed.
 - Documentation-only change; application test suite was not changed.
 
+## Evidence files produced
+
+- `docs/strategy/01-current-state-audit.md` through `docs/strategy/10-scale-and-multi-tenancy.md`.
+
 ## Boundaries
 
 This PR is analysis and documentation only. It does not add a model provider, change planner behavior, deploy infrastructure, or claim production scale.
+
+## Follow-up work
+
+Implement the versioned tenant/evidence/model/job contracts and queue abstraction in a separate code PR after this review is accepted.
