@@ -35,7 +35,7 @@
         <a class="sidebar-link" href="#customer-review"><span>✓</span> Review</a>
         <a class="sidebar-link" href="#history"><span>▤</span> History</a>
         <a class="sidebar-link" href="#audit"><span>≡</span> Activity</a>
-        <a class="sidebar-link" href="#describe"><span>⊙</span> Connections</a>
+        <a class="sidebar-link" data-secondary="true" href="#describe"><span>⊙</span> Connections</a>
         <div class="sidebar-spacer"></div>
         <button class="sidebar-command" id="open-command-palette" type="button"><span>⌕</span> Quick actions <kbd>⌘ K</kbd></button>
         <div class="sidebar-boundary"><span class="status-dot"></span><div><b>Local mode</b><small>No cloud mutations</small></div></div>
@@ -108,6 +108,7 @@
       </section>
       <section id="customer-review" class="panel screen hidden" data-screen="customer-review">
         <p class="eyebrow">5 · CUSTOMER PLAN REVIEW</p><h2 id="review-title">AWS infrastructure plan</h2>
+        <div id="review-empty" class="review-empty"><span class="review-empty-icon">✓</span><div><h3>Select a plan to review</h3><p>Choose a revision from History to inspect its architecture, controls, cost, and decision state.</p><a href="#history">Open plan history</a></div></div>
         <div class="review-status-row"><p id="review-status" class="message"></p><button id="copy-digest" class="secondary hidden" type="button">Copy digest</button></div>
         <div id="plan-timeline" class="plan-timeline" aria-label="Plan lifecycle"></div>
         <div id="approval-boundary" class="boundary hidden"><strong>Approved, not deployed.</strong> Approval records an exact plan decision only. It does not create or change AWS resources.</div>
@@ -201,9 +202,6 @@
         <div class="panel-heading"><div><p class="eyebrow">ACTIVITY</p><h2>What happened</h2><p class="section-intro">A chronological record of planning, connection, approval, and execution events.</p></div><button id="refresh-audit" class="secondary">Refresh</button></div>
         <div class="history-toolbar"><label for="audit-search">Search activity<input id="audit-search" type="search" placeholder="Search events, actors, or entities…" /></label><label for="audit-filter">Event type<select id="audit-filter"><option value="ALL">All events</option><option value="plan">Plans</option><option value="approval">Approvals</option><option value="cloud">Cloud</option><option value="repository">Repository</option></select></label></div>
         <div id="audit-events" aria-live="polite">No events loaded.</div><div id="audit-pagination" class="pagination" aria-label="Activity pagination"></div>
-      </section>
-      <section class="boundary">
-        <strong>Evidence boundary.</strong> This local demo uses signed fixture identities, PostgreSQL, live OPA policy, and a bounded fixture executor. It does not create AWS resources, grant cloud credentials, or claim a production deployment.
       </section>
       </div>
       <div id="command-palette" class="command-palette hidden" role="dialog" aria-modal="true" aria-labelledby="command-title">

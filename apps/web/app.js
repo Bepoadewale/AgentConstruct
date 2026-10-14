@@ -311,6 +311,7 @@ function renderReadableDetail(nodeId, value, rawNodeId) {
 
 function renderCustomerReview(review) {
   customerReview = review;
+  document.querySelector("#review-empty")?.classList.add("hidden");
   const content = review.content;
   const workloadSpec = content.application_analysis?.workload_spec || {};
   document.querySelector("#customer-review").classList.remove("hidden");
@@ -941,7 +942,7 @@ function syncActiveNavigation() {
     node.classList.toggle("screen-active", active);
   });
   document.querySelectorAll(".sidebar-link, header nav a, .mobile-nav a").forEach((link) => {
-    link.classList.toggle("active", link.getAttribute("href") === `#${target}`);
+    link.classList.toggle("active", !link.dataset.secondary && link.getAttribute("href") === `#${target}`);
   });
 }
 window.addEventListener("hashchange", syncActiveNavigation);
