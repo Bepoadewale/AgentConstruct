@@ -79,18 +79,23 @@ def validate_customer_workload_tests() -> None:
 
     test_files = sorted(TESTS.glob("test*.md"))
     if not test_files:
-        fail("docs/test/ must contain at least one testN.md evidence file")
+        fail("docs/test/ must contain at least one test<PR_NUMBER>.md evidence file")
 
     numbers: list[int] = []
     for path in test_files:
         match = re.fullmatch(r"test([1-9][0-9]*)\.md", path.name)
         if not match:
-            fail(f"test evidence file must be named test<N>.md: {path}")
-        numbers.append(int(match.group(1)))
+            fail(f"test evidence file must be named test<PR_NUMBER>.md: {path}")
+        number = match.group(1)
+        numbers.append(int(number))
+
+        matching_ticket = TICKETS / f"ticket{number}.md"
+        if not matching_ticket.is_file():
+            fail(f"{path.relative_to(ROOT)} must have matching {matching_ticket.relative_to(ROOT)}")
 
         text = read(path)
         required = [
-            f"# test{match.group(1)}",
+            f"# test{number}",
             "Date:",
             "Execution type:",
             "Customer repository:",
@@ -107,9 +112,8 @@ def validate_customer_workload_tests() -> None:
             if marker not in text:
                 fail(f"{path} is missing required marker: {marker}")
 
-    expected = list(range(1, max(numbers) + 1))
-    if numbers != expected:
-        fail(f"docs/test evidence files must be contiguous from test1.md; found {numbers}")
+    if len(numbers) != len(set(numbers)):
+        fail(f"duplicate docs/test evidence numbers found: {numbers}")
 
 
 def main() -> None:

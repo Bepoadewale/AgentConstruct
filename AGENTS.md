@@ -26,12 +26,13 @@ Build and maintain **AgentConstruct**, the private commercial product. Use plain
 
 ## Customer workload evidence
 
-- Every customer workload test run must get its own numbered evidence file under `docs/test/`.
-- Use the next available name: `test1.md`, `test2.md`, `test3.md`, and so on.
+- Every PR that performs a customer workload test run must have a PR-numbered evidence file under `docs/test/`.
+- Use the GitHub PR number as the filename: PR #42 uses `test42.md`, PR #43 uses `test43.md`, and so on.
+- If one PR performs multiple customer workload cycles, record all cycles in that one PR-numbered file.
 - Do not overwrite, rename, or renumber older test evidence.
 - Each file must state whether the run was local, simulated, statically validated, or real AWS execution.
 - For real AWS workload runs, record the exact repository, commit, account, region, commands, resources created, observed readiness result, teardown command, absence check, retained resources, and limitations.
-- `docs/VALIDATION.md` may summarize multiple runs, but `docs/test/testN.md` is the per-run source of truth.
+- `docs/VALIDATION.md` may summarize multiple runs, but `docs/test/test<PR_NUMBER>.md` is the per-PR customer workload evidence source of truth.
 
 ## PR tickets
 

@@ -815,8 +815,7 @@ Purpose: prove a real customer workload lifecycle twice using the customer repos
 
 Per-run evidence files:
 
-- `docs/test/test1.md` — customer workload App Runner pilot, cycle 1.
-- `docs/test/test2.md` — customer workload App Runner pilot, cycle 2.
+- `docs/test/test42.md` — PR #42 customer workload App Runner pilot, cycles 1 and 2.
 
 Execution boundary:
 

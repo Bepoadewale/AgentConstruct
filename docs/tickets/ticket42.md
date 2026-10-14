@@ -83,7 +83,7 @@ AWS account evidence:
 - [x] Customer workload create → validate → destroy succeeds twice.
 - [x] Foundation/support resources are retained.
 - [x] Numbered customer workload evidence files exist.
-- [x] Repo instructions require future numbered customer workload evidence files.
+- [x] Repo instructions require future PR-numbered customer workload evidence files.
 
 ## Acceptance status
 
@@ -131,8 +131,7 @@ Customer workload validation:
 ## Evidence files produced
 
 - `docs/VALIDATION.md`
-- `docs/test/test1.md`
-- `docs/test/test2.md`
+- `docs/test/test42.md`
 
 ## Retained resources
 
