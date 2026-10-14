@@ -41,6 +41,7 @@ Document and implement the first future-scale boundaries without changing the cu
 - [x] Capability and cost contracts are provider-neutral and AWS-compatible.
 - [x] Usage events support future quotas and billing without implementing billing now.
 - [x] Existing tests and local workflow remain unchanged.
+- [x] Secret scanning remains enforced without requiring a hosted Gitleaks license.
 
 ## Acceptance status
 
@@ -57,7 +58,7 @@ python3 scripts/check_doc_conventions.py
 git diff --check
 ```
 
-Results: lint passed; 128 tests passed; documentation conventions passed; diff check passed.
+Results: lint passed; 128 tests passed; documentation conventions passed; diff check passed. The CI secret-scan action was changed from the license-gated hosted action to a pinned Gitleaks container because the hosted action failed before scanning when no license was configured.
 
 ## Evidence files produced
 
