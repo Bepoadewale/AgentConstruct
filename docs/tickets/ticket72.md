@@ -19,9 +19,9 @@ The workspace shell, plan lifecycle, local execution boundary, history, activity
 
 ## Work planned for the PR
 
-- History revision comparison and activity grouping.
+- Stable project-level history keys, revision comparison, and activity grouping.
 - Skeleton loading, refresh/retry affordances, and complete empty states.
-- Responsive and focus-management polish.
+- Responsive contract and focus-management polish.
 - Local review export and share-link copy.
 - Frontend interaction contract coverage.
 - Performance-friendly content visibility and local analytics.
@@ -40,11 +40,12 @@ The workspace shell, plan lifecycle, local execution boundary, history, activity
 
 ## Tests / validation performed
 
-To run after implementation: `node --check apps/web/app.js`, `make lint`, `make test`, `make smoke`, `make browser-contract`, `make frontend-contract`, `make customer-plan-e2e`, `python3 scripts/check_doc_conventions.py`, and `git diff --check`.
+Validated with `node --check apps/web/app.js`, `make lint`, `make test`, `make smoke`, `make browser-contract`, `make frontend-contract`, `make frontend-responsive-contract`, `make customer-plan-e2e`, `python3 scripts/check_doc_conventions.py`, and `git diff --check`.
 
 ## Evidence files produced
 
 - `scripts/frontend-contract.sh`
+- `scripts/frontend-responsive-contract.sh`
 
 ## Boundaries
 
@@ -52,4 +53,4 @@ This ticket is local-only. It does not create AWS resources, grant credentials, 
 
 ## Follow-up work
 
-Capture fresh desktop and mobile screenshots and tune any remaining visual differences.
+Fresh automated screenshot capture remains follow-up work because the local CUA browser surface was unavailable in this environment; static responsive contracts and supplied screenshot inspection cover the local validation boundary.

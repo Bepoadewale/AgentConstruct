@@ -182,6 +182,7 @@ class ProductService:
                 InfrastructurePlan.creator_subject == principal.subject
             )
         revisions = self.db.execute(revisions_query.limit(20)).all()
+        project_names = {project.id: project.name for project in projects}
         activities = self.db.scalars(
             select(AuditEvent)
             .where(AuditEvent.organization_id == principal.organization_id)
@@ -218,6 +219,8 @@ class ProductService:
                 {
                     "id": revision.id,
                     "plan_id": plan.id,
+                    "project_id": plan.project_id,
+                    "project_name": project_names.get(plan.project_id),
                     "title": plan.title,
                     "revision": revision.revision_number,
                     "state": revision.state,

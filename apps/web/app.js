@@ -14,6 +14,7 @@ let historyPage = 1;
 let auditPage = 1;
 const PAGE_SIZE = 10;
 let lastFocusedElement = null;
+const stableCache = new Map();
 
 function track(event, detail = {}) {
   try {
@@ -28,6 +29,14 @@ function setRegionLoading(node, loading) {
   if (!node) return;
   node.setAttribute("aria-busy", String(loading));
   if (loading) node.innerHTML = '<div class="skeleton-list" aria-label="Loading"><span></span><span></span><span></span></div>';
+}
+
+async function withRetry(task, attempts = 2) {
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try { return await task(); } catch (error) { lastError = error; if (attempt + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, 250)); }
+  }
+  throw lastError;
 }
 
 const escapeHtml = (value) => String(value ?? "")
@@ -56,10 +65,17 @@ function idempotencyKey() {
 }
 
 async function api(path, options = {}) {
+  const method = (options.method || "GET").toUpperCase();
+  const cacheable = method === "GET" && ["/api/v1/dashboard", "/api/v1/audit-evidence", "/api/v1/github/connection", "/api/v1/cloud-connections"].includes(path);
+  if (cacheable) {
+    const cached = stableCache.get(path);
+    if (cached && cached.expires > Date.now()) return cached.value;
+  } else if (method !== "GET") stableCache.clear();
   const response = await fetch(path, { ...options, headers: { "content-type": "application/json", Authorization: `Bearer ${token}`, ...(options.headers || {}) } });
   if (response.status === 204) return null;
   const body = await response.json();
   if (!response.ok) throw new Error(body.detail || "Request failed");
+  if (cacheable) stableCache.set(path, { value: body, expires: Date.now() + 5000 });
   return body;
 }
 
@@ -105,7 +121,7 @@ function logout() {
 async function refreshDashboard() {
   setRegionLoading(document.querySelector("#dashboard-recent-projects"), true);
   setRegionLoading(document.querySelector("#dashboard-recent-activity"), true);
-  const dashboard = await api("/api/v1/dashboard");
+  const dashboard = await withRetry(() => api("/api/v1/dashboard"));
   dashboardSnapshot = dashboard;
   document.querySelector("#dashboard-heading").textContent = `${dashboard.workspace.name} dashboard`;
   document.querySelector("#dashboard-projects").textContent = dashboard.projects.length;
@@ -181,7 +197,7 @@ function renderHistory(plans) {
   historyPage = Math.min(historyPage, pageCount);
   const pageItems = filtered.slice((historyPage - 1) * PAGE_SIZE, historyPage * PAGE_SIZE);
   const groups = pageItems.reduce((map, item) => { const key = item.project_id || item.title || "Plans"; (map[key] ||= []).push(item); return map; }, {});
-  node.innerHTML = Object.values(groups).map((items) => `<div class="history-group"><div class="history-group-heading"><span>${escapeHtml(items[0].title || "Plan")}</span><small>${items.length} revision${items.length === 1 ? "" : "s"}</small></div>${items.map((item) => `<button class="history-row" type="button" data-history-id="${escapeHtml(item.id)}"><span class="history-title"><b>${escapeHtml(item.title)}</b><small>Revision ${escapeHtml(item.revision)} · ${escapeHtml(formatDate(item.created_at))}</small></span><span class="status-chip status-${escapeHtml(String(item.state).toLowerCase())}">${escapeHtml(item.state)}</span><span class="history-arrow">›</span></button>`).join("")}</div>`).join("");
+  node.innerHTML = Object.values(groups).map((items) => `<div class="history-group"><div class="history-group-heading"><span>${escapeHtml(items[0].project_name || items[0].title || "Plan")}</span><small>${items.length} revision${items.length === 1 ? "" : "s"}</small></div>${items.map((item) => `<button class="history-row" type="button" data-history-id="${escapeHtml(item.id)}"><span class="history-title"><b>${escapeHtml(item.title)}</b><small>Revision ${escapeHtml(item.revision)} · ${escapeHtml(formatDate(item.created_at))}</small></span><span class="status-chip status-${escapeHtml(String(item.state).toLowerCase())}">${escapeHtml(item.state)}</span><span class="history-arrow">›</span></button>`).join("")}</div>`).join("");
   node.querySelectorAll("[data-history-id]").forEach((row) => row.addEventListener("click", () => openCustomerReview(row.dataset.historyId).catch((error) => show(error.message, true))));
   renderPagination("history-pagination", historyPage, filtered.length, (nextPage) => { historyPage = nextPage; renderHistory(plans); });
 }
@@ -227,7 +243,7 @@ function showGitHub(message, failure = false) {
 }
 
 async function refreshGitHubConnection() {
-  githubConnection = await api("/api/v1/github/connection");
+  githubConnection = await withRetry(() => api("/api/v1/github/connection"));
   const picker = document.querySelector("#github-installation");
   picker.innerHTML = githubConnection.installations.length
     ? githubConnection.installations.map((installation) => `<option value="${escapeHtml(installation.id)}">${escapeHtml(installation.account_login)} · ${escapeHtml(installation.account_type)}</option>`).join("")
@@ -279,7 +295,7 @@ function renderCloudConnections() {
 }
 
 async function refreshCloudConnections() {
-  cloudConnections = await api("/api/v1/cloud-connections");
+  cloudConnections = await withRetry(() => api("/api/v1/cloud-connections"));
   renderCloudConnections();
 }
 
@@ -559,7 +575,7 @@ async function openCustomerReview(revisionId) {
 
 async function refreshAudit() {
   setRegionLoading(document.querySelector("#audit-events"), true);
-  const events = await api("/api/v1/audit-evidence");
+  const events = await withRetry(() => api("/api/v1/audit-evidence"));
   auditSnapshot = events;
   renderAuditEvents(events);
 }
@@ -690,6 +706,7 @@ document.querySelector("#audit-search").addEventListener("input", () => renderAu
 document.querySelector("#audit-filter").addEventListener("change", () => { auditPage = 1; renderAuditEvents(auditSnapshot); });
 document.querySelector("#audit-group").addEventListener("change", () => renderAuditEvents(auditSnapshot));
 document.querySelector("#refresh-dashboard")?.addEventListener("click", () => refreshDashboard().then(() => { show("Workspace refreshed."); track("dashboard_refresh"); }).catch((error) => show(error.message, true)));
+document.querySelector("#history-refresh")?.addEventListener("click", () => refreshDashboard().then(() => { show("Plan history refreshed."); track("history_refresh"); }).catch((error) => show(error.message, true)));
 document.querySelector("#load-sample-plan")?.addEventListener("click", () => { document.querySelector("#prompt").value = "Deploy a private support assistant API with staging and production, predictable cost controls, monitoring, and Slack alerts."; window.location.hash = "#describe"; track("sample_plan_loaded"); });
 document.querySelector("#close-activity-drawer")?.addEventListener("click", closeActivityDrawer);
 document.querySelector("#activity-drawer")?.addEventListener("click", (event) => { if (event.target.id === "activity-drawer") closeActivityDrawer(); });
@@ -1012,6 +1029,7 @@ mobileMenuToggle?.addEventListener("click", () => {
 mobileNav?.querySelectorAll("a").forEach((link) => link.addEventListener("click", () => {
   mobileNav.classList.add("hidden");
   mobileMenuToggle.setAttribute("aria-expanded", "false");
+  mobileMenuToggle.focus();
 }));
 
 function syncActiveNavigation() {
@@ -1033,8 +1051,9 @@ syncActiveNavigation();
 
 const commandPalette = document.querySelector("#command-palette");
 const commandSearch = document.querySelector("#command-search");
-function closeCommandPalette() { commandPalette.classList.add("hidden"); }
-function openCommandPalette() { commandPalette.classList.remove("hidden"); commandSearch.value = ""; commandSearch.focus(); }
+let commandTrigger = null;
+function closeCommandPalette() { commandPalette.classList.add("hidden"); commandTrigger?.focus?.(); commandTrigger = null; }
+function openCommandPalette() { commandTrigger = document.activeElement; commandPalette.classList.remove("hidden"); commandSearch.value = ""; commandSearch.focus(); track("command_palette_open"); }
 function runCommand(command) {
   closeCommandPalette();
   if (command === "new-plan") window.location.hash = "#describe";
@@ -1055,5 +1074,11 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeActivityDrawer();
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommandPalette(); }
   if (event.key === "Escape") closeCommandPalette();
+  if (event.key === "Tab" && !commandPalette.classList.contains("hidden")) {
+    const focusable = [...commandPalette.querySelectorAll("button, input, [href]")].filter((item) => !item.disabled && !item.classList.contains("hidden"));
+    const first = focusable[0]; const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
   if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === "n" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") runCommand("new-plan");
 });
