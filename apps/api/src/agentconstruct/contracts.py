@@ -107,6 +107,50 @@ class JobKind(StrEnum):
     REMEDIATION = "remediation"
 
 
+class ExecutionOperation(StrEnum):
+    """Operations an isolated runner may perform; never arbitrary commands."""
+
+    PLAN = "plan"
+    APPLY = "apply"
+    OBSERVE = "observe"
+    DESTROY = "destroy"
+
+
+class ExecutionPlacement(ContractBase):
+    """Cell-ready placement metadata without coupling the domain to a topology."""
+
+    cell_id: str = Field(default="local", min_length=1, max_length=120)
+    region: str = Field(default="local", min_length=1, max_length=80)
+    provider: str = Field(default="local", min_length=1, max_length=80)
+    isolation_class: str = Field(default="tenant-cell", min_length=1, max_length=80)
+
+
+class ExecutionContext(ContractBase):
+    """Bounded execution input. It carries references, never reusable credentials."""
+
+    execution_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1)
+    tenant: TenantScope
+    placement: ExecutionPlacement = Field(default_factory=ExecutionPlacement)
+    plan_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation: ExecutionOperation
+    allowed_operations: tuple[ExecutionOperation, ...] = ()
+    credential_reference: str | None = Field(default=None, max_length=240)
+    timeout_seconds: int = Field(default=900, ge=1, le=86_400)
+    network_policy: str = Field(default="isolated-runner", min_length=1, max_length=120)
+
+
+class ExecutionOutcome(ContractBase):
+    """Observed runner result with safe outputs only."""
+
+    execution_id: str
+    tenant: TenantScope
+    state: str = Field(min_length=1, max_length=80)
+    observed: bool = False
+    outputs: dict[str, str] = Field(default_factory=dict)
+    failure_reason: str | None = None
+    runner: str = Field(min_length=1, max_length=120)
+
+
 class JobEnvelope(ContractBase):
     """Transport-neutral durable job metadata."""
 
