@@ -10,6 +10,9 @@ let currentProject = null;
 let customerReview = null;
 let dashboardSnapshot = null;
 let auditSnapshot = [];
+let historyPage = 1;
+let auditPage = 1;
+const PAGE_SIZE = 10;
 
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;")
@@ -87,31 +90,59 @@ async function refreshDashboard() {
   const dashboard = await api("/api/v1/dashboard");
   dashboardSnapshot = dashboard;
   document.querySelector("#dashboard-heading").textContent = `${dashboard.workspace.name} dashboard`;
-  document.querySelector("#dashboard-projects").textContent = dashboard.projects.length
-    ? dashboard.projects.map((project) => project.name).join(", ") : "No projects yet.";
-  document.querySelector("#dashboard-connections").textContent = dashboard.cloud_connections.length
-    ? dashboard.cloud_connections.map((connection) => `${connection.display_name} (${connection.setup_state})`).join(", ") : "No AWS account connected yet.";
-  document.querySelector("#dashboard-plans").textContent = dashboard.plans.length
-    ? dashboard.plans.map((item) => `${item.title} · ${item.state}`).join("; ") : "No customer plan revisions yet.";
+  document.querySelector("#dashboard-projects").textContent = dashboard.projects.length;
+  document.querySelector("#dashboard-connections").textContent = dashboard.cloud_connections.length;
+  document.querySelector("#dashboard-plans").textContent = dashboard.plans.length;
+  renderDashboardLists(dashboard);
+  historyPage = 1;
   renderHistory(dashboard.plans || []);
   document.querySelector("#admin-dashboard").classList.toggle("hidden", !isAdministrator());
   if (isAdministrator()) {
     const filter = document.querySelector("#admin-plan-filter").value;
     const pending = await api(`/api/v1/admin/customer-plan-revisions?state=${encodeURIComponent(filter)}`);
-    document.querySelector("#dashboard-pending").textContent = pending.length
-      ? pending.map((item) => `${item.title} · revision ${item.revision} · ${item.state}${item.is_self_approval ? " · self-approved" : ""}`).join("; ")
-      : "No pending plan approvals.";
+    document.querySelector("#dashboard-pending").textContent = `${pending.length} plan${pending.length === 1 ? "" : "s"} require attention.`;
     const list = document.querySelector("#admin-pending-list");
     list.replaceChildren();
     pending.forEach((item) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "secondary";
-      button.textContent = `Review ${item.title} · ${item.state} · ${item.region || "region pending"}`;
+      button.textContent = `${item.title} · revision ${item.revision} · ${item.region || "region pending"}`;
       button.addEventListener("click", () => openCustomerReview(item.id).catch((error) => show(error.message, true)));
       list.append(button);
     });
   }
+}
+
+function renderDashboardLists(dashboard) {
+  const projects = document.querySelector("#dashboard-recent-projects");
+  const activity = document.querySelector("#dashboard-recent-activity");
+  if (projects) {
+    const recent = (dashboard.projects || []).slice(0, 5);
+    projects.innerHTML = recent.length ? recent.map((project) => `<div class="compact-row"><span class="compact-icon">⌘</span><span><b>${escapeHtml(project.name)}</b><small>${escapeHtml(project.repository_url || "Repository not connected")}</small></span></div>`).join("") : `<div class="empty-inline">No projects yet.</div>`;
+  }
+  if (activity) {
+    const recent = (dashboard.recent_activity || []).slice(0, 5);
+    activity.innerHTML = recent.length ? recent.map((event) => `<div class="compact-row"><span class="compact-icon">•</span><span><b>${escapeHtml(formatAction(event.action))}</b><small>${escapeHtml(formatDate(event.at))}</small></span></div>`).join("") : `<div class="empty-inline">No activity yet.</div>`;
+  }
+}
+
+function formatDate(value) {
+  if (!value) return "Date unavailable";
+  return new Date(value).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function formatAction(action) {
+  return String(action || "activity").replaceAll("_", " ").replaceAll(".", " · ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function renderPagination(nodeId, page, total, onChange) {
+  const node = document.querySelector(`#${nodeId}`);
+  if (!node) return;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  node.innerHTML = total > PAGE_SIZE ? `<span>Page ${page} of ${pages} · ${total} total</span><span><button type="button" class="secondary" data-page="prev" ${page === 1 ? "disabled" : ""}>Previous</button><button type="button" class="secondary" data-page="next" ${page === pages ? "disabled" : ""}>Next</button></span>` : (total ? `<span>${total} total</span>` : "");
+  node.querySelector('[data-page="prev"]')?.addEventListener("click", () => onChange(page - 1));
+  node.querySelector('[data-page="next"]')?.addEventListener("click", () => onChange(page + 1));
 }
 
 function renderHistory(plans) {
@@ -127,8 +158,12 @@ function renderHistory(plans) {
     node.innerHTML = `<div class="empty-state"><strong>${plans.length ? "No matching plans" : "No plans yet"}</strong><span>${plans.length ? "Try a different search or status filter." : "Create a plan to start your workspace history."}</span></div>`;
     return;
   }
-  node.innerHTML = filtered.map((item) => `<button class="history-row" type="button" data-history-id="${escapeHtml(item.id)}"><span class="history-title"><b>${escapeHtml(item.title)}</b><small>Revision ${escapeHtml(item.revision)} · ${escapeHtml(item.created_at ? new Date(item.created_at).toLocaleString() : "date unavailable")}</small></span><span class="status-chip status-${escapeHtml(String(item.state).toLowerCase())}">${escapeHtml(item.state)}</span><span class="history-arrow">›</span></button>`).join("");
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  historyPage = Math.min(historyPage, pageCount);
+  const pageItems = filtered.slice((historyPage - 1) * PAGE_SIZE, historyPage * PAGE_SIZE);
+  node.innerHTML = pageItems.map((item) => `<button class="history-row" type="button" data-history-id="${escapeHtml(item.id)}"><span class="history-title"><b>${escapeHtml(item.title)}</b><small>Revision ${escapeHtml(item.revision)} · ${escapeHtml(formatDate(item.created_at))}</small></span><span class="status-chip status-${escapeHtml(String(item.state).toLowerCase())}">${escapeHtml(item.state)}</span><span class="history-arrow">›</span></button>`).join("");
   node.querySelectorAll("[data-history-id]").forEach((row) => row.addEventListener("click", () => openCustomerReview(row.dataset.historyId).catch((error) => show(error.message, true))));
+  renderPagination("history-pagination", historyPage, filtered.length, (nextPage) => { historyPage = nextPage; renderHistory(plans); });
 }
 
 function show(message, failure = false) {
@@ -456,7 +491,12 @@ function renderAuditEvents(events) {
     const haystack = `${event.label} ${event.actor_subject} ${event.entity_type} ${event.decision_reason || ""}`.toLowerCase();
     return (filter === "ALL" || event.label.toLowerCase().includes(filter)) && (!query || haystack.includes(query));
   });
-  node.innerHTML = filtered.length ? filtered.slice().reverse().map((event) => `<div class="event"><time>${escapeHtml(new Date(event.at).toLocaleString())}</time><div><strong>${escapeHtml(event.label)}</strong><br><span>${escapeHtml(event.actor_subject)} · ${escapeHtml(event.actor_role)} · ${escapeHtml(event.entity_type)}${event.revision ? ` · revision ${escapeHtml(event.revision)}` : ""}${event.plan_digest ? ` · ${escapeHtml(event.plan_digest)}` : ""}${event.decision_reason ? ` · reason: ${escapeHtml(event.decision_reason)}` : ""}</span></div></div>`).join("") : `<div class="empty-state"><strong>No matching activity</strong><span>Try a different search or event filter.</span></div>`;
+  const ordered = filtered.slice().reverse();
+  const pageCount = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
+  auditPage = Math.min(auditPage, pageCount);
+  const pageItems = ordered.slice((auditPage - 1) * PAGE_SIZE, auditPage * PAGE_SIZE);
+  node.innerHTML = pageItems.length ? pageItems.map((event) => `<div class="event"><time>${escapeHtml(formatDate(event.at))}</time><div><strong>${escapeHtml(event.label)}</strong><br><span>${escapeHtml(event.actor_subject)} · ${escapeHtml(event.actor_role)} · ${escapeHtml(event.entity_type)}${event.revision ? ` · revision ${escapeHtml(event.revision)}` : ""}${event.plan_digest ? ` · ${escapeHtml(event.plan_digest.slice(0, 12))}…` : ""}${event.decision_reason ? ` · reason: ${escapeHtml(event.decision_reason)}` : ""}</span></div></div>`).join("") : `<div class="empty-state"><strong>No matching activity</strong><span>Try a different search or event filter.</span></div>`;
+  renderPagination("audit-pagination", auditPage, ordered.length, (nextPage) => { auditPage = nextPage; renderAuditEvents(events); });
 }
 
 function renderEnvironments(environments) {
@@ -544,9 +584,9 @@ document.querySelector("#create").addEventListener("click", async () => {
 document.querySelector("#open-review").addEventListener("click", () => { window.location.hash = "#customer-review"; });
 document.querySelector("#history-new-plan").addEventListener("click", () => { window.location.hash = "#describe"; });
 document.querySelector("#history-search").addEventListener("input", () => renderHistory(dashboardSnapshot?.plans || []));
-document.querySelector("#history-filter").addEventListener("change", () => renderHistory(dashboardSnapshot?.plans || []));
+document.querySelector("#history-filter").addEventListener("change", () => { historyPage = 1; renderHistory(dashboardSnapshot?.plans || []); });
 document.querySelector("#audit-search").addEventListener("input", () => renderAuditEvents(auditSnapshot));
-document.querySelector("#audit-filter").addEventListener("change", () => renderAuditEvents(auditSnapshot));
+document.querySelector("#audit-filter").addEventListener("change", () => { auditPage = 1; renderAuditEvents(auditSnapshot); });
 
 document.querySelector("#submit-review").addEventListener("click", async () => {
   try {
