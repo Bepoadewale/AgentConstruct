@@ -130,7 +130,7 @@ async function refreshGitHubConnection() {
   githubConnection = await api("/api/v1/github/connection");
   const picker = document.querySelector("#github-installation");
   picker.innerHTML = githubConnection.installations.length
-    ? githubConnection.installations.map((installation) => `<option value="${installation.id}">${installation.account_login} · ${installation.account_type}</option>`).join("")
+    ? githubConnection.installations.map((installation) => `<option value="${escapeHtml(installation.id)}">${escapeHtml(installation.account_login)} · ${escapeHtml(installation.account_type)}</option>`).join("")
     : '<option value="">No accessible GitHub App installation</option>';
   const installLink = githubConnection.install_url ? ` <a href="${githubConnection.install_url}" target="_blank" rel="noreferrer">Open GitHub App install</a>.` : "";
   showGitHub(`GitHub App is ${githubConnection.execution === "SIMULATED" ? "a deterministic local fixture" : "connected in live read-only mode"}. Repository writes are disabled.${installLink}`);
@@ -139,8 +139,8 @@ async function refreshGitHubConnection() {
   const deliveries = githubConnection.recent_webhook_deliveries || [];
   if (states.length || deliveries.length) {
     detail.innerHTML = `<strong>GitHub App state</strong><p>Webhook receiver: ${githubConnection.webhooks_enabled ? "enabled" : "not configured"}<br>Writes: disabled until reviewed publication is approved.</p>` +
-      states.map((state) => `<div class="component"><strong>${state.account_login}</strong><span>${state.installation_id} · ${state.state} · ${state.repository_selection}</span></div>`).join("") +
-      deliveries.map((delivery) => `<div class="component"><strong>${delivery.event}</strong><span>${delivery.status} · ${delivery.repository || "installation"} · ${delivery.delivery_id}</span></div>`).join("");
+      states.map((state) => `<div class="component"><strong>${escapeHtml(state.account_login)}</strong><span>${escapeHtml(state.installation_id)} · ${escapeHtml(state.state)} · ${escapeHtml(state.repository_selection)}</span></div>`).join("") +
+      deliveries.map((delivery) => `<div class="component"><strong>${escapeHtml(delivery.event)}</strong><span>${escapeHtml(delivery.status)} · ${escapeHtml(delivery.repository || "installation")} · ${escapeHtml(delivery.delivery_id)}</span></div>`).join("");
     detail.classList.remove("hidden");
   } else {
     detail.classList.add("hidden");
@@ -153,7 +153,7 @@ async function refreshGitHubRepositories() {
   if (!installationId) return;
   const repositories = await api(`/api/v1/github/installations/${encodeURIComponent(installationId)}/repositories`);
   const picker = document.querySelector("#repository");
-  picker.innerHTML = '<option value="">Choose an authorized repository</option>' + repositories.map((repository) => `<option value="${repository.html_url}" data-repository="${repository.full_name}" data-default-branch="${repository.default_branch}">${repository.full_name}</option>`).join("");
+  picker.innerHTML = '<option value="">Choose an authorized repository</option>' + repositories.map((repository) => `<option value="${escapeHtml(repository.html_url)}" data-repository="${escapeHtml(repository.full_name)}" data-default-branch="${escapeHtml(repository.default_branch)}">${escapeHtml(repository.full_name)}</option>`).join("");
   if (repositories.length) {
     picker.value = repositories[0].html_url;
     await refreshGitHubBranches();
@@ -168,13 +168,13 @@ async function refreshGitHubBranches() {
   const encodedRepository = selected.dataset.repository.split("/").map(encodeURIComponent).join("/");
   const response = await api(`/api/v1/github/installations/${encodeURIComponent(installationId)}/repositories/${encodedRepository}/branches`);
   const picker = document.querySelector("#repository-branch");
-  picker.innerHTML = response.branches.map((branch) => `<option value="${branch}">${branch}</option>`).join("");
+  picker.innerHTML = response.branches.map((branch) => `<option value="${escapeHtml(branch)}">${escapeHtml(branch)}</option>`).join("");
   picker.value = selected.dataset.defaultBranch || response.branches[0] || "";
 }
 
 function renderCloudConnections() {
   const picker = document.querySelector("#cloud-target");
-  picker.innerHTML = `<option value="">Local demo target — no AWS account connected</option>${cloudConnections.map((connection) => `<option value="${connection.id}">${connection.display_name}${connection.account_id ? ` · ${connection.account_id}` : ""} · ${connection.setup_state}</option>`).join("")}`;
+  picker.innerHTML = `<option value="">Local demo target — no AWS account connected</option>${cloudConnections.map((connection) => `<option value="${escapeHtml(connection.id)}">${escapeHtml(connection.display_name)}${connection.account_id ? ` · ${escapeHtml(connection.account_id)}` : ""} · ${escapeHtml(connection.setup_state)}</option>`).join("")}`;
   selectedCloudConnection = cloudConnections.find((connection) => connection.id === picker.value) || null;
 }
 
@@ -186,7 +186,7 @@ async function refreshCloudConnections() {
 async function showCloudConnectionDetail(connectionId) {
   const detail = await api(`/api/v1/cloud-connections/${connectionId}`);
   const node = document.querySelector("#aws-target-detail");
-  node.innerHTML = `<strong>${detail.display_name}</strong><p>Account: ${detail.account_id || "setup pending"}<br>Role: ${detail.role_arn || "created by AWS setup after customer review"}<br>Status: ${detail.setup_state}<br>Regions: ${detail.authorized_regions.join(", ") || "verified regions not available yet"}<br>Capabilities: ${detail.capabilities.join("; ")}<br>Last verified: ${detail.verified_at || "not verified"}<br>Deployment permission: ${detail.deployment_permission}</p>`;
+  node.innerHTML = `<strong>${escapeHtml(detail.display_name)}</strong><p>Account: ${escapeHtml(detail.account_id || "setup pending")}<br>Role: ${escapeHtml(detail.role_arn || "created by AWS setup after customer review")}<br>Status: ${escapeHtml(detail.setup_state)}<br>Regions: ${escapeHtml(detail.authorized_regions.join(", ") || "verified regions not available yet")}<br>Capabilities: ${escapeHtml(detail.capabilities.join("; "))}<br>Last verified: ${escapeHtml(detail.verified_at || "not verified")}<br>Deployment permission: ${escapeHtml(detail.deployment_permission)}</p>`;
   node.classList.remove("hidden");
   document.querySelector("#disconnect-aws").classList.remove("hidden");
 }
@@ -422,7 +422,7 @@ async function openCustomerReview(revisionId) {
 
 async function refreshAudit() {
   const events = await api("/api/v1/audit-evidence");
-  document.querySelector("#audit-events").innerHTML = events.length ? events.reverse().map((event) => `<div class="event"><time>${new Date(event.at).toLocaleString()}</time><div><strong>${event.label}</strong><br><span>${event.actor_subject} · ${event.actor_role} · ${event.entity_type}${event.revision ? ` · revision ${event.revision}` : ""}${event.plan_digest ? ` · ${event.plan_digest}` : ""}${event.decision_reason ? ` · reason: ${event.decision_reason}` : ""}</span></div></div>`).join("") : "No events yet.";
+  document.querySelector("#audit-events").innerHTML = events.length ? events.reverse().map((event) => `<div class="event"><time>${escapeHtml(new Date(event.at).toLocaleString())}</time><div><strong>${escapeHtml(event.label)}</strong><br><span>${escapeHtml(event.actor_subject)} · ${escapeHtml(event.actor_role)} · ${escapeHtml(event.entity_type)}${event.revision ? ` · revision ${escapeHtml(event.revision)}` : ""}${event.plan_digest ? ` · ${escapeHtml(event.plan_digest)}` : ""}${event.decision_reason ? ` · reason: ${escapeHtml(event.decision_reason)}` : ""}</span></div></div>`).join("") : "No events yet.";
 }
 
 function renderEnvironments(environments) {
