@@ -574,6 +574,31 @@ def create_customer_plan_cloud_execution_run(
         translate(error)
 
 
+@app.get("/api/v1/cloud-execution-runs")
+def list_cloud_execution_runs(
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("cloud_execution.runs_list").inc()
+    try:
+        return service.cloud_execution_runs(principal)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
+@app.get("/api/v1/cloud-execution-runs/{run_id}/evidence")
+def get_cloud_execution_run_evidence(
+    run_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("cloud_execution.evidence").inc()
+    try:
+        return service.cloud_execution_run_evidence(principal, run_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
 @app.post("/api/v1/intents", status_code=201)
 def create_intent(
     request: IntentRequest,
