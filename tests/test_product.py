@@ -39,11 +39,70 @@ class LocalExecutor:
                 "profile": profile,
                 "health_checked": not should_fail,
                 "degradation_detected": should_degrade,
+                "outputs": [
+                    {
+                        "name": "application_url",
+                        "type": "https_url",
+                        "value": f"https://{environment_id}.local.test",
+                        "visibility": "customer",
+                        "sensitive": False,
+                        "source": "unit-fixture",
+                        "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+                    },
+                    {
+                        "name": "app_runner_service_arn",
+                        "type": "aws_arn",
+                        "value": f"arn:aws:apprunner:us-east-1:000000000000:service/test/{environment_id}",
+                        "visibility": "customer",
+                        "sensitive": False,
+                        "source": "unit-fixture",
+                        "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+                    },
+                ],
+                "resources": [
+                    {
+                        "provider": "aws",
+                        "resource_type": "apprunner_service",
+                        "name": "test-service",
+                        "external_id": f"arn:aws:apprunner:us-east-1:000000000000:service/test/{environment_id}",
+                        "region": "us-east-1",
+                        "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+                        "tags": {"agentconstruct:environment-id": environment_id},
+                    }
+                ],
             },
         )
 
     def destroy(self, environment_id: str) -> ExecutionObservation:
-        return ExecutionObservation("DESTROYED", {"environment_id": environment_id, "cleanup_verified": True})
+        return ExecutionObservation(
+            "DESTROYED",
+            {
+                "environment_id": environment_id,
+                "cleanup_verified": True,
+                "outputs": [
+                    {
+                        "name": "application_url",
+                        "type": "https_url",
+                        "value": f"https://{environment_id}.local.test",
+                        "visibility": "customer",
+                        "sensitive": False,
+                        "source": "unit-fixture",
+                        "status": "DESTROYED",
+                    }
+                ],
+                "resources": [
+                    {
+                        "provider": "aws",
+                        "resource_type": "apprunner_service",
+                        "name": "test-service",
+                        "external_id": f"arn:aws:apprunner:us-east-1:000000000000:service/test/{environment_id}",
+                        "region": "us-east-1",
+                        "status": "DESTROYED",
+                        "tags": {"agentconstruct:environment-id": environment_id},
+                    }
+                ],
+            },
+        )
 
     def change(self, environment_id: str, minimum_replicas: int) -> ExecutionObservation:
         return ExecutionObservation(

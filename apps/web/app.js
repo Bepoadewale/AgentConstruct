@@ -317,7 +317,15 @@ function renderReviewEnvironments(environments) {
     node.textContent = "No local dry-run execution yet.";
     return;
   }
-  node.innerHTML = environments.map((environment) => `<div class="component"><strong>${environment.type}: ${environment.state}</strong><span>${environment.execution_mode || "LOCAL_DRY_RUN"} · ${environment.cost_estimate ? `$${environment.cost_estimate.monthly_low}–$${environment.cost_estimate.monthly_high}/month estimate` : "cost estimate unavailable"} · ${JSON.stringify(environment.observed_state || {})}</span></div>`).join("");
+  node.innerHTML = environments.map((environment) => {
+    const outputs = (environment.outputs || []).length
+      ? `<h4>Deployment outputs</h4>${environment.outputs.map((output) => `<div class="component"><strong>${output.name}</strong><span>${output.status} · ${output.type} · ${output.sensitive ? "secret reference" : output.value}</span></div>`).join("")}`
+      : "<p class=\"message\">No deployment outputs observed yet.</p>";
+    const resources = (environment.resources || []).length
+      ? `<h4>Observed resources</h4>${environment.resources.map((resource) => `<div class="component"><strong>${resource.provider}:${resource.type}</strong><span>${resource.status} · ${resource.name}${resource.region ? ` · ${resource.region}` : ""}${resource.external_id ? ` · ${resource.external_id}` : ""}</span></div>`).join("")}`
+      : "<p class=\"message\">No resources observed yet.</p>";
+    return `<div class="component"><strong>${environment.type}: ${environment.state}</strong><span>${environment.execution_mode || "LOCAL_DRY_RUN"} · ${environment.cost_estimate ? `$${environment.cost_estimate.monthly_low}–$${environment.cost_estimate.monthly_high}/month estimate` : "cost estimate unavailable"}</span>${outputs}${resources}</div>`;
+  }).join("");
 }
 
 async function openCustomerReview(revisionId) {
@@ -336,7 +344,11 @@ function renderEnvironments(environments) {
   day2Environment = productionEnvironment;
   const environmentsNode = document.querySelector("#environments");
   if (environmentsNode) {
-    environmentsNode.innerHTML = environments.length ? environments.map((environment) => `<div class="component"><strong>${environment.type}: ${environment.state}</strong><span>${JSON.stringify(environment.observed_state)}</span></div>`).join("") : "No local execution yet.";
+    environmentsNode.innerHTML = environments.length ? environments.map((environment) => {
+      const outputSummary = (environment.outputs || []).map((output) => `${output.name}: ${output.status}`).join("; ") || "outputs pending";
+      const resourceSummary = (environment.resources || []).map((resource) => `${resource.type}: ${resource.status}`).join("; ") || "resources pending";
+      return `<div class="component"><strong>${environment.type}: ${environment.state}</strong><span>${outputSummary}<br>${resourceSummary}</span></div>`;
+    }).join("") : "No local execution yet.";
   }
   const destroy = document.querySelector("#destroy");
   const day2 = document.querySelector("#day2");
