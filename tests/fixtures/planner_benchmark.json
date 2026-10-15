@@ -1,0 +1,27 @@
+[
+  {
+    "name": "tiny-stateless-api",
+    "workload_type": "api",
+    "peak_rps": 10,
+    "monthly_budget_usd": 300,
+    "expected_profile_not_contains": ["eks", "kubernetes"],
+    "policy_outcome": "ALLOW"
+  },
+  {
+    "name": "gpu-multiservice-inference",
+    "workload_type": "inference",
+    "peak_rps": 100,
+    "monthly_budget_usd": 5000,
+    "requires_gpu": true,
+    "multi_service": true,
+    "requires_kubernetes": true,
+    "expected_profile_contains": ["eks"],
+    "policy_outcome": "APPROVAL_REQUIRED"
+  },
+  {
+    "name": "unsupported-unknown-runtime",
+    "workload_type": "unknown",
+    "monthly_budget_usd": 200,
+    "expected_behavior": "needs-clarification"
+  }
+]

@@ -4,7 +4,11 @@ from agentconstruct.contracts import (
     ExecutionPlacement,
     TenantScope,
 )
-from agentconstruct.execution_runner import DisabledExecutionRunner, FixtureExecutionRunner
+from agentconstruct.execution_runner import (
+    DisabledExecutionRunner,
+    FixtureExecutionRunner,
+    RunnerPreparation,
+)
 
 
 def tenant(org="org-demo"):
@@ -44,6 +48,20 @@ def test_runner_denies_operation_not_in_allowlist():
 def test_disabled_runner_fails_closed():
     result = DisabledExecutionRunner().run(context())
     assert result.state == "BLOCKED_RUNNER_NOT_CONFIGURED"
+
+
+def test_fixture_runner_exposes_full_lifecycle_contract():
+    run_context = context(ExecutionOperation.APPLY).model_copy(
+        update={"allowed_operations": (ExecutionOperation.APPLY, ExecutionOperation.OBSERVE, ExecutionOperation.DESTROY)}
+    )
+    runner = FixtureExecutionRunner()
+    prepared = runner.prepare(run_context)
+    assert isinstance(prepared, RunnerPreparation) and prepared.prepared is True
+    assert runner.execute(run_context).state == "SIMULATED_APPLY"
+    assert runner.observe(run_context).state == "OBSERVED"
+    assert runner.destroy(run_context).state == "SIMULATED_DESTROY"
+    assert runner.cancel(run_context).state == "CANCELLED"
+    assert runner.collect_evidence(run_context)
 
 
 def test_context_rejects_non_digest_and_keeps_credential_as_reference():

@@ -9,6 +9,8 @@ from typing import Any
 
 from agentconstruct.client import ProductApiClient
 
+MCP_TOOL_SCHEMA_VERSION = "v1"
+
 TOOL_DEFINITIONS = [
     {
         "name": "analyze_workload",
@@ -258,10 +260,10 @@ def handle_request(server: AgentConstructMcp, request: dict[str, Any]) -> dict[s
         result = {
             "protocolVersion": request.get("params", {}).get("protocolVersion", "2025-03-26"),
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "agentconstruct", "version": "0.1.0"},
+            "serverInfo": {"name": "agentconstruct", "version": "0.1.0", "toolSchemaVersion": MCP_TOOL_SCHEMA_VERSION},
         }
     elif method == "tools/list":
-        result = {"tools": TOOL_DEFINITIONS}
+        result = {"schemaVersion": MCP_TOOL_SCHEMA_VERSION, "tools": TOOL_DEFINITIONS}
     elif method == "tools/call":
         params = request.get("params", {})
         try:

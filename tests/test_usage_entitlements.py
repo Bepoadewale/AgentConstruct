@@ -1,5 +1,5 @@
 from agentconstruct.contracts import Entitlement, TenantScope, UsageEvent
-from agentconstruct.usage import InMemoryUsageLedger
+from agentconstruct.usage import InMemoryUsageLedger, UsageMeterLedger
 
 
 def tenant(org="org-demo"):
@@ -44,3 +44,11 @@ def test_cross_tenant_usage_is_denied():
     decision = ledger.decide(entitlement(org="org-a"), event(org="org-b"))
     assert decision.allowed is False
     assert "tenant" in decision.reason
+
+
+def test_usage_meter_records_only_allowed_events():
+    meter = UsageMeterLedger()
+    first = event(quantity=1)
+    second = event(quantity=1)
+    assert meter.decide(entitlement(limit=1), first).allowed is True
+    assert meter.decide(entitlement(limit=1), second).allowed is False

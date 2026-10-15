@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Protocol
 
 import httpx
 
@@ -13,6 +14,34 @@ from agentconstruct.security import Principal
 class PolicyDecision:
     result: PolicyResult
     reason: str
+
+
+@dataclass(frozen=True)
+class AuthorizationRequest:
+    actor_id: str
+    tenant_id: str
+    operation: str
+    plan_digest: str
+    scope: str
+    approval: str | None = None
+
+
+class AuthorizationService(Protocol):
+    def authorize(self, request: AuthorizationRequest) -> PolicyDecision: ...
+
+
+class FailClosedAuthorizationService:
+    """Independent authorization boundary for non-HTTP clients and runners."""
+
+    def __init__(self, policy: PolicyClient | None = None):
+        self.policy = policy
+
+    def authorize(self, request: AuthorizationRequest) -> PolicyDecision:
+        if not request.actor_id or not request.tenant_id or len(request.plan_digest) != 64 or not request.scope:
+            return PolicyDecision(PolicyResult.DENY, "authorization request is incomplete")
+        if request.operation in {"apply", "destroy", "remediate"} and not request.approval:
+            return PolicyDecision(PolicyResult.APPROVAL_REQUIRED, "privileged operation requires approval")
+        return PolicyDecision(PolicyResult.ALLOW, "authorization boundary accepted request")
 
 
 class PolicyClient:

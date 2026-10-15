@@ -10,6 +10,8 @@ from typing import Any
 
 from agentconstruct.client import ProductApiClient
 
+CLI_PROTOCOL_VERSION = "v1"
+
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AgentConstruct governed API client")

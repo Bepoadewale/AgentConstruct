@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+API_CONTRACT_VERSION = "v1"
+
 
 class ProductApiClient:
     def __init__(self, base_url: str, token: str, client: httpx.Client | None = None):
@@ -19,7 +21,11 @@ class ProductApiClient:
         response = self.client.request(
             method,
             f"{self.base_url}{path}",
-            headers={"Authorization": f"Bearer {self.token}"},
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Accept": f"application/vnd.agentconstruct.{API_CONTRACT_VERSION}+json",
+                "X-AgentConstruct-Client-Contract": API_CONTRACT_VERSION,
+            },
             json=payload,
         )
         try:

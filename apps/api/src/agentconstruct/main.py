@@ -56,12 +56,14 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="AgentConstruct", version="0.1.0", lifespan=lifespan)
 configure_tracing()
 FastAPIInstrumentor.instrument_app(app)
+API_CONTRACT_VERSION = "v1"
 
 
 @app.middleware("http")
 async def prevent_stale_local_ui(request: Request, call_next):
     """Keep the local demo from serving an older cached HTML/CSS/JS build."""
     response = await call_next(request)
+    response.headers["X-AgentConstruct-API-Version"] = API_CONTRACT_VERSION
     if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"}:
         response.headers["Cache-Control"] = "no-store, max-age=0"
     return response

@@ -10,12 +10,18 @@ the replacement seams; it is not evidence of a cloud deployment.
   model calls, capabilities, cost evidence, usage, and execution outcomes.
 - `boundaries.py` provides required tenant context, feature flags, lifecycle
   export/deletion/archive contracts, capability registration, evidence links,
-  separate decision engines, and runner limits.
+  separate cost/complexity/risk/reliability/capacity engines, rollout targeting,
+  and runner limits.
 - `queue.py` exposes `enqueue`, `claim`, `heartbeat`, `retry`, `cancel`, and
-  `dead_letter`. PostgreSQL is only the current transport adapter.
+  `dead_letter`, plus stale-job recovery. PostgreSQL is only the current
+  transport adapter.
 - `model_gateway.py` applies provider, token, and timeout admission before a
-  gateway call. The deterministic fixture is deliberately non-authoritative.
-- `execution_runner.py` fails closed unless a bounded runner is configured.
+  gateway call and exposes structured generation, cost, and output validation.
+  The deterministic fixture is deliberately non-authoritative.
+- `execution_runner.py` exposes prepare/execute/observe/destroy/cancel/evidence
+  lifecycle methods and fails closed unless a bounded runner is configured.
+- `policy.py`, `client.py`, `cli.py`, and `mcp.py` expose independent
+  authorization and explicit v1 protocol/schema metadata.
 
 ## Replacement seams
 
@@ -47,6 +53,7 @@ The following can be replaced without changing business semantics:
    output limits.
 6. Feature flags default off and can target a tenant without changing code.
 7. Export and deletion are explicit lifecycle operations with auditable due dates.
+8. API, CLI, and MCP clients advertise a stable contract version.
 
 ## What remains intentionally unimplemented
 

@@ -8,7 +8,7 @@ changing job semantics.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 from sqlalchemy.orm import Session
@@ -29,6 +29,8 @@ class JobQueue(Protocol):
     def cancel(self, job_id: str, reason: str = "cancelled") -> None: ...
 
     def dead_letter(self, job_id: str, error: str) -> None: ...
+
+    def requeue_stale(self, timeout_seconds: int) -> int: ...
 
     def acknowledge(self, job_id: str) -> None: ...
 
@@ -139,6 +141,15 @@ class PostgresJobQueue:
         row.updated_at = datetime.now(UTC)
         self.db.commit()
 
+    def requeue_stale(self, timeout_seconds: int) -> int:
+        cutoff = datetime.now(UTC) - timedelta(seconds=timeout_seconds)
+        rows = self.db.query(PlatformJob).filter(PlatformJob.state == "RUNNING", PlatformJob.updated_at < cutoff).all()
+        for row in rows:
+            row.state = "QUEUED"
+            row.updated_at = datetime.now(UTC)
+        self.db.commit()
+        return len(rows)
+
     @staticmethod
     def _envelope(row: PlatformJob) -> JobEnvelope:
         payload = dict(row.envelope)
@@ -152,6 +163,7 @@ class InMemoryJobQueue:
     def __init__(self):
         self.jobs: dict[str, tuple[JobEnvelope, str]] = {}
         self.idempotency: dict[tuple[str, str], str] = {}
+        self.claimed_at: dict[str, datetime] = {}
 
     def enqueue(self, job: JobEnvelope) -> JobEnvelope:
         key = (job.tenant.organization_id, job.idempotency_key)
@@ -174,6 +186,7 @@ class InMemoryJobQueue:
             ):
                 updated = job.model_copy(update={"attempt": job.attempt + 1})
                 self.jobs[job.job_id] = (updated, "RUNNING")
+                self.claimed_at[job.job_id] = datetime.now(UTC)
                 return updated
         return None
 
@@ -203,3 +216,12 @@ class InMemoryJobQueue:
     def dead_letter(self, job_id: str, error: str) -> None:
         job, _ = self.jobs[job_id]
         self.jobs[job_id] = (job, "DEAD_LETTER")
+
+    def requeue_stale(self, timeout_seconds: int) -> int:
+        cutoff = datetime.now(UTC) - timedelta(seconds=timeout_seconds)
+        count = 0
+        for job_id, (job, state) in list(self.jobs.items()):
+            if state == "RUNNING" and self.claimed_at.get(job_id, datetime.now(UTC)) < cutoff:
+                self.jobs[job_id] = (job, "QUEUED")
+                count += 1
+        return count

@@ -34,6 +34,12 @@ def test_tenant_context_rejects_cross_tenant_records():
         require_same_tenant(context(), TenantScope(organization_id="org-other", workspace_id="ws-demo", actor_id="other"))
 
 
+def test_tenant_context_carries_cell_and_region_metadata():
+    scoped = context().model_copy(update={"cell_id": "cell-a", "home_region": "eu-west-1"})
+    assert scoped.cell_id == "cell-a"
+    assert scoped.contract_scope().home_region == "eu-west-1"
+
+
 def test_flags_are_disabled_by_default_and_targetable():
     flags = InMemoryFeatureFlags([FeatureFlag(name="new-runner", enabled=True, tenants=frozenset({"org-demo"}))])
     assert flags.enabled("new-runner", context()) is True
@@ -79,3 +85,7 @@ def test_runner_limits_fail_closed():
     )
     with pytest.raises(TenantBoundaryError):
         validate_runner_context(execution, RunnerLimits())
+
+    restricted = execution.model_copy(update={"operation": ExecutionOperation.PLAN, "requested_commands": ("terraform",)})
+    with pytest.raises(TenantBoundaryError):
+        validate_runner_context(restricted, RunnerLimits(allowed_commands=frozenset({"echo"})))

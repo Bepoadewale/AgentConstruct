@@ -42,12 +42,25 @@ class ModelCallPolicy(BaseModel):
 
 class ModelGateway(Protocol):
     def complete(self, request: ModelRequest, document: dict[str, Any]) -> ModelResponse: ...
+    def generate_structured(self, request: ModelRequest, document: dict[str, Any]) -> ModelResponse: ...
+    def estimate_cost(self, request: ModelRequest) -> float: ...
+    def validate_output(self, output: dict[str, Any]) -> bool: ...
 
 
 class DisabledModelGateway:
     def complete(self, request: ModelRequest, document: dict[str, Any]) -> ModelResponse:
         del request, document
         raise ModelGatewayUnavailable("no model gateway is configured")
+
+    generate_structured = complete
+
+    def estimate_cost(self, request: ModelRequest) -> float:
+        del request
+        raise ModelGatewayUnavailable("no model gateway is configured")
+
+    def validate_output(self, output: dict[str, Any]) -> bool:
+        del output
+        return False
 
 
 class DeterministicModelGateway:
@@ -76,8 +89,17 @@ class DeterministicModelGateway:
                     limitations=("not a language-model response",),
                 ),
             ),
-            usage=ModelUsage(input_tokens=len(serialized.split()), output_tokens=8),
+            usage=ModelUsage(input_tokens=len(serialized.split()), output_tokens=8, latency_ms=0, retry_count=0),
         )
+
+    def generate_structured(self, request: ModelRequest, document: dict[str, Any]) -> ModelResponse:
+        return self.complete(request, document)
+
+    def estimate_cost(self, request: ModelRequest) -> float:
+        return round(request.max_output_tokens * 0.000001, 8)
+
+    def validate_output(self, output: dict[str, Any]) -> bool:
+        return output.get("mode") == "SIMULATED" and isinstance(output.get("document_fields"), list)
 
 
 def configured_model_gateway() -> ModelGateway:

@@ -34,9 +34,11 @@ class TenantContext(BaseModel):
     organization_id: str = Field(min_length=1, max_length=160)
     workspace_id: str = Field(min_length=1, max_length=160)
     actor_id: str = Field(min_length=1, max_length=160)
+    role: str = Field(default="developer", min_length=1, max_length=80)
     project_id: str | None = Field(default=None, max_length=160)
     environment_id: str | None = Field(default=None, max_length=160)
     cell_id: str = Field(default="local", min_length=1, max_length=120)
+    home_region: str = Field(default="local", min_length=1, max_length=80)
 
     @classmethod
     def from_principal(cls, principal: Principal, *, workspace_id: str = "workspace-default", **ids: str | None) -> TenantContext:
@@ -44,6 +46,7 @@ class TenantContext(BaseModel):
             organization_id=principal.organization_id,
             workspace_id=workspace_id,
             actor_id=principal.subject,
+            role=principal.role,
             **ids,
         )
 
@@ -54,6 +57,8 @@ class TenantContext(BaseModel):
             project_id=self.project_id,
             environment_id=self.environment_id,
             actor_id=self.actor_id,
+            cell_id=self.cell_id,
+            home_region=self.home_region,
         )
 
 
@@ -76,6 +81,8 @@ class FeatureFlag(BaseModel):
     enabled: bool = False
     tenants: frozenset[str] = frozenset()
     roles: frozenset[str] = frozenset()
+    environments: frozenset[str] = frozenset()
+    percentage: int = Field(default=100, ge=0, le=100)
     version: str = "local-v1"
 
 
@@ -83,20 +90,31 @@ class FeatureFlags(Protocol):
     def enabled(self, name: str, context: TenantContext) -> bool: ...
 
 
+class RolloutPolicy(Protocol):
+    def enabled(self, name: str, context: TenantContext) -> bool: ...
+
+
 class InMemoryFeatureFlags:
     def __init__(self, flags: list[FeatureFlag] | None = None):
         self._flags = {flag.name: flag for flag in flags or []}
+        self.audit: list[dict[str, str]] = []
 
     def set(self, flag: FeatureFlag) -> None:
         self._flags[flag.name] = flag
+        self.audit.append({"event": "flag_updated", "name": flag.name, "version": flag.version})
 
     def enabled(self, name: str, context: TenantContext) -> bool:
         flag = self._flags.get(name)
         if flag is None or not flag.enabled:
             return False
-        return (not flag.tenants or context.organization_id in flag.tenants) and (
-            not flag.roles or context.actor_id in flag.roles
-        )
+        if flag.tenants and context.organization_id not in flag.tenants:
+            return False
+        if flag.roles and context.role not in flag.roles:
+            return False
+        if flag.environments and (context.environment_id or "") not in flag.environments:
+            return False
+        bucket = sum(ord(char) for char in f"{flag.name}:{context.organization_id}") % 100
+        return bucket < flag.percentage
 
 
 class DataLifecycle(BaseModel):
@@ -127,6 +145,18 @@ class InMemoryDataLifecycle:
     def request_delete(self, context: TenantContext, *, now: datetime | None = None) -> datetime:
         self.deleted.add(context.organization_id)
         return (now or datetime.now(UTC)) + timedelta(days=self.policy.deletion_grace_days)
+
+    def request_project_delete(self, context: TenantContext, project_id: str, *, now: datetime | None = None) -> datetime:
+        if context.project_id and context.project_id != project_id:
+            raise TenantBoundaryError("project scope mismatch")
+        return self.request_delete(context.model_copy(update={"project_id": project_id}), now=now)
+
+    def purge_due(self, context: TenantContext, *, now: datetime | None = None) -> int:
+        if context.organization_id not in self.deleted:
+            return 0
+        self.records.pop(context.organization_id, None)
+        self.deleted.discard(context.organization_id)
+        return 1
 
     def archive_audit(self, context: TenantContext, *, now: datetime | None = None) -> datetime:
         cutoff = (now or datetime.now(UTC)) - timedelta(days=self.policy.audit_archive_after_days)
@@ -170,6 +200,10 @@ class ReliabilityEstimator(Protocol):
     def score(self, profile: str, availability_target: str | None) -> int: ...
 
 
+class CapacityEstimator(Protocol):
+    def score(self, profile: str, peak_rps: int | None, component_count: int) -> int: ...
+
+
 class FixtureDecisionEngines:
     """Separate deterministic engines used until live catalogs are configured."""
 
@@ -190,6 +224,13 @@ class FixtureDecisionEngines:
     @staticmethod
     def score_reliability(profile: str, availability_target: str | None) -> int:
         return 5 if availability_target and "99.9" in availability_target else (4 if "managed" in profile.lower() else 3)
+
+    @staticmethod
+    def score_capacity(profile: str, peak_rps: int | None, component_count: int) -> int:
+        load = peak_rps or 0
+        if "lambda" in profile.lower() and load > 100:
+            return 2
+        return min(5, max(1, 3 + (1 if load > 50 else 0) + (1 if component_count > 3 else 0)))
 
 
 class EvidenceGraph:
@@ -224,7 +265,12 @@ class RunnerLimits(BaseModel):
     timeout_seconds: int = Field(default=900, ge=1, le=86_400)
     max_output_bytes: int = Field(default=1_000_000, ge=1_024, le=100_000_000)
     allowed_operations: frozenset[ExecutionOperation] = frozenset({ExecutionOperation.PLAN, ExecutionOperation.OBSERVE})
+    allowed_commands: frozenset[str] = frozenset()
     network_policy: str = Field(default="isolated-runner", min_length=1, max_length=120)
+    filesystem_policy: str = Field(default="ephemeral-workspace", min_length=1, max_length=120)
+    credential_scope: str = Field(default="reference-only", min_length=1, max_length=120)
+    retry_policy: str = Field(default="bounded", min_length=1, max_length=80)
+    cleanup_policy: str = Field(default="always", min_length=1, max_length=80)
 
 
 def validate_runner_context(context: ExecutionContext, limits: RunnerLimits) -> None:
@@ -234,3 +280,9 @@ def validate_runner_context(context: ExecutionContext, limits: RunnerLimits) -> 
         raise TenantBoundaryError("runner timeout exceeds configured limit")
     if context.network_policy != limits.network_policy:
         raise TenantBoundaryError("runner network policy mismatch")
+    if context.filesystem_policy != limits.filesystem_policy:
+        raise TenantBoundaryError("runner filesystem policy mismatch")
+    if context.credential_scope != limits.credential_scope:
+        raise TenantBoundaryError("runner credential scope mismatch")
+    if limits.allowed_commands and any(command not in limits.allowed_commands for command in context.requested_commands):
+        raise TenantBoundaryError("runner command is outside the configured allowlist")

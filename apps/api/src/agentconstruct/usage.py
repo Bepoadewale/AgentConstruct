@@ -8,8 +8,37 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from typing import Protocol
 
 from agentconstruct.contracts import Entitlement, UsageDecision, UsageEvent
+
+
+class UsageMeter(Protocol):
+    def record(self, event: UsageEvent) -> None: ...
+
+
+class EntitlementService(Protocol):
+    def decide(self, entitlement: Entitlement, event: UsageEvent) -> UsageDecision: ...
+
+
+class QuotaService(EntitlementService, Protocol):
+    """Quota admission is intentionally the same shape as entitlement admission."""
+
+
+class UsageMeterLedger:
+    """Named adapter combining metering and admission for future billing clients."""
+
+    def __init__(self, ledger: InMemoryUsageLedger | None = None):
+        self.ledger = ledger or InMemoryUsageLedger()
+
+    def record(self, event: UsageEvent) -> None:
+        self.ledger.record(event)
+
+    def decide(self, entitlement: Entitlement, event: UsageEvent) -> UsageDecision:
+        decision = self.ledger.decide(entitlement, event)
+        if decision.allowed:
+            self.ledger.record(event)
+        return decision
 
 
 class InMemoryUsageLedger:

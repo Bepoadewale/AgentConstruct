@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from agentconstruct.contracts import JobEnvelope, JobKind, ModelPurpose, ModelRequest, TenantScope
 from agentconstruct.db import run_migrations
@@ -34,9 +36,13 @@ def test_in_memory_queue_is_idempotent_and_retries_then_dead_letters():
     assert duplicate.job_id == first.job_id
     claimed = queue.claim("org-demo")
     assert claimed is not None and claimed.attempt == 1
+    queue.claimed_at[claimed.job_id] = datetime.now(UTC) - timedelta(hours=1)
+    assert queue.requeue_stale(60) == 1
+    claimed = queue.claim("org-demo")
+    assert claimed is not None
     assert queue.fail(claimed.job_id, "temporary") == "QUEUED"
     claimed_again = queue.claim("org-demo")
-    assert claimed_again is not None and claimed_again.attempt == 2
+    assert claimed_again is not None and claimed_again.attempt == 3
     queue.heartbeat(claimed_again.job_id)
     queue.cancel(claimed_again.job_id, "operator requested cancellation")
     assert queue.fail(claimed_again.job_id, "permanent", retry=False) == "DEAD_LETTER"
@@ -102,5 +108,7 @@ def test_model_call_policy_enforces_provider_and_budget():
     )
     response = guarded_complete(DeterministicModelGateway(), request, {"prompt": "ok"}, ModelCallPolicy(max_output_tokens=100))
     assert response.request.request_id == request.request_id
+    assert DeterministicModelGateway().validate_output(response.output) is True
+    assert DeterministicModelGateway().estimate_cost(request) > 0
     with pytest.raises(ModelGatewayUnavailable):
         guarded_complete(DeterministicModelGateway(), request.model_copy(update={"provider": "unknown"}), {"prompt": "no"})

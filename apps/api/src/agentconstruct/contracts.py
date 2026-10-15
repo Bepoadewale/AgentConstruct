@@ -47,6 +47,8 @@ class TenantScope(ContractBase):
     project_id: str | None = Field(default=None, max_length=160)
     environment_id: str | None = Field(default=None, max_length=160)
     actor_id: str = Field(min_length=1, max_length=160)
+    cell_id: str = Field(default="local", min_length=1, max_length=120)
+    home_region: str = Field(default="local", min_length=1, max_length=80)
 
 
 class EvidenceKind(StrEnum):
@@ -100,6 +102,8 @@ class ModelUsage(ContractBase):
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
     estimated_cost_usd: float | None = Field(default=None, ge=0)
+    latency_ms: int | None = Field(default=None, ge=0)
+    retry_count: int = Field(default=0, ge=0)
     measured_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -152,8 +156,11 @@ class ExecutionContext(ContractBase):
     operation: ExecutionOperation
     allowed_operations: tuple[ExecutionOperation, ...] = ()
     credential_reference: str | None = Field(default=None, max_length=240)
+    requested_commands: tuple[str, ...] = ()
     timeout_seconds: int = Field(default=900, ge=1, le=86_400)
     network_policy: str = Field(default="isolated-runner", min_length=1, max_length=120)
+    filesystem_policy: str = Field(default="ephemeral-workspace", min_length=1, max_length=120)
+    credential_scope: str = Field(default="reference-only", min_length=1, max_length=120)
 
 
 class ExecutionOutcome(ContractBase):
