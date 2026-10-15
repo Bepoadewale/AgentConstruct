@@ -31,6 +31,7 @@ from agentconstruct.domain import (
     TerraformPlanRenderRequest,
     TerraformPlanReviewRequest,
 )
+from agentconstruct.product_readiness import security_headers
 from agentconstruct.security import Principal, issue_local_token, verify_token
 from agentconstruct.service import ProductService
 from agentconstruct.telemetry import configure_tracing
@@ -64,6 +65,8 @@ async def prevent_stale_local_ui(request: Request, call_next):
     """Keep the local demo from serving an older cached HTML/CSS/JS build."""
     response = await call_next(request)
     response.headers["X-AgentConstruct-API-Version"] = API_CONTRACT_VERSION
+    for name, value in security_headers().items():
+        response.headers[name] = value
     if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"}:
         response.headers["Cache-Control"] = "no-store, max-age=0"
     return response
