@@ -77,6 +77,7 @@ from agentconstruct.models import (
     UsageRecord,
     WorkloadIntent,
     WorkspaceInvitation,
+    WorkspaceSubscription,
 )
 from agentconstruct.planner import AwsV1Planner
 from agentconstruct.policy import PolicyClient
@@ -188,6 +189,39 @@ class ProductService:
         self.workspace_profile(principal)
         users = self.db.scalars(select(ProductUser).where(ProductUser.organization_id == principal.organization_id).order_by(ProductUser.subject)).all()
         return [{"subject": user.subject, "role": user.role, "state": "ACTIVE"} for user in users]
+
+    def change_workspace_member_role(self, principal: Principal, subject: str, role: str) -> dict[str, str]:
+        self._require_workspace_admin(principal)
+        if subject == principal.subject and role != principal.role:
+            raise ValueError("administrators cannot change their own role")
+        member = self.db.scalar(select(ProductUser).where(ProductUser.organization_id == principal.organization_id, ProductUser.subject == subject))
+        if not member:
+            raise KeyError("workspace member not found")
+        member.role = role
+        self.audit(principal, "workspace.member_role_changed", "user", member.id, {"subject": subject, "role": role})
+        self.db.commit()
+        return {"subject": member.subject, "role": member.role}
+
+    def subscription(self, principal: Principal) -> dict[str, Any]:
+        self.workspace_profile(principal)
+        subscription = self.db.scalar(select(WorkspaceSubscription).where(WorkspaceSubscription.organization_id == principal.organization_id))
+        if not subscription:
+            subscription = WorkspaceSubscription(organization_id=principal.organization_id, limits={"plans_created": 25, "repository_analyses": 25, "execution_jobs": 10}, trial_ends_at=datetime.now(UTC) + timedelta(days=14))
+            self.db.add(subscription)
+            self.db.commit()
+        return {"plan_name": subscription.plan_name, "state": subscription.state, "limits": subscription.limits, "trial_ends_at": subscription.trial_ends_at}
+
+    def set_subscription(self, principal: Principal, plan_name: str, state: str, limits: dict[str, int]) -> dict[str, Any]:
+        self._require_workspace_admin(principal)
+        subscription = self.db.scalar(select(WorkspaceSubscription).where(WorkspaceSubscription.organization_id == principal.organization_id))
+        if not subscription:
+            subscription = WorkspaceSubscription(organization_id=principal.organization_id)
+            self.db.add(subscription)
+        subscription.plan_name, subscription.state, subscription.limits = plan_name, state, limits
+        self.db.flush()
+        self.audit(principal, "billing.subscription_updated", "workspace_subscription", subscription.id, {"plan_name": plan_name, "state": state, "limits": limits})
+        self.db.commit()
+        return self.subscription(principal)
 
     def create_api_credential(self, principal: Principal, name: str, scopes: list[str]) -> dict[str, Any]:
         self._require_workspace_admin(principal)

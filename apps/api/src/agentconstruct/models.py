@@ -81,6 +81,19 @@ class UsageRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class WorkspaceSubscription(Base):
+    """Provider-neutral commercial state; no payment processor is implied."""
+
+    __tablename__ = "workspace_subscriptions"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), unique=True, index=True)
+    plan_name: Mapped[str] = mapped_column(String(80), default="beta")
+    state: Mapped[str] = mapped_column(String(24), default="TRIAL")
+    limits: Mapped[dict] = mapped_column(JSON, default=dict)
+    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class SupportTicket(Base):
     __tablename__ = "support_tickets"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

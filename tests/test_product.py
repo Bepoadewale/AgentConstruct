@@ -176,6 +176,17 @@ def test_private_beta_workspace_controls_are_durable_and_tenant_scoped():
     assert exported["state"] == "READY"
 
 
+def test_workspace_roles_and_provider_neutral_subscription_controls():
+    service, _ = make_service()
+    updated = service.change_workspace_member_role(operator(), "user-founder", "operator")
+    assert updated["role"] == "operator"
+    subscription = service.subscription(founder())
+    assert subscription["state"] == "TRIAL"
+    active = service.set_subscription(operator(), "team", "ACTIVE", {"plans_created": 500})
+    assert active["plan_name"] == "team"
+    assert active["limits"]["plans_created"] == 500
+
+
 def test_signed_identity_rejects_tampered_token():
     token = issue_local_token("founder")
     principal = verify_token(f"Bearer {token}")

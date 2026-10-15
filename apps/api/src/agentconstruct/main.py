@@ -30,13 +30,16 @@ from agentconstruct.domain import (
     IntentRequest,
     InvitationRequest,
     LocalLoginRequest,
+    MembershipRoleRequest,
     PlanCommentRequest,
     ProjectRequest,
+    SubscriptionRequest,
     SupportTicketRequest,
     TerraformPlanRenderRequest,
     TerraformPlanReviewRequest,
 )
 from agentconstruct.product_readiness import security_headers
+from agentconstruct.rate_limit import SlidingWindowRateLimiter
 from agentconstruct.security import Principal, issue_local_token, verify_token
 from agentconstruct.service import ProductService
 from agentconstruct.telemetry import configure_tracing
@@ -63,11 +66,15 @@ app = FastAPI(title="AgentConstruct", version="0.1.0", lifespan=lifespan)
 configure_tracing()
 FastAPIInstrumentor.instrument_app(app)
 API_CONTRACT_VERSION = "v1"
+RATE_LIMIT = SlidingWindowRateLimiter(int(os.getenv("AGENTCONSTRUCT_RATE_LIMIT_PER_MINUTE", "0")))
 
 
 @app.middleware("http")
 async def prevent_stale_local_ui(request: Request, call_next):
     """Keep the local demo from serving an older cached HTML/CSS/JS build."""
+    client = request.client.host if request.client else "unknown"
+    if RATE_LIMIT.limit and not request.url.path.startswith("/healthz") and not RATE_LIMIT.allow(client):
+        return Response(status_code=429, content='{"detail":"rate limit exceeded"}', media_type="application/json", headers={"Retry-After": "60"})
     response = await call_next(request)
     response.headers["X-AgentConstruct-API-Version"] = API_CONTRACT_VERSION
     for name, value in security_headers().items():
@@ -92,6 +99,12 @@ def translate(error: Exception) -> None:
 @app.get("/healthz")
 def healthz():
     return {"status": "ok", "product": "AgentConstruct"}
+
+
+@app.get("/status")
+def public_status():
+    """Unauthenticated, provider-neutral status surface for demos/self-hosting."""
+    return {"status": "operational", "product": "AgentConstruct", "cloud_execution": "not enabled by default"}
 
 
 @app.get("/metrics")
@@ -127,6 +140,14 @@ def workspace_members(principal: Principal = Depends(verify_token), service: Pro
     return service.list_workspace_members(principal)
 
 
+@app.patch("/api/v1/workspace/members/{subject}")
+def change_workspace_member_role(subject: str, request: MembershipRoleRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    try:
+        return service.change_workspace_member_role(principal, subject, request.role)
+    except (PermissionError, KeyError, ValueError) as error:
+        translate(error)
+
+
 @app.post("/api/v1/workspace/invitations", status_code=201)
 def invite_workspace_member(request: InvitationRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
     try:
@@ -138,6 +159,19 @@ def invite_workspace_member(request: InvitationRequest, principal: Principal = D
 @app.get("/api/v1/usage")
 def usage_summary(principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
     return service.usage_summary(principal)
+
+
+@app.get("/api/v1/billing/subscription")
+def get_subscription(principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    return service.subscription(principal)
+
+
+@app.put("/api/v1/billing/subscription")
+def set_subscription(request: SubscriptionRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    try:
+        return service.set_subscription(principal, request.plan_name, request.state, request.limits)
+    except (PermissionError, ValueError) as error:
+        translate(error)
 
 
 @app.post("/api/v1/api-credentials", status_code=201)

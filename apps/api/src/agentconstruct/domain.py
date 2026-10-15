@@ -381,3 +381,13 @@ class SupportTicketRequest(BaseModel):
 
 class DataLifecycleRequestBody(BaseModel):
     request_type: str = Field(pattern=r"^(EXPORT|DELETE)$")
+
+
+class MembershipRoleRequest(BaseModel):
+    role: str = Field(pattern=r"^(developer|operator|administrator)$")
+
+
+class SubscriptionRequest(BaseModel):
+    plan_name: str = Field(min_length=2, max_length=80)
+    state: str = Field(default="ACTIVE", pattern=r"^(TRIAL|ACTIVE|PAST_DUE|CANCELED)$")
+    limits: dict[str, int] = Field(default_factory=dict, max_length=20)
