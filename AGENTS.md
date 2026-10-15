@@ -23,6 +23,10 @@ Build and maintain **AgentConstruct**, the private commercial product. Use plain
 - Keep interfaces provider-neutral, but implement AWS first.
 - Use bounded readiness checks, useful failures and project-scoped cleanup.
 - Do not push directly to `main`; use a focused branch and reviewable PR.
+- **PR-only workflow:** every repository change, including documentation, configuration, tests, and cleanup, must be made on a focused branch and merged through a GitHub pull request. `main` is updated only by merging a reviewed PR after its required checks pass.
+- Open a draft PR before substantive implementation whenever GitHub permits it. If GitHub requires an initial commit before it can create the PR, make that smallest possible bootstrap commit, open the draft PR immediately, then add the required PR-numbered ticket before further substantive work.
+- Treat a direct commit or push to `main` as a process incident: stop, disclose it in the PR/ticket or appropriate audit record, and do not repeat it. Do not rewrite shared history unless the repository owner explicitly directs it.
+- Before merging, confirm the PR has a focused scope, current ticket and evidence, required validation, no unresolved review feedback, and a clean merge state. After merge, delete the branch unless there is a documented operational reason to retain it.
 
 ## Customer workload evidence
 
