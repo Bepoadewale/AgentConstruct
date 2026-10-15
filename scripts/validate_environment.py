@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 
+from agentconstruct.providers import ProviderConfiguration
+
 
 def main() -> int:
     hosted = os.getenv("AGENTCONSTRUCT_HOSTED_MODE", "false").lower() == "true"
@@ -15,6 +17,7 @@ def main() -> int:
         errors.append("hosted mode requires AGENTCONSTRUCT_JWKS_URL")
     if hosted and os.getenv("AGENTCONSTRUCT_LOCAL_SIGNING_KEY"):
         errors.append("hosted mode must not use AGENTCONSTRUCT_LOCAL_SIGNING_KEY")
+    errors.extend(ProviderConfiguration.from_environment().validation_errors(hosted=hosted))
     if errors:
         print("Environment validation failed:")
         print("\n".join(f"- {error}" for error in errors))
