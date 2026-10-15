@@ -21,6 +21,7 @@ from agentconstruct.connection_secrets import (
     ConnectionSecretStore,
     configured_connection_secret_store,
 )
+from agentconstruct.contracts import TenantScope
 from agentconstruct.day2 import FixtureDay2Advisor
 from agentconstruct.domain import (
     EnvironmentName,
@@ -40,7 +41,7 @@ from agentconstruct.integrations import (
     configured_github_connection,
     verify_github_webhook_signature,
 )
-from agentconstruct.intent import DeterministicIntentProvider, IntentProvider
+from agentconstruct.intent import IntentProvider, configured_intent_provider
 from agentconstruct.models import (
     ApiCredential,
     Approval,
@@ -103,7 +104,7 @@ class ProductService:
         cloud_execution: CloudExecutionAdapter | None = None,
     ):
         self.db = db
-        self.intent_provider = intent_provider or DeterministicIntentProvider()
+        self.intent_provider = intent_provider or configured_intent_provider()
         self.planner = AwsV1Planner()
         self.cloud_discovery = FixtureAwsDiscovery()
         self.github = github or configured_github_connection()
@@ -3233,7 +3234,14 @@ class ProductService:
                 raise ValueError("idempotency key conflicts with a different request")
             return existing
         selected_repository = source_repository or project.repository_url
-        interpretation = self.intent_provider.interpret(prompt, selected_repository)
+        tenant = TenantScope(
+            organization_id=principal.organization_id,
+            workspace_id=principal.organization_id,
+            project_id=project.id,
+            actor_id=principal.subject,
+        )
+        interpretation = self.intent_provider.interpret(prompt, selected_repository, tenant)
+        self._record_model_usage(principal, interpretation.model_metadata)
         spec = interpretation.spec
         repository_analysis = self.latest_repository_analysis(principal, project.id)
         spec_payload = spec.model_dump(mode="json")
@@ -3261,6 +3269,7 @@ class ProductService:
                 **spec_payload,
                 "cloud_connection_id": cloud_connection_id,
                 "questions": [question.model_dump() for question in interpretation.questions],
+                "model_metadata": interpretation.model_metadata,
             },
         )
         self.db.add(intent)
@@ -3270,10 +3279,41 @@ class ProductService:
             "intent.interpreted",
             "workload_intent",
             intent.id,
-            {"state": state, "unknowns": spec.unknowns},
+            {
+                "state": state,
+                "unknowns": spec.unknowns,
+                "model_call": interpretation.model_metadata,
+            },
         )
         self.db.commit()
         return intent
+
+    def _record_model_usage(
+        self, principal: Principal, metadata: dict[str, Any] | None
+    ) -> None:
+        if not metadata:
+            return
+        usage = metadata.get("usage") or {}
+        detail = {
+            "request_id": metadata.get("request_id"),
+            "provider": metadata.get("provider"),
+            "model": metadata.get("model"),
+            "prompt_version": metadata.get("prompt_version"),
+        }
+        for metric, quantity in (
+            ("model_calls", 1),
+            ("model_input_tokens", int(usage.get("input_tokens") or 0)),
+            ("model_output_tokens", int(usage.get("output_tokens") or 0)),
+        ):
+            self.db.add(
+                UsageRecord(
+                    organization_id=principal.organization_id,
+                    metric=metric,
+                    quantity=quantity,
+                    source="model_gateway",
+                    detail=detail,
+                )
+            )
 
     @staticmethod
     def _runtime_from_repository(analysis: dict[str, Any]) -> str | None:

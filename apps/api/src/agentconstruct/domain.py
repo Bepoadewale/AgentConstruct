@@ -124,6 +124,7 @@ class MaterialQuestion(BaseModel):
 class IntentInterpretation(BaseModel):
     spec: WorkloadSpec
     questions: list[MaterialQuestion] = Field(default_factory=list)
+    model_metadata: dict[str, Any] | None = None
 
 
 class ArchitectureComponent(BaseModel):
@@ -346,9 +347,7 @@ class InfrastructurePlanConstraintUpdateRequest(BaseModel):
     monthly_budget_usd: int | None = Field(default=None, ge=1)
     region: str | None = Field(default=None, pattern=r"^[a-z]{2}-[a-z]+-\d$")
     environment: list[EnvironmentName] | None = None
-    data_classification: str | None = Field(
-        default=None, pattern=r"^(public|internal|restricted)$"
-    )
+    data_classification: str | None = Field(default=None, pattern=r"^(public|internal|restricted)$")
     availability_target: str | None = Field(default=None, pattern=r"^99\\.(9|99)%$")
     workload_type: str | None = Field(default=None, min_length=2, max_length=80)
     public_access: bool | None = None

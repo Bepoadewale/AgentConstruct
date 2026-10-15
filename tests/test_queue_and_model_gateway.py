@@ -1,14 +1,21 @@
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from agentconstruct.contracts import JobEnvelope, JobKind, ModelPurpose, ModelRequest, TenantScope
 from agentconstruct.db import run_migrations
 from agentconstruct.model_gateway import (
+    NOVA_2_LITE_MODEL_ID,
+    BedrockNovaGateway,
     DeterministicModelGateway,
     DisabledModelGateway,
+    FallbackModelGateway,
     ModelCallPolicy,
     ModelGatewayUnavailable,
+    NovaGatewayConfig,
     guarded_complete,
+    guarded_generate_structured,
+    model_input_digest,
 )
 from agentconstruct.models import Base
 from agentconstruct.queue import InMemoryJobQueue, PostgresJobQueue
@@ -106,9 +113,141 @@ def test_model_call_policy_enforces_provider_and_budget():
         input_digest="a" * 64,
         max_output_tokens=100,
     )
-    response = guarded_complete(DeterministicModelGateway(), request, {"prompt": "ok"}, ModelCallPolicy(max_output_tokens=100))
+    response = guarded_complete(
+        DeterministicModelGateway(),
+        request,
+        {"prompt": "ok"},
+        ModelCallPolicy(max_output_tokens=100),
+    )
     assert response.request.request_id == request.request_id
     assert DeterministicModelGateway().validate_output(response.output) is True
     assert DeterministicModelGateway().estimate_cost(request) > 0
     with pytest.raises(ModelGatewayUnavailable):
-        guarded_complete(DeterministicModelGateway(), request.model_copy(update={"provider": "unknown"}), {"prompt": "no"})
+        guarded_complete(
+            DeterministicModelGateway(),
+            request.model_copy(update={"provider": "unknown"}),
+            {"prompt": "no"},
+        )
+
+
+class FakeBedrockRuntime:
+    def __init__(self, output=None, stop_reason="end_turn"):
+        self.output = output or {"workload_type": "ai_api"}
+        self.stop_reason = stop_reason
+        self.calls = []
+
+    def converse(self, **kwargs):
+        self.calls.append(kwargs)
+        return {
+            "output": {
+                "message": {"content": [{"text": json.dumps(self.output)}]},
+            },
+            "stopReason": self.stop_reason,
+            "usage": {"inputTokens": 100, "outputTokens": 20},
+            "metrics": {"latencyMs": 42},
+            "ResponseMetadata": {"RequestId": "bedrock-request-1"},
+        }
+
+
+def nova_request(document, **updates):
+    base = ModelRequest(
+        tenant=tenant(),
+        purpose=ModelPurpose.INTENT_EXTRACTION,
+        provider="bedrock",
+        model=NOVA_2_LITE_MODEL_ID,
+        prompt_version="intent-nova2-v1",
+        input_digest=model_input_digest(document),
+        max_output_tokens=500,
+        timeout_seconds=30,
+        data_policy="bedrock-no-training",
+    )
+    return base.model_copy(update=updates)
+
+
+def nova_config(**updates):
+    base = NovaGatewayConfig(
+        model_id=NOVA_2_LITE_MODEL_ID,
+        input_price_per_million_usd=0.10,
+        output_price_per_million_usd=0.40,
+        pricing_catalog_version="test-2026-10-15",
+    )
+    return NovaGatewayConfig(**(base.__dict__ | updates))
+
+
+def test_nova_gateway_requests_json_schema_and_records_safe_usage():
+    document = {"customer_request": "deploy an api", "selected_repository": "org/repo"}
+    client = FakeBedrockRuntime()
+    gateway = BedrockNovaGateway(nova_config(), client)
+    response = guarded_generate_structured(
+        gateway,
+        nova_request(document),
+        document,
+        {
+            "type": "object",
+            "properties": {
+                "workload_type": {"type": "string", "minLength": 1},
+            },
+            "required": ["workload_type"],
+        },
+        ModelCallPolicy(
+            max_output_tokens=500,
+            max_timeout_seconds=30,
+            allowed_providers=frozenset({"bedrock"}),
+            allowed_data_policies=frozenset({"bedrock-no-training"}),
+        ),
+    )
+    call = client.calls[0]
+    prompt = json.loads(call["messages"][0]["content"][0]["text"])
+    schema = prompt["required_output_schema"]
+    assert call["modelId"] == NOVA_2_LITE_MODEL_ID
+    assert call["inferenceConfig"]["temperature"] == 0.0
+    assert schema["additionalProperties"] is False
+    assert "minLength" not in schema["properties"]["workload_type"]
+    assert "outputConfig" not in call
+    assert call["requestMetadata"]["tenant_digest"] != "org-demo"
+    assert response.output == {"workload_type": "ai_api"}
+    assert response.usage is not None
+    assert response.usage.estimated_cost_usd == 0.000018
+    assert response.evidence[0].kind.value == "model_inference"
+    assert response.safety_result == "bedrock-json-locally-schema-validated"
+
+
+def test_nova_gateway_rejects_digest_mismatch_and_incomplete_output():
+    document = {"customer_request": "deploy"}
+    gateway = BedrockNovaGateway(nova_config(), FakeBedrockRuntime(stop_reason="max_tokens"))
+    with pytest.raises(ModelGatewayUnavailable, match="digest"):
+        gateway.generate_structured(
+            nova_request(document, input_digest="b" * 64),
+            document,
+            {"type": "object", "properties": {}, "additionalProperties": False},
+        )
+    with pytest.raises(ModelGatewayUnavailable, match="incomplete"):
+        gateway.generate_structured(
+            nova_request(document),
+            document,
+            {"type": "object", "properties": {}, "additionalProperties": False},
+        )
+
+
+def test_model_policy_rejects_unapproved_tenant_data_policy():
+    document = {"customer_request": "deploy"}
+    request = nova_request(document, data_policy="provider-training-allowed")
+    with pytest.raises(ModelGatewayUnavailable, match="data policy"):
+        ModelCallPolicy(
+            allowed_providers=frozenset({"bedrock"}),
+            allowed_data_policies=frozenset({"bedrock-no-training"}),
+        ).validate(request)
+
+
+def test_explicit_fallback_preserves_fixture_identity():
+    document = {"customer_request": "deploy"}
+    primary = BedrockNovaGateway(nova_config(), FakeBedrockRuntime(stop_reason="max_tokens"))
+    gateway = FallbackModelGateway(primary, DeterministicModelGateway())
+    response = gateway.generate_structured(
+        nova_request(document),
+        document,
+        {"type": "object", "properties": {}, "additionalProperties": False},
+    )
+    assert response.request.provider == "fixture"
+    assert response.request.model == "deterministic-fixture"
+    assert response.evidence[0].kind.value == "fixture"

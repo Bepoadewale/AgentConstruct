@@ -38,6 +38,7 @@ from agentconstruct.domain import (
     TerraformPlanRenderRequest,
     TerraformPlanReviewRequest,
 )
+from agentconstruct.model_gateway import ModelGatewayUnavailable
 from agentconstruct.product_readiness import security_headers
 from agentconstruct.rate_limit import SlidingWindowRateLimiter
 from agentconstruct.security import Principal, issue_local_token, verify_token
@@ -93,6 +94,8 @@ def translate(error: Exception) -> None:
         raise HTTPException(403, str(error)) from error
     if isinstance(error, (ValueError, KeyError)):
         raise HTTPException(409, str(error)) from error
+    if isinstance(error, ModelGatewayUnavailable):
+        raise HTTPException(503, str(error)) from error
     raise error
 
 
@@ -739,7 +742,7 @@ def create_intent(
             request.cloud_connection_id,
             request.idempotency_key,
         )
-    except (PermissionError, ValueError, KeyError) as error:
+    except (PermissionError, ValueError, KeyError, ModelGatewayUnavailable) as error:
         translate(error)
     return {"id": intent.id, "state": intent.state, "spec": intent.spec}
 

@@ -36,7 +36,19 @@ locals {
     AGENTCONSTRUCT_HOSTED_MODE  = "false"
     AGENTCONSTRUCT_DATABASE_URL = "sqlite+pysqlite:////tmp/agentconstruct.db"
   }
-  runtime_env = merge(local.runtime_env_common, local.runtime_env_database)
+  runtime_env_model = var.enable_nova_model ? {
+    AGENTCONSTRUCT_MODEL_PROVIDER          = "bedrock"
+    AGENTCONSTRUCT_MODEL_FALLBACK          = "disabled"
+    AGENTCONSTRUCT_BEDROCK_REGION          = var.region
+    AGENTCONSTRUCT_BEDROCK_MODEL_ID        = var.nova_model_id
+    AGENTCONSTRUCT_MODEL_DATA_POLICY       = "bedrock-no-training"
+    AGENTCONSTRUCT_MODEL_MAX_OUTPUT_TOKENS = "2000"
+    AGENTCONSTRUCT_MODEL_TIMEOUT_SECONDS   = "60"
+    AGENTCONSTRUCT_MODEL_MAX_ATTEMPTS      = "2"
+    } : {
+    AGENTCONSTRUCT_MODEL_PROVIDER = "fixture"
+  }
+  runtime_env = merge(local.runtime_env_common, local.runtime_env_database, local.runtime_env_model)
   azs         = slice(data.aws_availability_zones.available.names, 0, 2)
 }
 
@@ -153,6 +165,31 @@ data "aws_iam_policy_document" "runtime_permissions" {
       effect    = "Allow"
       actions   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
       resources = [statement.value]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.enable_nova_model ? [1] : []
+    content {
+      sid       = "InvokeNova2LiteInferenceProfile"
+      effect    = "Allow"
+      actions   = ["bedrock:InvokeModel"]
+      resources = ["arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${var.nova_model_id}"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.enable_nova_model ? [1] : []
+    content {
+      sid       = "InvokeNova2LiteOnlyThroughProfile"
+      effect    = "Allow"
+      actions   = ["bedrock:InvokeModel"]
+      resources = ["arn:aws:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0"]
+      condition {
+        test     = "StringEquals"
+        variable = "bedrock:InferenceProfileArn"
+        values   = ["arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${var.nova_model_id}"]
+      }
     }
   }
 }

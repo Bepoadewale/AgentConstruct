@@ -1,24 +1,218 @@
 from __future__ import annotations
 
+import os
 import re
+from functools import lru_cache
 from typing import Protocol
 
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from agentconstruct.contracts import (
+    ModelPurpose,
+    ModelRequest,
+    ModelResponse,
+    ModelUsage,
+    TenantScope,
+)
 from agentconstruct.domain import (
     EnvironmentName,
     IntentInterpretation,
     MaterialQuestion,
     WorkloadSpec,
 )
+from agentconstruct.model_gateway import (
+    NOVA_2_LITE_MODEL_ID,
+    ModelCallPolicy,
+    ModelGateway,
+    ModelGatewayUnavailable,
+    configured_model_gateway,
+    guarded_generate_structured,
+    model_input_digest,
+)
+
+MATERIAL_FIELDS = (
+    "source_repository",
+    "average_rps",
+    "peak_rps",
+    "monthly_budget_usd",
+    "environments",
+)
 
 
 class IntentProvider(Protocol):
-    def interpret(self, prompt: str, source_repository: str | None) -> IntentInterpretation: ...
+    def interpret(
+        self, prompt: str, source_repository: str | None, tenant: TenantScope
+    ) -> IntentInterpretation: ...
+
+
+class NovaIntentProposal(BaseModel):
+    """Narrow proposal shape; material unknowns are recalculated locally."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    workload_type: str
+    data_classification: str
+    average_rps: int | None
+    peak_rps: int | None
+    monthly_budget_usd: int | None
+    environments: list[EnvironmentName]
+    availability_target: str | None
+    region_constraints: list[str]
+    integration_requirements: list[str]
+    runtime: str | None
+    containerized: bool | None
+    event_driven: bool
+    stateful: bool
+    requires_private_connectivity: bool
+    requires_kubernetes: bool
+    requires_gpu: bool
+    multi_service: bool
+    execution_duration_minutes: int | None
+    confidence: float = Field(ge=0, le=1)
+
+
+class NovaIntentProvider:
+    """Use Nova for extraction, then enforce AgentConstruct's local contract."""
+
+    def __init__(
+        self,
+        gateway: ModelGateway | None = None,
+        model_id: str | None = None,
+        max_output_tokens: int | None = None,
+        timeout_seconds: int | None = None,
+        data_policy: str | None = None,
+    ):
+        self.gateway = gateway or configured_model_gateway()
+        self.model_id = model_id or os.getenv(
+            "AGENTCONSTRUCT_BEDROCK_MODEL_ID", NOVA_2_LITE_MODEL_ID
+        )
+        self.max_output_tokens = max_output_tokens or int(
+            os.getenv("AGENTCONSTRUCT_MODEL_MAX_OUTPUT_TOKENS", "2000")
+        )
+        self.timeout_seconds = timeout_seconds or int(
+            os.getenv("AGENTCONSTRUCT_MODEL_TIMEOUT_SECONDS", "60")
+        )
+        self.data_policy = data_policy or os.getenv(
+            "AGENTCONSTRUCT_MODEL_DATA_POLICY", "bedrock-no-training"
+        )
+        self.policy = ModelCallPolicy(
+            max_output_tokens=self.max_output_tokens,
+            max_timeout_seconds=self.timeout_seconds,
+            allowed_providers=frozenset({"bedrock"}),
+            allowed_data_policies=frozenset({self.data_policy}),
+        )
+
+    def interpret(
+        self, prompt: str, source_repository: str | None, tenant: TenantScope
+    ) -> IntentInterpretation:
+        document = {
+            "task": (
+                "Extract only explicitly stated or strongly evidenced infrastructure requirements. "
+                "Use null or an empty list for missing material values. AWS is the product's current "
+                "cloud boundary, not a fact to infer from model memory."
+            ),
+            "customer_request": prompt,
+            "selected_repository": source_repository,
+        }
+        request = self._request(document, tenant)
+        response = guarded_generate_structured(
+            self.gateway,
+            request,
+            document,
+            NovaIntentProposal.model_json_schema(),
+            self.policy,
+        )
+        if response.request.provider == "fixture":
+            result = DeterministicIntentProvider().interpret(prompt, source_repository, tenant)
+            result.model_metadata = _model_metadata(response)
+            return result
+
+        try:
+            proposal = NovaIntentProposal.model_validate(response.output)
+        except ValidationError:
+            repair_document = document | {
+                "repair_instruction": (
+                    "A previous response violated the required schema. Re-extract the original "
+                    "source and return exactly the requested fields and types."
+                )
+            }
+            repair_response = guarded_generate_structured(
+                self.gateway,
+                self._request(repair_document, tenant),
+                repair_document,
+                NovaIntentProposal.model_json_schema(),
+                self.policy,
+            )
+            try:
+                proposal = NovaIntentProposal.model_validate(repair_response.output)
+            except ValidationError as error:
+                raise ModelGatewayUnavailable(
+                    "Nova response violated the intent schema after one repair attempt"
+                ) from error
+            response = _combine_model_responses(response, repair_response)
+        unknowns = _material_unknowns(proposal, source_repository)
+        field_status = {
+            field: "UNKNOWN" if field in unknowns else "MODEL_INFERRED" for field in MATERIAL_FIELDS
+        }
+        spec = WorkloadSpec(
+            workload_type=proposal.workload_type,
+            source_repository=source_repository,
+            cloud="aws",
+            data_classification=proposal.data_classification,
+            average_rps=proposal.average_rps,
+            peak_rps=proposal.peak_rps,
+            monthly_budget_usd=proposal.monthly_budget_usd,
+            environments=proposal.environments,
+            availability_target=proposal.availability_target,
+            region_constraints=proposal.region_constraints,
+            model_requirements={"runtime": proposal.runtime or "unknown"},
+            integration_requirements=proposal.integration_requirements,
+            runtime=proposal.runtime,
+            containerized=proposal.containerized,
+            event_driven=proposal.event_driven,
+            stateful=proposal.stateful,
+            requires_private_connectivity=proposal.requires_private_connectivity,
+            requires_kubernetes=proposal.requires_kubernetes,
+            requires_gpu=proposal.requires_gpu,
+            multi_service=proposal.multi_service,
+            execution_duration_minutes=proposal.execution_duration_minutes,
+            field_status=field_status,
+            unknowns=unknowns,
+            confidence=proposal.confidence,
+            provenance={
+                "provider": "amazon-bedrock",
+                "model": self.model_id,
+                "prompt_version": request.prompt_version,
+                "input_digest": request.input_digest,
+            },
+        )
+        return IntentInterpretation(
+            spec=spec,
+            questions=[_material_question(field) for field in unknowns],
+            model_metadata=_model_metadata(response),
+        )
+
+    def _request(self, document: dict[str, object], tenant: TenantScope) -> ModelRequest:
+        return ModelRequest(
+            tenant=tenant,
+            purpose=ModelPurpose.INTENT_EXTRACTION,
+            provider="bedrock",
+            model=self.model_id,
+            prompt_version="intent-nova2-v1",
+            input_digest=model_input_digest(document),
+            timeout_seconds=self.timeout_seconds,
+            max_output_tokens=self.max_output_tokens,
+            data_policy=self.data_policy,
+        )
 
 
 class DeterministicIntentProvider:
-    """Local fixture parser. It is deliberately predictable and never silently fills critical gaps."""
+    """Local fixture parser. It never silently fills critical gaps."""
 
-    def interpret(self, prompt: str, source_repository: str | None) -> IntentInterpretation:
+    def interpret(
+        self, prompt: str, source_repository: str | None, tenant: TenantScope
+    ) -> IntentInterpretation:
+        del tenant
         lower = prompt.lower()
         average = self._number_before(
             lower, r"(\d+)\s*(?:requests?|rps)\s*(?:/|per)\s*(?:second|sec)"
@@ -95,25 +289,8 @@ class DeterministicIntentProvider:
         )
         return IntentInterpretation(
             spec=spec,
-            questions=[
-                MaterialQuestion(
-                    field=field,
-                    question=self._question_for(field),
-                    reason="AgentConstruct must not guess a value that changes architecture, security, or cost.",
-                )
-                for field in unknowns
-            ],
+            questions=[_material_question(field) for field in unknowns],
         )
-
-    @staticmethod
-    def _question_for(field: str) -> str:
-        return {
-            "source_repository": "Which GitHub repository contains this workload?",
-            "average_rps": "What average request rate should the system support?",
-            "peak_rps": "What peak request rate should the system support?",
-            "monthly_budget_usd": "What monthly infrastructure budget should the recommendation respect?",
-            "environments": "Which environments are required, for example staging and production?",
-        }[field]
 
     @staticmethod
     def _number_before(value: str, expression: str) -> int | None:
@@ -124,3 +301,75 @@ class DeterministicIntentProvider:
     def _number_after_word(value: str, word: str) -> int | None:
         match = re.search(rf"{word}[^\d]*(\d+)", value)
         return int(match.group(1)) if match else None
+
+
+@lru_cache(maxsize=1)
+def configured_intent_provider() -> IntentProvider:
+    provider = os.getenv("AGENTCONSTRUCT_MODEL_PROVIDER", "fixture").lower()
+    if provider == "fixture":
+        return DeterministicIntentProvider()
+    return NovaIntentProvider()
+
+
+def _material_unknowns(proposal: NovaIntentProposal, source_repository: str | None) -> list[str]:
+    values = {
+        "source_repository": source_repository,
+        "average_rps": proposal.average_rps,
+        "peak_rps": proposal.peak_rps,
+        "monthly_budget_usd": proposal.monthly_budget_usd,
+        "environments": proposal.environments,
+    }
+    return [field for field in MATERIAL_FIELDS if not values[field]]
+
+
+def _material_question(field: str) -> MaterialQuestion:
+    question = {
+        "source_repository": "Which GitHub repository contains this workload?",
+        "average_rps": "What average request rate should the system support?",
+        "peak_rps": "What peak request rate should the system support?",
+        "monthly_budget_usd": "What monthly infrastructure budget should the recommendation respect?",
+        "environments": "Which environments are required, for example staging and production?",
+    }[field]
+    return MaterialQuestion(
+        field=field,
+        question=question,
+        reason="AgentConstruct must not guess a value that changes architecture, security, or cost.",
+    )
+
+
+def _model_metadata(response) -> dict[str, object]:
+    usage = response.usage
+    return {
+        "request_id": response.request.request_id,
+        "provider": response.request.provider,
+        "model": response.request.model,
+        "prompt_version": response.request.prompt_version,
+        "input_digest": response.request.input_digest,
+        "data_policy": response.request.data_policy,
+        "finish_reason": response.finish_reason,
+        "safety_result": response.safety_result,
+        "usage": usage.model_dump(mode="json") if usage else None,
+        "evidence": [item.model_dump(mode="json") for item in response.evidence],
+    }
+
+
+def _combine_model_responses(first: ModelResponse, second: ModelResponse) -> ModelResponse:
+    first_usage = first.usage or ModelUsage()
+    second_usage = second.usage or ModelUsage()
+    costs = [
+        cost
+        for cost in (first_usage.estimated_cost_usd, second_usage.estimated_cost_usd)
+        if cost is not None
+    ]
+    return second.model_copy(
+        update={
+            "evidence": first.evidence + second.evidence,
+            "usage": ModelUsage(
+                input_tokens=first_usage.input_tokens + second_usage.input_tokens,
+                output_tokens=first_usage.output_tokens + second_usage.output_tokens,
+                estimated_cost_usd=round(sum(costs), 8) if costs else None,
+                latency_ms=(first_usage.latency_ms or 0) + (second_usage.latency_ms or 0),
+                retry_count=first_usage.retry_count + second_usage.retry_count + 1,
+            ),
+        }
+    )
