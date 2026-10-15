@@ -95,27 +95,7 @@ opa-test:
 	docker compose exec -T opa opa test /policies
 
 terraform-validate:
-	terraform fmt -check -recursive infrastructure/terraform
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-bootstrap terraform -chdir=infrastructure/terraform/agentconstruct-bootstrap init -backend=false -input=false
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-bootstrap terraform -chdir=infrastructure/terraform/agentconstruct-bootstrap validate
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-foundation terraform -chdir=infrastructure/terraform/bootstrap init -backend=false -input=false
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-foundation terraform -chdir=infrastructure/terraform/bootstrap validate
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-management terraform -chdir=infrastructure/terraform/management-identity init -backend=false -input=false
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-management terraform -chdir=infrastructure/terraform/management-identity validate
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-runtime terraform -chdir=infrastructure/terraform/control-plane-runtime-identity init -backend=false -input=false
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-runtime terraform -chdir=infrastructure/terraform/control-plane-runtime-identity validate
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-connection terraform -chdir=infrastructure/terraform/customer-connection init -backend=false -input=false
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-connection terraform -chdir=infrastructure/terraform/customer-connection validate
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-template-host terraform -chdir=infrastructure/terraform/connection-template-host init -backend=false -input=false
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-template-host terraform -chdir=infrastructure/terraform/connection-template-host validate
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-apprunner-runtime terraform -chdir=infrastructure/terraform/app-runner-runtime init -backend=false -input=false
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-apprunner-runtime terraform -chdir=infrastructure/terraform/app-runner-runtime validate
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-customer-apprunner terraform -chdir=infrastructure/terraform/customer-workload-app-runner-pilot init -backend=false -input=false
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-customer-apprunner terraform -chdir=infrastructure/terraform/customer-workload-app-runner-pilot validate
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-apprunner-renderer terraform -chdir=infrastructure/terraform/renderers/app-runner-plan init -backend=false -input=false
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-apprunner-renderer terraform -chdir=infrastructure/terraform/renderers/app-runner-plan validate
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-pilot terraform -chdir=infrastructure/terraform/pilot init -backend=false -input=false
-	TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-pilot terraform -chdir=infrastructure/terraform/pilot validate
+	./scripts/terraform-validate.sh
 
 customer-aws-connection-plan:
 	./scripts/customer-aws-connection.sh plan
