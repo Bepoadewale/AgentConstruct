@@ -9,6 +9,23 @@ variable "enable_service" {
   default     = false
 }
 
+variable "enable_nova_model" {
+  type        = bool
+  description = "Enable governed Amazon Nova 2 Lite intent extraction and its least-privilege runtime permission."
+  default     = false
+}
+
+variable "nova_model_id" {
+  type        = string
+  description = "Amazon Nova 2 Lite geographic inference profile ID."
+  default     = "us.amazon.nova-2-lite-v1:0"
+
+  validation {
+    condition     = can(regex("^(us|eu|jp)\\.amazon\\.nova-2-lite-v1:0$", var.nova_model_id))
+    error_message = "nova_model_id must be a geographic Amazon Nova 2 Lite inference profile."
+  }
+}
+
 variable "image_identifier" {
   type        = string
   description = "Full ECR image URI with tag for the AgentConstruct runtime. Required when enable_service is true."

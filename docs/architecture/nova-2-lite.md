@@ -1,0 +1,80 @@
+# Amazon Nova 2 Lite
+
+**Implemented, disabled by default.** AgentConstruct can use Amazon Nova 2 Lite
+through the Amazon Bedrock Converse API to interpret a customer request into a
+typed workload proposal. Local development and CI continue to use the explicitly
+labelled fixture unless Bedrock is selected.
+
+## Authority boundary
+
+Nova may interpret requirements and propose values. It cannot approve a plan,
+evaluate OPA policy, calculate the immutable plan digest, invoke Terraform, run a
+shell, or mutate a customer cloud. Pydantic validation, deterministic planning,
+policy, human approval, and the bounded runner remain independent.
+
+The current Nova 2 Lite Bedrock model card marks native structured outputs as
+unsupported. AgentConstruct therefore sends a JSON schema with the request,
+accepts only a plain JSON object, validates it locally, permits one bounded repair
+attempt, and fails closed if validation still fails. It does not claim provider-
+enforced schema compliance.
+
+## Configuration
+
+Set these on the API runtime through its secret/configuration system:
+
+```text
+AGENTCONSTRUCT_MODEL_PROVIDER=bedrock
+AGENTCONSTRUCT_MODEL_FALLBACK=disabled
+AGENTCONSTRUCT_BEDROCK_REGION=us-east-1
+AGENTCONSTRUCT_BEDROCK_MODEL_ID=us.amazon.nova-2-lite-v1:0
+AGENTCONSTRUCT_MODEL_DATA_POLICY=bedrock-no-training
+AGENTCONSTRUCT_MODEL_MAX_OUTPUT_TOKENS=2000
+AGENTCONSTRUCT_MODEL_TIMEOUT_SECONDS=60
+AGENTCONSTRUCT_MODEL_MAX_ATTEMPTS=2
+```
+
+The AWS SDK credential chain is the only credential mechanism. App Runner uses
+its runtime role. No AWS access key belongs in repository configuration.
+
+`enable_nova_model=true` in the App Runner runtime Terraform contract adds only
+`bedrock:InvokeModel` for the selected Nova 2 Lite geographic inference profile
+and permits its Nova 2 Lite foundation model only when Bedrock evaluates it
+through that exact profile. The default is `false`, so applying the existing
+runtime contract cannot silently begin sending customer data to a model.
+
+The `us.` inference profile can route within the US geography. A different
+geographic profile requires an explicit configuration and residency review.
+
+## Evidence and failure behavior
+
+Each successful call records the provider, model, prompt version, input digest,
+data policy, token usage, latency, finish reason, provider request ID, output
+digest, and validation result. Raw prompts and model output are not copied into
+audit metadata. The workload intent continues to retain the customer's original
+request as existing product data.
+
+Transport retries and application repair attempts are bounded. Content filtering,
+timeouts, incomplete output, digest mismatches, and repeated schema failures fail
+closed. Fixture fallback is available only when
+`AGENTCONSTRUCT_MODEL_FALLBACK=fixture` is explicitly set; its response remains
+labelled `SIMULATED` and never masquerades as Nova evidence.
+
+Pricing estimates remain unset unless both current per-million-token rates and a
+catalog version are configured. This prevents stale model-memory pricing from
+being presented as an AWS charge.
+
+## Activation gate
+
+Before enabling Nova for a tenant:
+
+1. confirm Bedrock access and the geographic processing boundary;
+2. set a reviewed pricing catalog version and budget alarms;
+3. run the offline intent benchmark plus an authorized, capped live evaluation;
+4. review prompt-injection, unsupported-request, and schema-failure results;
+5. enable a small tenant allowlist before a wider rollout.
+
+References:
+
+- [Nova 2 Lite model card](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-2-lite.html)
+- [Nova 2 Converse API](https://docs.aws.amazon.com/nova/latest/nova2-userguide/using-converse-api.html)
+- [Geographic cross-Region inference](https://docs.aws.amazon.com/bedrock/latest/userguide/geographic-cross-region-inference.html)

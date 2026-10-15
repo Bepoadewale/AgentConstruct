@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from agentconstruct.contracts import TenantScope
 from agentconstruct.db import make_engine, run_migrations
 from agentconstruct.domain import (
     CloudInventorySnapshot,
@@ -12,7 +13,7 @@ from agentconstruct.domain import (
 )
 from agentconstruct.executor import ExecutionObservation
 from agentconstruct.intent import DeterministicIntentProvider
-from agentconstruct.models import Incident, Recommendation, RepositoryConnection
+from agentconstruct.models import Incident, Recommendation, RepositoryConnection, UsageRecord
 from agentconstruct.planner import AwsV1Planner
 from agentconstruct.policy import PolicyClient
 from agentconstruct.security import LOCAL_USERS, Principal, issue_local_token, verify_token
@@ -117,11 +118,16 @@ class LocalExecutor:
         )
 
 
-def make_service():
+def make_service(intent_provider=None):
     engine = make_engine("sqlite+pysqlite:///:memory:")
     run_migrations(engine)
     db = sessionmaker(bind=engine, expire_on_commit=False)()
-    service = ProductService(db, policy=PolicyClient(fixture=True), executor=LocalExecutor())
+    service = ProductService(
+        db,
+        policy=PolicyClient(fixture=True),
+        executor=LocalExecutor(),
+        intent_provider=intent_provider,
+    )
     service.seed_local_identity()
     return service, db
 
@@ -141,11 +147,62 @@ def complete_prompt(budget: int = 1500) -> str:
 
 
 def test_intent_fixture_preserves_unknown_material_requirements():
-    interpretation = DeterministicIntentProvider().interpret("Deploy an AI API in AWS.", None)
+    interpretation = DeterministicIntentProvider().interpret(
+        "Deploy an AI API in AWS.",
+        None,
+        TenantScope(
+            organization_id="org-demo",
+            workspace_id="org-demo",
+            actor_id="user-founder",
+        ),
+    )
     spec = interpretation.spec
     assert {"source_repository", "average_rps", "peak_rps", "monthly_budget_usd", "environments"} <= set(spec.unknowns)
     assert spec.cloud == "aws"
     assert {question.field for question in interpretation.questions} >= {"source_repository", "monthly_budget_usd"}
+
+
+def test_model_usage_is_metered_with_safe_provider_metadata():
+    class MeteredIntentProvider:
+        def interpret(self, prompt, source_repository, tenant):
+            result = DeterministicIntentProvider().interpret(
+                prompt, source_repository, tenant
+            )
+            result.model_metadata = {
+                "request_id": "request-safe-id",
+                "provider": "bedrock",
+                "model": "us.amazon.nova-2-lite-v1:0",
+                "prompt_version": "intent-nova2-v1",
+                "usage": {"input_tokens": 200, "output_tokens": 80},
+            }
+            return result
+
+    service, db = make_service(intent_provider=MeteredIntentProvider())
+    project = service.create_project(
+        founder(), "metered-rag", "https://github.com/example/rag"
+    )
+    service.create_intent(
+        founder(),
+        project.id,
+        complete_prompt(),
+        None,
+        None,
+        "idem-model-metering-001",
+    )
+
+    summary = {row["metric"]: row["quantity"] for row in service.usage_summary(founder())}
+    assert summary["model_calls"] == 1
+    assert summary["model_input_tokens"] == 200
+    assert summary["model_output_tokens"] == 80
+    record = db.scalar(
+        select(UsageRecord).where(UsageRecord.metric == "model_calls")
+    )
+    assert record.detail == {
+        "request_id": "request-safe-id",
+        "provider": "bedrock",
+        "model": "us.amazon.nova-2-lite-v1:0",
+        "prompt_version": "intent-nova2-v1",
+    }
 
 
 def test_planner_returns_a_transparent_cost_range_and_private_controls():
