@@ -1,5 +1,6 @@
 import pytest
-from agentconstruct.boundaries import TenantBoundaryError, TenantContext
+from agentconstruct.api_compat import compatibility_headers
+from agentconstruct.boundaries import FeatureFlag, TenantBoundaryError, TenantContext
 from agentconstruct.contracts import (
     ArchitecturePlanV1,
     Entitlement,
@@ -10,6 +11,7 @@ from agentconstruct.contracts import (
 from agentconstruct.production_readiness import (
     EntitlementEnforcer,
     LocalRecordStore,
+    PersistentFeatureFlags,
     exercise_idempotency,
 )
 
@@ -68,3 +70,14 @@ def test_entitlements_enforce_workspace_and_record_allowed_usage() -> None:
     assert enforcer.decide_and_record(entitlement, event).allowed is False
     other = UsageEvent(tenant=context("org-b").contract_scope(), event_type="execution_jobs", quantity=1, unit="job", source="test")
     assert enforcer.decide_and_record(entitlement, other).allowed is False
+
+
+def test_persistent_rollout_and_api_compatibility_are_auditable() -> None:
+    flags = PersistentFeatureFlags()
+    flags.set(FeatureFlag(name="new-planner", enabled=True, tenants=frozenset({"org-a"}), version="v2"))
+    assert flags.enabled("new-planner", context()) is True
+    assert flags.enabled("new-planner", context("org-b")) is False
+    assert flags.audit("new-planner")[0]["version"] == "v2"
+    assert compatibility_headers() == {"X-AgentConstruct-API-Version": "v1"}
+    with pytest.raises(ValueError):
+        compatibility_headers("v99")

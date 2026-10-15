@@ -17,7 +17,12 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from agentconstruct.boundaries import TenantBoundaryError, TenantContext, require_same_tenant
+from agentconstruct.boundaries import (
+    FeatureFlag,
+    TenantBoundaryError,
+    TenantContext,
+    require_same_tenant,
+)
 from agentconstruct.contracts import (
     DomainContractV1,
     Entitlement,
@@ -166,3 +171,37 @@ class EntitlementEnforcer:
             if allowed:
                 self._events.setdefault(key, []).append(event)
             return UsageDecision(tenant=event.tenant, event_type=event.event_type, allowed=allowed, consumed=consumed, limit=entitlement.limit, unit=entitlement.unit, remaining=max(0, entitlement.limit - consumed - (event.quantity if allowed else 0)), reason="within entitlement" if allowed else "entitlement exceeded", policy_version=entitlement.policy_version)
+
+
+class PersistentFeatureFlags:
+    """SQLite-backed rollout policy with an auditable update log."""
+
+    def __init__(self, path: str | Path = ":memory:") -> None:
+        self._db = sqlite3.connect(str(path), check_same_thread=False)
+        self._lock = threading.RLock()
+        self._db.execute("CREATE TABLE IF NOT EXISTS flags(name TEXT PRIMARY KEY, payload TEXT NOT NULL)")
+        self._db.execute("CREATE TABLE IF NOT EXISTS flag_audit(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, version TEXT NOT NULL, changed_at TEXT NOT NULL)")
+        self._db.commit()
+
+    def set(self, flag: FeatureFlag) -> None:
+        with self._lock:
+            self._db.execute("INSERT OR REPLACE INTO flags(name, payload) VALUES(?,?)", (flag.name, flag.model_dump_json()))
+            self._db.execute("INSERT INTO flag_audit(name, version, changed_at) VALUES(?,?,?)", (flag.name, flag.version, datetime.now(UTC).isoformat()))
+            self._db.commit()
+
+    def enabled(self, name: str, context: TenantContext) -> bool:
+        with self._lock:
+            row = self._db.execute("SELECT payload FROM flags WHERE name=?", (name,)).fetchone()
+        if row is None:
+            return False
+        flag = FeatureFlag.model_validate_json(row[0])
+        if not flag.enabled or (flag.tenants and context.organization_id not in flag.tenants) or (flag.roles and context.role not in flag.roles) or (flag.environments and (context.environment_id or "") not in flag.environments):
+            return False
+        return sum(ord(char) for char in f"{name}:{context.organization_id}") % 100 < flag.percentage
+
+    def audit(self, name: str | None = None) -> list[dict[str, str]]:
+        query = "SELECT name, version, changed_at FROM flag_audit" + (" WHERE name=?" if name else "")
+        args = (name,) if name else ()
+        with self._lock:
+            rows = self._db.execute(query, args).fetchall()
+        return [{"name": row[0], "version": row[1], "changed_at": row[2]} for row in rows]

@@ -404,4 +404,15 @@ class EnvironmentOutputV1(DomainContractV1):
     source_resource_id: str | None = Field(default=None, max_length=160)
 
 
+class EvidenceDecisionV1(DomainContractV1):
+    contract_type: str = "EvidenceDecision.v1"
+    decision_id: str = Field(min_length=1, max_length=160)
+    used_evidence: tuple[str, ...] = ()
+    inferences: tuple[str, ...] = ()
+    unknowns: tuple[str, ...] = ()
+    rejected_alternatives: tuple[str, ...] = ()
+    policy_reasons: tuple[str, ...] = ()
+    outcome_reference: str | None = Field(default=None, max_length=240)
+
+
 ContractEnvelope.model_rebuild()
