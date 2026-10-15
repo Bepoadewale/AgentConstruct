@@ -294,4 +294,114 @@ class UsageDecision(ContractBase):
     policy_version: str = Field(min_length=1, max_length=80)
 
 
+class DomainContractV1(ContractBase):
+    """Common envelope for durable, externally versioned domain records."""
+
+    tenant: TenantScope
+    project_id: str | None = Field(default=None, max_length=160)
+    environment_id: str | None = Field(default=None, max_length=160)
+    actor_id: str = Field(min_length=1, max_length=160)
+    source_evidence: tuple[EvidenceRef, ...] = ()
+    provenance: dict[str, str] = Field(default_factory=dict)
+    policy_version: str = Field(default="local-v1", min_length=1, max_length=120)
+    catalog_version: str = Field(default="local-v1", min_length=1, max_length=160)
+    plan_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class WorkloadSpecV1(DomainContractV1):
+    contract_type: str = "WorkloadSpec.v1"
+    workload_type: str = Field(min_length=1, max_length=120)
+    requirements: dict[str, Any] = Field(default_factory=dict)
+
+
+class ArchitecturePlanV1(DomainContractV1):
+    contract_type: str = "ArchitecturePlan.v1"
+    architecture_family: str = Field(min_length=1, max_length=160)
+    components: tuple[str, ...] = ()
+    used_evidence: tuple[str, ...] = ()
+    inferences: tuple[str, ...] = ()
+    unknowns: tuple[str, ...] = ()
+    rejected_alternatives: tuple[str, ...] = ()
+    policy_reasons: tuple[str, ...] = ()
+    decision_scores: dict[str, int] = Field(default_factory=dict)
+
+
+class DeploymentPlanV1(DomainContractV1):
+    contract_type: str = "DeploymentPlan.v1"
+    target: str = Field(min_length=1, max_length=160)
+    operations: tuple[ExecutionOperation, ...] = ()
+    runner_id: str | None = Field(default=None, max_length=160)
+
+
+class ApprovalV1(DomainContractV1):
+    contract_type: str = "Approval.v1"
+    approval_id: str = Field(min_length=1, max_length=160)
+    operation: str = Field(min_length=1, max_length=120)
+    decision: str = Field(min_length=1, max_length=80)
+    scope: dict[str, str] = Field(default_factory=dict)
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class ExecutionJobV1(DomainContractV1):
+    contract_type: str = "ExecutionJob.v1"
+    job: JobEnvelope
+    runner_limits: dict[str, Any] = Field(default_factory=dict)
+
+
+class ObservedStateV1(DomainContractV1):
+    contract_type: str = "ObservedState.v1"
+    state: str = Field(min_length=1, max_length=80)
+    resources: tuple[str, ...] = ()
+    health: str = Field(default="unknown", min_length=1, max_length=80)
+    observed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class AuditEventV1(DomainContractV1):
+    contract_type: str = "AuditEvent.v1"
+    event_id: str = Field(min_length=1, max_length=160)
+    event_type: str = Field(min_length=1, max_length=160)
+    entity_type: str = Field(min_length=1, max_length=120)
+    entity_id: str = Field(min_length=1, max_length=160)
+    details: dict[str, str] = Field(default_factory=dict)
+
+
+class CostEstimateV1(DomainContractV1):
+    contract_type: str = "CostEstimate.v1"
+    estimate: CostEvidence
+    complexity_score: int = Field(default=1, ge=1, le=5)
+    risk_score: int = Field(default=1, ge=1, le=5)
+    reliability_score: int = Field(default=1, ge=1, le=5)
+    capacity_score: int = Field(default=1, ge=1, le=5)
+
+
+class RecommendationV1(DomainContractV1):
+    contract_type: str = "Recommendation.v1"
+    recommendation_id: str = Field(min_length=1, max_length=160)
+    title: str = Field(min_length=1, max_length=240)
+    rationale: str = Field(min_length=1, max_length=2_000)
+    outcome_reference: str | None = Field(default=None, max_length=240)
+
+
+class ResourceRecordV1(DomainContractV1):
+    contract_type: str = "ResourceRecord.v1"
+    resource_id: str = Field(min_length=1, max_length=160)
+    resource_type: str = Field(min_length=1, max_length=120)
+    provider: str = Field(default="local", min_length=1, max_length=80)
+    ownership: str = Field(default="customer", min_length=1, max_length=80)
+    health: str = Field(default="unknown", min_length=1, max_length=80)
+    last_verified_at: datetime | None = None
+    evidence_links: tuple[str, ...] = ()
+
+
+class EnvironmentOutputV1(DomainContractV1):
+    contract_type: str = "EnvironmentOutput.v1"
+    output_id: str = Field(min_length=1, max_length=160)
+    name: str = Field(min_length=1, max_length=160)
+    value: str = Field(min_length=1, max_length=4_000)
+    sensitive: bool = False
+    source_resource_id: str | None = Field(default=None, max_length=160)
+
+
 ContractEnvelope.model_rebuild()

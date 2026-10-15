@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--url", default="http://127.0.0.1:8000/healthz")
+    parser.add_argument("--url", default="http://127.0.0.1:8080/healthz")
     parser.add_argument("--requests", type=int, default=50)
     parser.add_argument("--concurrency", type=int, default=5)
     args = parser.parse_args()

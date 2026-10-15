@@ -7,7 +7,8 @@ the replacement seams; it is not evidence of a cloud deployment.
 ## Current local boundaries
 
 - `contracts.py` carries versioned, tenant-scoped envelopes, evidence refs, jobs,
-  model calls, capabilities, cost evidence, usage, and execution outcomes.
+  model calls, capabilities, cost evidence, usage, execution outcomes, and
+  named v1 workload/plan/approval/observation/resource/output records.
 - `boundaries.py` provides required tenant context, feature flags, lifecycle
   export/deletion/archive contracts, capability registration, evidence links,
   separate cost/complexity/risk/reliability/capacity engines, rollout targeting,
@@ -20,6 +21,9 @@ the replacement seams; it is not evidence of a cloud deployment.
   The deterministic fixture is deliberately non-authoritative.
 - `execution_runner.py` exposes prepare/execute/observe/destroy/cancel/evidence
   lifecycle methods and fails closed unless a bounded runner is configured.
+- `production_readiness.py` provides a tenant-scoped SQLite seam for local
+  export, backup, archive, soft-delete, and recovery tests, plus concurrent
+  idempotency and entitlement admission probes.
 - `policy.py`, `client.py`, `cli.py`, and `mcp.py` expose independent
   authorization and explicit v1 protocol/schema metadata.
 
