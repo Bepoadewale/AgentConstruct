@@ -156,6 +156,26 @@ def test_planner_returns_a_transparent_cost_range_and_private_controls():
     assert plan.profile == "aws-ecs-fargate"
 
 
+def test_private_beta_workspace_controls_are_durable_and_tenant_scoped():
+    service, _ = make_service()
+    invite = service.invite_workspace_member(operator(), "new@example.com", "developer")
+    assert invite["state"] == "PENDING"
+    assert invite["invite_token"].startswith("_") is False
+
+    credential = service.create_api_credential(operator(), "CI", ["read", "plans:write"])
+    assert credential["token"].startswith("ac_live_")
+    service.revoke_api_credential(operator(), credential["id"])
+
+    service.record_usage(founder(), "plans_created")
+    service.db.commit()
+    assert service.usage_summary(founder()) == [{"metric": "plans_created", "quantity": 1}]
+
+    ticket = service.create_support_ticket(founder(), "Need help", "Please help with a local review.")
+    assert ticket.organization_id == founder().organization_id
+    exported = service.request_data_lifecycle(operator(), "EXPORT")
+    assert exported["state"] == "READY"
+
+
 def test_signed_identity_rejects_tampered_token():
     token = issue_local_token("founder")
     principal = verify_token(f"Bearer {token}")

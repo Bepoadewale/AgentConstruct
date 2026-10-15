@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
@@ -42,12 +42,14 @@ from agentconstruct.integrations import (
 )
 from agentconstruct.intent import DeterministicIntentProvider, IntentProvider
 from agentconstruct.models import (
+    ApiCredential,
     Approval,
     AuditEvent,
     CloudConnection,
     CloudDiscoveryJob,
     CloudExecutionRun,
     CloudReadinessPreflight,
+    DataLifecycleRequest,
     DeploymentPlan,
     DesiredStatePublication,
     Environment,
@@ -61,6 +63,7 @@ from agentconstruct.models import (
     InfrastructurePlanRevision,
     ObservedResource,
     Organization,
+    PlanComment,
     ProductUser,
     Project,
     Recommendation,
@@ -68,9 +71,12 @@ from agentconstruct.models import (
     StoredArchitecturePlan,
     StoredCloudInventorySnapshot,
     StoredRepositoryAnalysis,
+    SupportTicket,
     TerraformPlanRender,
     TerraformPlanReview,
+    UsageRecord,
     WorkloadIntent,
+    WorkspaceInvitation,
 )
 from agentconstruct.planner import AwsV1Planner
 from agentconstruct.policy import PolicyClient
@@ -156,6 +162,103 @@ class ProductService:
             "user": {"id": user.id, "subject": user.subject, "role": role},
             "workspace": {"id": organization.id, "name": organization.name},
         }
+
+    def _require_workspace_admin(self, principal: Principal) -> None:
+        if not self._is_workspace_administrator(principal):
+            raise PermissionError("workspace administrator role required")
+
+    def invite_workspace_member(self, principal: Principal, email: str, role: str) -> dict[str, Any]:
+        self._require_workspace_admin(principal)
+        raw_token = secrets.token_urlsafe(24)
+        invitation = WorkspaceInvitation(
+            organization_id=principal.organization_id,
+            email=email.lower(),
+            role=role,
+            token_digest=hashlib.sha256(raw_token.encode()).hexdigest(),
+            expires_at=datetime.now(UTC) + timedelta(days=7),
+            invited_by_subject=principal.subject,
+        )
+        self.db.add(invitation)
+        self.db.flush()
+        self.audit(principal, "workspace.invitation_created", "workspace_invitation", invitation.id, {"email": invitation.email, "role": role})
+        self.db.commit()
+        return {"id": invitation.id, "email": invitation.email, "role": invitation.role, "state": invitation.state, "expires_at": invitation.expires_at, "invite_token": raw_token}
+
+    def list_workspace_members(self, principal: Principal) -> list[dict[str, Any]]:
+        self.workspace_profile(principal)
+        users = self.db.scalars(select(ProductUser).where(ProductUser.organization_id == principal.organization_id).order_by(ProductUser.subject)).all()
+        return [{"subject": user.subject, "role": user.role, "state": "ACTIVE"} for user in users]
+
+    def create_api_credential(self, principal: Principal, name: str, scopes: list[str]) -> dict[str, Any]:
+        self._require_workspace_admin(principal)
+        raw_token = f"ac_live_{secrets.token_urlsafe(32)}"
+        credential = ApiCredential(
+            organization_id=principal.organization_id,
+            name=name,
+            token_digest=hashlib.sha256(raw_token.encode()).hexdigest(),
+            scopes={"items": sorted(set(scopes))},
+            created_by_subject=principal.subject,
+        )
+        self.db.add(credential)
+        self.db.flush()
+        self.audit(principal, "api_credential.created", "api_credential", credential.id, {"name": name, "scopes": credential.scopes["items"]})
+        self.db.commit()
+        return {"id": credential.id, "name": credential.name, "scopes": credential.scopes["items"], "token": raw_token, "created_at": credential.created_at}
+
+    def revoke_api_credential(self, principal: Principal, credential_id: str) -> None:
+        self._require_workspace_admin(principal)
+        credential = self.db.scalar(select(ApiCredential).where(ApiCredential.id == credential_id, ApiCredential.organization_id == principal.organization_id))
+        if not credential:
+            raise KeyError("API credential not found")
+        credential.revoked_at = datetime.now(UTC)
+        self.audit(principal, "api_credential.revoked", "api_credential", credential.id, {})
+        self.db.commit()
+
+    def record_usage(self, principal: Principal, metric: str, quantity: int = 1, source: str = "api") -> UsageRecord:
+        record = UsageRecord(organization_id=principal.organization_id, metric=metric, quantity=quantity, source=source)
+        self.db.add(record)
+        self.db.flush()
+        return record
+
+    def usage_summary(self, principal: Principal) -> list[dict[str, Any]]:
+        self.workspace_profile(principal)
+        records = self.db.scalars(select(UsageRecord).where(UsageRecord.organization_id == principal.organization_id).order_by(UsageRecord.created_at.desc()).limit(200)).all()
+        totals: dict[str, int] = {}
+        for record in records:
+            totals[record.metric] = totals.get(record.metric, 0) + record.quantity
+        return [{"metric": metric, "quantity": quantity} for metric, quantity in sorted(totals.items())]
+
+    def add_plan_comment(self, principal: Principal, revision_id: str, body: str) -> PlanComment:
+        revision = self._infrastructure_revision(principal, revision_id)
+        comment = PlanComment(organization_id=principal.organization_id, revision_id=revision.id, author_subject=principal.subject, body=body)
+        self.db.add(comment)
+        self.db.flush()
+        self.audit(principal, "plan.comment_added", "infrastructure_plan_revision", revision.id, {"comment_id": comment.id})
+        self.db.commit()
+        return comment
+
+    def plan_comments(self, principal: Principal, revision_id: str) -> list[PlanComment]:
+        self._infrastructure_revision(principal, revision_id)
+        return list(self.db.scalars(select(PlanComment).where(PlanComment.organization_id == principal.organization_id, PlanComment.revision_id == revision_id).order_by(PlanComment.created_at)).all())
+
+    def create_support_ticket(self, principal: Principal, subject: str, body: str) -> SupportTicket:
+        ticket = SupportTicket(organization_id=principal.organization_id, subject=subject, body=body, created_by_subject=principal.subject)
+        self.db.add(ticket)
+        self.db.flush()
+        self.audit(principal, "support.ticket_created", "support_ticket", ticket.id, {"subject": subject})
+        self.db.commit()
+        return ticket
+
+    def request_data_lifecycle(self, principal: Principal, request_type: str) -> dict[str, Any]:
+        self._require_workspace_admin(principal)
+        request = DataLifecycleRequest(organization_id=principal.organization_id, request_type=request_type, requested_by_subject=principal.subject)
+        self.db.add(request)
+        self.db.flush()
+        self.audit(principal, "data_lifecycle.requested", "data_lifecycle_request", request.id, {"request_type": request_type})
+        self.db.commit()
+        if request_type == "EXPORT":
+            return {"id": request.id, "state": "READY", "export": self.audit_evidence(principal)}
+        return {"id": request.id, "state": request.state}
 
     def workspace_dashboard(self, principal: Principal) -> dict[str, Any]:
         """Tenant-scoped dashboard data. Developers see their plans; admins see workspace plans."""

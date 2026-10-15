@@ -30,6 +30,79 @@ class ProductUser(Base):
     role: Mapped[str] = mapped_column(String(32))
 
 
+class WorkspaceInvitation(Base):
+    """Tenant-scoped, expiring invitation. The raw token is never persisted."""
+
+    __tablename__ = "workspace_invitations"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    email: Mapped[str] = mapped_column(String(240), index=True)
+    role: Mapped[str] = mapped_column(String(32), default="developer")
+    token_digest: Mapped[str] = mapped_column(String(64), unique=True)
+    state: Mapped[str] = mapped_column(String(24), default="PENDING", index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    invited_by_subject: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ApiCredential(Base):
+    """Hashed, scoped local API credential; secret material is returned only once."""
+
+    __tablename__ = "api_credentials"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    token_digest: Mapped[str] = mapped_column(String(64), unique=True)
+    scopes: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by_subject: Mapped[str] = mapped_column(String(160))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PlanComment(Base):
+    __tablename__ = "plan_comments"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    revision_id: Mapped[str] = mapped_column(ForeignKey("infrastructure_plan_revisions.id"), index=True)
+    author_subject: Mapped[str] = mapped_column(String(160))
+    body: Mapped[str] = mapped_column(Text)
+    state: Mapped[str] = mapped_column(String(24), default="OPEN", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class UsageRecord(Base):
+    __tablename__ = "usage_records"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    metric: Mapped[str] = mapped_column(String(80), index=True)
+    quantity: Mapped[int] = mapped_column(default=1)
+    source: Mapped[str] = mapped_column(String(80), default="api")
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    subject: Mapped[str] = mapped_column(String(160))
+    body: Mapped[str] = mapped_column(Text)
+    state: Mapped[str] = mapped_column(String(24), default="OPEN", index=True)
+    created_by_subject: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DataLifecycleRequest(Base):
+    __tablename__ = "data_lifecycle_requests"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    request_type: Mapped[str] = mapped_column(String(32), index=True)
+    state: Mapped[str] = mapped_column(String(24), default="REQUESTED", index=True)
+    requested_by_subject: Mapped[str] = mapped_column(String(160))
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Project(Base):
     __tablename__ = "projects"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

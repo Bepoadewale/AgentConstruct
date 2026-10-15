@@ -43,6 +43,23 @@ headers at the API boundary.
 
 - [x] Full validation complete
 
+## Durable control-plane completion
+
+The initial primitives are now backed by the control-plane database and
+versioned API routes rather than only process memory:
+
+- administrator-created, expiring workspace invitations (only token digests
+  are stored);
+- hashed, scoped API credentials with one-time display and revocation;
+- tenant-scoped usage records for future plans, quotas and billing;
+- immutable revision comments for collaboration;
+- durable support tickets; and
+- administrator-requested export/deletion lifecycle records with audit events.
+
+These are provider-neutral private-beta controls. They deliberately do not
+claim hosted SSO, payment collection, email delivery, or automated deletion
+execution before those external integrations are selected and verified.
+
 ## Tests / validation performed
 
 Validated with lint, the complete unit suite, local smoke/load/browser/frontend

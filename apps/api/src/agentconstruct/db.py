@@ -151,6 +151,10 @@ def run_migrations(target: Engine | None = None) -> None:
         if version < 17:
             Base.metadata.create_all(bind=connection)
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (17)"))
+            version = 17
+        if version < 18:
+            Base.metadata.create_all(bind=connection)
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (18)"))
 
 
 def session() -> Generator[Session, None, None]:

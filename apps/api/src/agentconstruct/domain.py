@@ -358,3 +358,26 @@ class InfrastructurePlanConstraintUpdateRequest(BaseModel):
 
 class LocalLoginRequest(BaseModel):
     username: str = Field(min_length=2, max_length=80)
+
+
+class InvitationRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=240)
+    role: str = Field(default="developer", pattern=r"^(developer|operator|administrator)$")
+
+
+class ApiCredentialRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    scopes: list[str] = Field(default_factory=lambda: ["read"], max_length=12)
+
+
+class PlanCommentRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+
+class SupportTicketRequest(BaseModel):
+    subject: str = Field(min_length=3, max_length=160)
+    body: str = Field(min_length=1, max_length=8000)
+
+
+class DataLifecycleRequestBody(BaseModel):
+    request_type: str = Field(pattern=r"^(EXPORT|DELETE)$")

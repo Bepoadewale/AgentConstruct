@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from agentconstruct.db import SessionLocal, run_migrations, session
 from agentconstruct.domain import (
+    ApiCredentialRequest,
     ApprovalRequest,
     AwsConnectionVerificationRequest,
     AwsQuickCreateRequest,
@@ -20,14 +21,18 @@ from agentconstruct.domain import (
     CloudExecutionRunRequest,
     CloudInventorySnapshotRequest,
     CloudReadinessPreflightRequest,
+    DataLifecycleRequestBody,
     DesiredStatePublicationRequest,
     DesiredStatePublicationStateRequest,
     InfrastructurePlanConstraintUpdateRequest,
     InfrastructurePlanDecisionRequest,
     InfrastructurePlanRevisionRequest,
     IntentRequest,
+    InvitationRequest,
     LocalLoginRequest,
+    PlanCommentRequest,
     ProjectRequest,
+    SupportTicketRequest,
     TerraformPlanRenderRequest,
     TerraformPlanReviewRequest,
 )
@@ -114,6 +119,55 @@ def current_user(
     try:
         return service.workspace_profile(principal)
     except PermissionError as error:
+        translate(error)
+
+
+@app.get("/api/v1/workspace/members")
+def workspace_members(principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    return service.list_workspace_members(principal)
+
+
+@app.post("/api/v1/workspace/invitations", status_code=201)
+def invite_workspace_member(request: InvitationRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    try:
+        return service.invite_workspace_member(principal, request.email, request.role)
+    except (PermissionError, ValueError) as error:
+        translate(error)
+
+
+@app.get("/api/v1/usage")
+def usage_summary(principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    return service.usage_summary(principal)
+
+
+@app.post("/api/v1/api-credentials", status_code=201)
+def create_api_credential(request: ApiCredentialRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    try:
+        return service.create_api_credential(principal, request.name, request.scopes)
+    except (PermissionError, ValueError) as error:
+        translate(error)
+
+
+@app.delete("/api/v1/api-credentials/{credential_id}", status_code=204)
+def revoke_api_credential(credential_id: str, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    try:
+        service.revoke_api_credential(principal, credential_id)
+    except (PermissionError, KeyError, ValueError) as error:
+        translate(error)
+    return Response(status_code=204)
+
+
+@app.post("/api/v1/support/tickets", status_code=201)
+def create_support_ticket(request: SupportTicketRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    ticket = service.create_support_ticket(principal, request.subject, request.body)
+    return {"id": ticket.id, "subject": ticket.subject, "state": ticket.state, "created_at": ticket.created_at}
+
+
+@app.post("/api/v1/data-lifecycle", status_code=202)
+def request_data_lifecycle(request: DataLifecycleRequestBody, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    try:
+        return service.request_data_lifecycle(principal, request.request_type)
+    except (PermissionError, ValueError) as error:
         translate(error)
 
 
@@ -1005,6 +1059,24 @@ def audit_events(
         }
         for item in service.audits(principal, environment_id)
     ]
+
+
+@app.get("/api/v1/customer-plans/revisions/{revision_id}/comments")
+def list_plan_comments(revision_id: str, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    try:
+        comments = service.plan_comments(principal, revision_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+    return [{"id": item.id, "body": item.body, "author_subject": item.author_subject, "state": item.state, "created_at": item.created_at} for item in comments]
+
+
+@app.post("/api/v1/customer-plans/revisions/{revision_id}/comments", status_code=201)
+def add_plan_comment(revision_id: str, request: PlanCommentRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+    try:
+        comment = service.add_plan_comment(principal, revision_id, request.body)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+    return {"id": comment.id, "body": comment.body, "state": comment.state, "created_at": comment.created_at}
 
 
 @app.get("/api/v1/audit-evidence")
