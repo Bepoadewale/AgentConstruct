@@ -7,7 +7,7 @@ Start with the [current-state audit](product/CURRENT_STATE_AUDIT.md), [product f
 - `product/`: current customer, product, packaging and roadmap material.
 - `architecture/`, `security/`, cloud/reliability/GitOps pages: current technical contracts.
 - `strategy/`: preserved historical strategy and commercial thinking. It is private and not public-repository material.
-- `decisions/`: active architectural decisions.
+- `decisions/`: active architectural decisions, including [provider and private-beta boundaries](decisions/ADR-011-provider-and-private-beta-boundaries.md).
 
 Every document must clearly say whether a capability is executed locally, simulated, statically validated, planned for a cloud pilot or executed in cloud evidence.
 
