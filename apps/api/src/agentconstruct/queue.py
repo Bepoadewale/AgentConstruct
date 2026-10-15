@@ -22,6 +22,14 @@ class JobQueue(Protocol):
 
     def claim(self, tenant_organization_id: str, kinds: Iterable[JobKind] | None = None) -> JobEnvelope | None: ...
 
+    def heartbeat(self, job_id: str) -> None: ...
+
+    def retry(self, job_id: str, error: str) -> str: ...
+
+    def cancel(self, job_id: str, reason: str = "cancelled") -> None: ...
+
+    def dead_letter(self, job_id: str, error: str) -> None: ...
+
     def acknowledge(self, job_id: str) -> None: ...
 
     def fail(self, job_id: str, error: str, *, retry: bool = True) -> str: ...
@@ -91,6 +99,15 @@ class PostgresJobQueue:
         row.updated_at = datetime.now(UTC)
         self.db.commit()
 
+    def heartbeat(self, job_id: str) -> None:
+        row = self.db.get(PlatformJob, job_id)
+        if row is None:
+            raise KeyError(f"unknown platform job: {job_id}")
+        if row.state != "RUNNING":
+            raise ValueError("only running jobs can heartbeat")
+        row.updated_at = datetime.now(UTC)
+        self.db.commit()
+
     def fail(self, job_id: str, error: str, *, retry: bool = True) -> str:
         row = self.db.get(PlatformJob, job_id)
         if row is None:
@@ -100,6 +117,27 @@ class PostgresJobQueue:
         row.updated_at = datetime.now(UTC)
         self.db.commit()
         return row.state
+
+    def retry(self, job_id: str, error: str) -> str:
+        return self.fail(job_id, error, retry=True)
+
+    def cancel(self, job_id: str, reason: str = "cancelled") -> None:
+        row = self.db.get(PlatformJob, job_id)
+        if row is None:
+            raise KeyError(f"unknown platform job: {job_id}")
+        row.error = reason[:2_000]
+        row.state = "CANCELLED"
+        row.updated_at = datetime.now(UTC)
+        self.db.commit()
+
+    def dead_letter(self, job_id: str, error: str) -> None:
+        row = self.db.get(PlatformJob, job_id)
+        if row is None:
+            raise KeyError(f"unknown platform job: {job_id}")
+        row.error = error[:2_000]
+        row.state = "DEAD_LETTER"
+        row.updated_at = datetime.now(UTC)
+        self.db.commit()
 
     @staticmethod
     def _envelope(row: PlatformJob) -> JobEnvelope:
@@ -143,9 +181,25 @@ class InMemoryJobQueue:
         job, _ = self.jobs[job_id]
         self.jobs[job_id] = (job, "SUCCEEDED")
 
+    def heartbeat(self, job_id: str) -> None:
+        job, state = self.jobs[job_id]
+        if state != "RUNNING":
+            raise ValueError("only running jobs can heartbeat")
+        self.jobs[job_id] = (job, state)
+
     def fail(self, job_id: str, error: str, *, retry: bool = True) -> str:
         job, _ = self.jobs[job_id]
         state = "QUEUED" if retry and job.attempt < job.max_attempts else "DEAD_LETTER"
         self.jobs[job_id] = (job, state)
         return state
 
+    def retry(self, job_id: str, error: str) -> str:
+        return self.fail(job_id, error, retry=True)
+
+    def cancel(self, job_id: str, reason: str = "cancelled") -> None:
+        job, _ = self.jobs[job_id]
+        self.jobs[job_id] = (job, "CANCELLED")
+
+    def dead_letter(self, job_id: str, error: str) -> None:
+        job, _ = self.jobs[job_id]
+        self.jobs[job_id] = (job, "DEAD_LETTER")

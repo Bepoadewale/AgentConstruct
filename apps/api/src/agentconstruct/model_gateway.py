@@ -7,6 +7,8 @@ import json
 import os
 from typing import Any, Protocol
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from agentconstruct.contracts import (
     EvidenceKind,
     EvidenceRef,
@@ -18,6 +20,24 @@ from agentconstruct.contracts import (
 
 class ModelGatewayUnavailable(RuntimeError):
     """Raised when no model provider is configured."""
+
+
+class ModelCallPolicy(BaseModel):
+    """Tenant-safe budget and timeout admission before a provider call."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    max_output_tokens: int = Field(default=2_000, ge=1, le=100_000)
+    max_timeout_seconds: int = Field(default=60, ge=1, le=900)
+    allowed_providers: frozenset[str] = frozenset({"fixture"})
+
+    def validate(self, request: ModelRequest) -> None:
+        if request.provider not in self.allowed_providers:
+            raise ModelGatewayUnavailable(f"model provider {request.provider!r} is not allowed")
+        if request.max_output_tokens > self.max_output_tokens:
+            raise ModelGatewayUnavailable("model output budget exceeds tenant policy")
+        if request.timeout_seconds > self.max_timeout_seconds:
+            raise ModelGatewayUnavailable("model timeout exceeds tenant policy")
 
 
 class ModelGateway(Protocol):
@@ -66,3 +86,14 @@ def configured_model_gateway() -> ModelGateway:
         return DisabledModelGateway()
     return DeterministicModelGateway()
 
+
+def guarded_complete(
+    gateway: ModelGateway,
+    request: ModelRequest,
+    document: dict[str, Any],
+    policy: ModelCallPolicy | None = None,
+) -> ModelResponse:
+    """Apply model admission policy before delegating to any provider."""
+
+    (policy or ModelCallPolicy()).validate(request)
+    return gateway.complete(request, document)

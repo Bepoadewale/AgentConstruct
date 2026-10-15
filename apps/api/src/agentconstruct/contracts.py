@@ -22,6 +22,23 @@ class ContractBase(BaseModel):
     schema_version: str = CONTRACT_VERSION
 
 
+class ContractEnvelope(ContractBase):
+    """Versioned wrapper for legacy/domain payloads during schema evolution."""
+
+    contract_type: str = Field(min_length=1, max_length=120)
+    tenant: TenantScope
+    project_id: str | None = Field(default=None, max_length=160)
+    environment_id: str | None = Field(default=None, max_length=160)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    source_evidence: tuple[EvidenceRef, ...] = ()
+    provenance: dict[str, str] = Field(default_factory=dict)
+    policy_version: str | None = Field(default=None, max_length=120)
+    catalog_version: str | None = Field(default=None, max_length=160)
+    plan_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class TenantScope(ContractBase):
     """Mandatory scope carried through every platform operation."""
 
@@ -268,3 +285,6 @@ class UsageDecision(ContractBase):
     remaining: float = Field(ge=0)
     reason: str = Field(min_length=1, max_length=240)
     policy_version: str = Field(min_length=1, max_length=80)
+
+
+ContractEnvelope.model_rebuild()

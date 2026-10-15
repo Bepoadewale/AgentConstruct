@@ -4,6 +4,7 @@ import pytest
 from agentconstruct.contracts import (
     CapabilityKind,
     CapabilityRequirement,
+    ContractEnvelope,
     CostEvidence,
     EvidenceKind,
     EvidenceRef,
@@ -29,6 +30,20 @@ def scope() -> TenantScope:
 def test_platform_contracts_require_explicit_tenant_scope():
     with pytest.raises(ValidationError):
         JobEnvelope(kind=JobKind.PLANNING, idempotency_key="planning-123")
+
+
+def test_contract_envelope_preserves_version_and_provenance():
+    envelope = ContractEnvelope(
+        contract_type="ArchitecturePlan",
+        tenant=scope(),
+        payload={"profile": "fixture"},
+        provenance={"profile": "planner-fixture"},
+        policy_version="opa-v1",
+        catalog_version="fixture-v1",
+        plan_digest="a" * 64,
+    )
+    assert envelope.schema_version
+    assert envelope.tenant.organization_id == "org-demo"
 
 
 def test_evidence_is_versioned_provenance_and_credential_free():
@@ -107,4 +122,3 @@ def test_usage_events_are_tenant_scoped_and_meterable():
     )
     assert event.tenant.workspace_id == "workspace-demo"
     assert event.quantity == 123
-
