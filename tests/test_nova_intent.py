@@ -5,7 +5,9 @@ from typing import Any
 import pytest
 from agentconstruct.contracts import ModelResponse, ModelUsage, TenantScope
 from agentconstruct.intent import NovaIntentProvider
+from agentconstruct.main import translate
 from agentconstruct.model_gateway import NOVA_2_LITE_MODEL_ID, ModelGatewayUnavailable
+from fastapi import HTTPException
 
 
 def scope() -> TenantScope:
@@ -138,3 +140,9 @@ def test_nova_intent_repairs_one_schema_violation_and_records_usage():
     assert len(gateway.calls) == 2
     assert result.spec.workload_type == "rag_application"
     assert result.model_metadata["usage"]["retry_count"] == 1
+
+
+def test_model_gateway_failure_translates_to_bounded_service_unavailable():
+    with pytest.raises(HTTPException) as raised:
+        translate(ModelGatewayUnavailable("model response failed validation"))
+    assert raised.value.status_code == 503

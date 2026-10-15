@@ -2,7 +2,7 @@
 
 - PR: #79
 - Branch: `feat/nova-2-lite-gateway`
-- Status: in progress
+- Status: complete
 
 ## Problem / goal
 
@@ -22,13 +22,19 @@ model approval, policy, execution, or cloud authority.
 
 ## Research / references used
 
-- Amazon Nova 2 documentation and model identifiers.
-- Amazon Bedrock Converse and structured-output API documentation.
+- Amazon Nova 2 Lite model card and supported geographic inference profile IDs.
+- Amazon Bedrock Converse and geographic cross-Region IAM documentation.
 - Repository ADR-005 and queue/model-gateway architecture guidance.
+
+The official model card currently marks Bedrock native structured outputs as
+unsupported for Nova 2 Lite. The implementation therefore uses JSON-only prompt
+guidance followed by strict local Pydantic validation and one bounded repair
+attempt; it does not claim provider-enforced schema compliance.
 
 ## Work planned for the PR
 
-- Add a Bedrock-backed Nova 2 Lite adapter using strict structured output.
+- Add a Bedrock-backed Nova 2 Lite adapter using JSON-only responses and strict
+  local schema validation.
 - Add configuration, bounded retries/timeouts, usage metadata, safe errors, and
   deterministic fallback behavior.
 - Keep credentials outside configuration and use the AWS SDK credential chain.
@@ -51,22 +57,35 @@ model approval, policy, execution, or cloud authority.
 
 ## Acceptance status
 
-- [ ] Structured Nova 2 Lite responses are schema validated.
-- [ ] Authority boundaries remain intact.
-- [ ] Admission and data-policy limits are enforced.
-- [ ] Safe audit metadata is produced.
-- [ ] Explicit deterministic fallback is covered.
-- [ ] Tests remain credential-free and offline.
-- [ ] Required validation passes.
+- [x] Nova 2 Lite JSON responses are strictly schema validated locally.
+- [x] Authority boundaries remain intact.
+- [x] Admission and data-policy limits are enforced.
+- [x] Safe audit metadata and usage metering are produced.
+- [x] Explicit deterministic fallback is covered and labelled as a fixture.
+- [x] Tests remain credential-free and offline.
+- [x] Required validation passes.
 
 ## Tests / validation performed
 
-Pending implementation.
+Validated on 2026-10-15 with:
+
+- `make lint`;
+- `make test` — 187 passed, with one upstream Starlette/httpx deprecation
+  warning;
+- `python3 scripts/check_doc_conventions.py`;
+- `git diff --check`;
+- `make terraform-validate`;
+- two complete clean-room cycles recorded in `docs/test/test79.md`.
+
+Both cycles additionally passed smoke, browser/interaction/responsive/
+accessibility contracts, a bounded local load smoke, customer-plan E2E,
+simple/complex/degraded/Day-2 demonstrations, policy and readiness failures,
+Tempo trace verification, OPA 3/3, Terraform validation, Kubernetes rendering,
+and final cleanup.
 
 ## Evidence files produced
 
-No customer workload execution is planned. If the validation process performs a
-customer workload cycle, `docs/test/test79.md` will record it.
+- `docs/test/test79.md` records two local fixture customer-workload cycles.
 
 ## Boundaries
 
@@ -75,8 +94,12 @@ customer workload cycle, `docs/test/test79.md` will record it.
 - Nova proposes typed data only. Policy, approval, plan hashing, and bounded
   execution remain independent.
 - No AWS access keys or other long-lived credentials are added.
+- Nova 2 Lite native structured output is not supported at the time of this PR;
+  JSON is validated locally and failures are bounded.
 
 ## Follow-up work
 
 - Enable Bedrock model access in the production AWS account and run an explicitly
   authorized, budget-capped live evaluation before tenant rollout.
+- Verify the chosen inference profile's destination Regions and account SCPs at
+  activation time rather than relying on the profile prefix alone.
