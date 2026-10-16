@@ -35,10 +35,33 @@ docker build -f apps/api/Dockerfile .
 npm run verify
 ```
 
-The completed clean-room section will run the local API, worker, PostgreSQL,
-OPA, Prometheus, Grafana, Tempo and fixture executor twice from clean state. It
-will exercise API/CORS, customer-plan, simple, complex, degraded, Day-2,
-failure, readiness, trace, OPA, Terraform, Kubernetes and MCP checks.
+Two complete clean-room cycles ran the local API, worker, PostgreSQL, OPA,
+Prometheus, Grafana, Tempo and fixture executor from clean state. Each cycle
+executed:
+
+```bash
+make clean-local
+make bootstrap-local
+make smoke
+make api-contract
+make local-load-smoke
+make customer-plan-e2e
+make seed-demo-data
+make demo-simple
+make demo-complex
+make demo-degraded
+make demo-day2
+make demo-failure
+make demo-readiness-failure
+make trace-check
+make verify
+make opa-test
+make terraform-validate
+make kubernetes-render
+printf '<MCP tools/list request>' | AGENTCONSTRUCT_TOKEN=fixture-token \
+  .venv/bin/agentconstruct-mcp
+make clean-local
+```
 
 ## Observed result
 
@@ -51,18 +74,29 @@ failure, readiness, trace, OPA, Terraform, Kubernetes and MCP checks.
   deterministic tests, 34-operation API compatibility, static production
   build, Cloudflare-limit inspection, nested-route refresh and npm audit with
   zero vulnerabilities.
-- Clean-room cycle results are pending.
+- Two clean-room cycles passed. Their 50-request, concurrency-5 load smokes
+  recorded local p95 values of 22.2 ms and 29.0 ms; these are correctness
+  smokes, not production capacity claims.
+- Both cycles passed the developer/administrator flow, self-approval audit,
+  governed dry run/destroy, simple App Runner, complex EKS, degraded ECS,
+  Day-2 change, policy denial and readiness-failure cases.
+- Both cycles passed Tempo trace search, 204 tests, OPA 3/3, all Terraform
+  validations, Kubernetes rendering and MCP tool discovery.
+- An earlier cycle stopped at the first API-contract check because the new
+  script used a singular decision-path spelling. The script was corrected to
+  the actual `/decisions` route and the full cycle was restarted from clean
+  state; the incomplete run is not counted.
 
 ## Teardown
 
-No cloud teardown is required. The final clean-room command will be `make
-clean-local`, which removes only this project's containers, volume, virtual
-environment and `.local` runtime state.
+No cloud teardown was required. Both clean-room cycles ended with `make
+clean-local`, which removed this project's containers, PostgreSQL volume,
+network, virtual environment and `.local` runtime state. No project container
+remains running.
 
 ## Final boundary
 
-Current evidence proves local/static separation and independent builds. It does
+This evidence proves local/static separation and independent builds. It does
 not prove Cloudflare deployment, live cross-origin login, production OIDC,
 hosted durable PostgreSQL, or any AWS customer workload. Those require their
 own explicit configuration and live-environment evidence.
-

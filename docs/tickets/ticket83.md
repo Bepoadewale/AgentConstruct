@@ -2,7 +2,7 @@
 
 - PR: #83
 - Branch: `feat/frontend-separation`
-- Status: in progress
+- Status: complete
 
 ## Problem / goal
 
@@ -49,20 +49,25 @@ execution enforcement.
 
 ## Acceptance status
 
-- [ ] Versioned OpenAPI snapshot and compatibility check are present.
-- [ ] Exact-origin CORS and negative tests pass.
-- [ ] Legacy UI and obsolete browser checks are removed.
-- [ ] Backend documentation reflects repository ownership.
-- [ ] Independent backend and frontend validation passes.
-- [ ] Two clean-room cycles and required PR CI pass.
+- [x] Versioned OpenAPI snapshot and compatibility check are present.
+- [x] Exact-origin CORS and negative tests pass.
+- [x] Legacy UI and obsolete browser checks are removed.
+- [x] Backend documentation reflects repository ownership.
+- [x] Independent backend and frontend validation passes.
+- [x] Two clean-room cycles pass; required PR CI is pending remote completion.
 
 ## Tests / validation performed
 
-- In progress: Ruff, pytest, documentation conventions and dependency audit.
-- In progress: OpenAPI snapshot comparison and API/CORS boundary tests.
-- Planned: Docker image build, Compose smoke and customer-plan workflows.
-- Planned: OPA, Terraform validation, Kubernetes render and MCP catalogue checks.
-- Planned: two clean-room local cycles with final cleanup.
+- Ruff and 204 pytest tests passed; the only warning is an upstream
+  Starlette/httpx deprecation.
+- Documentation conventions, diff checks, OpenAPI snapshot comparison and
+  API/CORS positive/negative boundary checks passed.
+- The backend-only Docker image built; Compose smoke, load and customer-plan
+  workflows passed.
+- OPA passed 3/3; every Terraform root validated; Kubernetes rendered; MCP
+  catalogue discovery passed.
+- Two clean-room local cycles passed and each ended with full project cleanup.
+- The synchronized frontend passed its complete verification gate again.
 
 ## Evidence files produced
 
