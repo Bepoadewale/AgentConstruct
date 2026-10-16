@@ -2,7 +2,7 @@
 
 - PR: #84
 - Branch: `fix/invite-token-contract`
-- Status: implementation complete; GitHub checks pending
+- Status: complete
 
 ## Problem / goal
 
@@ -41,7 +41,7 @@ encountered that case and failed one of 204 tests.
 - [x] The expected 32-character URL-safe format is asserted.
 - [x] The focused test passed 50 consecutive runs.
 - [x] Local lint, full tests, and dependency audit passed.
-- [ ] Required GitHub checks pass.
+- [x] Required GitHub checks pass.
 
 ## Tests / validation performed
 
@@ -50,6 +50,8 @@ encountered that case and failed one of 204 tests.
 - Full pytest suite: 204 passed, with one upstream Starlette/httpx deprecation warning.
 - `pip-audit`: no known vulnerabilities; the unpublished local `agentconstruct`
   package is not on PyPI and was skipped.
+- GitHub Actions run `38950571280`: all seven jobs passed, including Python,
+  local E2E, cloud contracts, policy, supply-chain, secrets, and documentation.
 
 ## Evidence files produced
 
