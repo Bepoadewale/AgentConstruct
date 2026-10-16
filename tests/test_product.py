@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 
 from agentconstruct.contracts import TenantScope
@@ -217,7 +218,7 @@ def test_private_beta_workspace_controls_are_durable_and_tenant_scoped():
     service, _ = make_service()
     invite = service.invite_workspace_member(operator(), "new@example.com", "developer")
     assert invite["state"] == "PENDING"
-    assert invite["invite_token"].startswith("_") is False
+    assert re.fullmatch(r"[A-Za-z0-9_-]{32}", invite["invite_token"])
 
     credential = service.create_api_credential(operator(), "CI", ["read", "plans:write"])
     assert credential["token"].startswith("ac_live_")
