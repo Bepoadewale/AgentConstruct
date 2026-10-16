@@ -11,8 +11,8 @@ grep -q '"surface":"control-plane-api"' <<<"$root"
 grep -q '"api_version":"v1"' <<<"$root"
 
 openapi="$(curl -fsS "$base_url/openapi.json")"
-grep -q '"/api/v1/customer-plans/revisions/{revision_id}/submit"' <<<"$openapi"
-grep -q '"/api/v1/customer-plans/revisions/{revision_id}/approve"' <<<"$openapi"
+grep -q '"/api/v1/customer-plan-revisions/{revision_id}/submit"' <<<"$openapi"
+grep -q '"/api/v1/customer-plan-revisions/{revision_id}/decisions"' <<<"$openapi"
 
 curl -fsS -o /dev/null -D "$headers_file" -X OPTIONS "$base_url/api/v1/me" \
   -H "Origin: $allowed_origin" \
@@ -33,4 +33,3 @@ if grep -qi '^access-control-allow-origin:' "$headers_file"; then
 fi
 
 echo "Versioned API and exact-origin CORS contract passed."
-
