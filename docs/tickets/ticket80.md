@@ -2,7 +2,7 @@
 
 - PR: #80
 - Branch: `feat/same-account-pilot-boundaries`
-- Status: in progress
+- Status: complete
 
 ## Problem / goal
 
@@ -53,16 +53,28 @@ customer isolation.
 
 ## Acceptance status
 
-- [ ] No member-account operation is introduced.
-- [ ] Platform and customer scopes are collision-resistant.
-- [ ] Customer sandbox VPC and role boundaries are implemented.
-- [ ] Shared-account limitations are documented.
-- [ ] Offline validation passes.
-- [ ] Teardown and absence checks are bounded.
+- [x] No member-account operation is introduced.
+- [x] Platform and customer scopes are collision-resistant.
+- [x] Customer sandbox VPC and role boundaries are implemented.
+- [x] Shared-account limitations are documented.
+- [x] Offline validation passes.
+- [x] Teardown and absence checks are bounded.
 
 ## Tests / validation performed
 
-Pending implementation.
+- Authenticated Terraform plans against isolated remote state keys:
+  - platform: 9 to add, 0 to change, 0 to destroy;
+  - customer sandbox: 11 to add, 0 to change, 0 to destroy.
+- `make lint`: passed.
+- `make test`: 190 passed; one upstream Starlette/httpx deprecation warning.
+- `make opa-test`: 3 passed.
+- `make terraform-validate`: every Terraform root passed.
+- `make kubernetes-render`: passed without applying resources.
+- Browser, frontend, responsive and accessibility contracts: passed.
+- Local load smoke: 50 requests at concurrency 5, p95 25 ms or better.
+- Customer-plan E2E and all canonical/failure/readiness demos: passed.
+- Two complete clean-room cycles passed from bootstrap through teardown.
+- `git diff --check` and documentation conventions: passed.
 
 ## Evidence files produced
 

@@ -21,10 +21,11 @@ if [[ -n "${AWS_PROFILE:-}" ]]; then
 fi
 account="$(aws sts get-caller-identity "${aws_args[@]}" --query Account --output text)"
 [[ "$account" == "$EXPECTED_AWS_ACCOUNT_ID" ]] || { echo "AWS account guard failed: got ${account}, expected ${EXPECTED_AWS_ACCOUNT_ID}" >&2; exit 3; }
+[[ "${AGENTCONSTRUCT_PLATFORM_SCOPE:-platform}" == "platform" ]] || { echo "Platform deployment scope guard failed" >&2; exit 3; }
 
-terraform -chdir="$root" init -input=false \
+terraform -chdir="$root" init -input=false -reconfigure \
   -backend-config="bucket=${TF_STATE_BUCKET}" \
-  -backend-config="key=agentconstruct/app-runner-runtime.tfstate" \
+  -backend-config="key=agentconstruct/platform/app-runner-runtime.tfstate" \
   -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
   -backend-config="region=${AWS_REGION}"
 
@@ -35,6 +36,7 @@ vars=(
   "-var=customer_template_url=${AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL}"
   "-var=image_identifier=${image_identifier}"
   "-var=enable_service=${enable_service}"
+  "-var=runtime_vpc_cidr=${AGENTCONSTRUCT_PLATFORM_VPC_CIDR:-10.42.0.0/16}"
 )
 
 case "$operation" in

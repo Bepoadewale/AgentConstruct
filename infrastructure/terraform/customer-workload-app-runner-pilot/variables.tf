@@ -8,6 +8,39 @@ variable "expected_account_id" {
   description = "Account guard. Terraform fails if the caller is not in this AWS account."
 }
 
+variable "deployment_scope" {
+  type        = string
+  description = "Required placement label for the same-account customer sandbox."
+  default     = "customer-sandbox"
+
+  validation {
+    condition     = var.deployment_scope == "customer-sandbox"
+    error_message = "deployment_scope must be customer-sandbox."
+  }
+}
+
+variable "customer_vpc_cidr" {
+  type        = string
+  description = "Dedicated same-account customer-sandbox VPC CIDR."
+  default     = "10.84.0.0/16"
+
+  validation {
+    condition     = var.customer_vpc_cidr == "10.84.0.0/16"
+    error_message = "The controlled pilot customer VPC CIDR must be 10.84.0.0/16."
+  }
+}
+
+variable "platform_vpc_cidr" {
+  type        = string
+  description = "Platform VPC CIDR used only by the collision guard."
+  default     = "10.42.0.0/16"
+
+  validation {
+    condition     = var.platform_vpc_cidr == "10.42.0.0/16"
+    error_message = "The controlled pilot platform VPC CIDR must be 10.42.0.0/16."
+  }
+}
+
 variable "enable_service" {
   type        = bool
   description = "Create the App Runner service after the customer image has been pushed to ECR."
@@ -23,13 +56,13 @@ variable "image_identifier" {
 variable "service_name" {
   type        = string
   description = "App Runner service name."
-  default     = "agentconstruct-customer-control-plane"
+  default     = "agentconstruct-customer-sandbox-workload"
 }
 
 variable "ecr_repository_name" {
   type        = string
   description = "ECR repository name for the customer workload image."
-  default     = "agentconstruct-customer-ai-platform-control-plane"
+  default     = "agentconstruct-customer-sandbox-workload"
 }
 
 variable "source_repository" {

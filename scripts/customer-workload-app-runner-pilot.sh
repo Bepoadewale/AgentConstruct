@@ -14,8 +14,11 @@ require TF_STATE_BUCKET
 require TF_LOCK_TABLE
 require AWS_REGION
 
-service_name="${AGENTCONSTRUCT_CUSTOMER_SERVICE_NAME:-agentconstruct-customer-control-plane}"
-repository_name="${AGENTCONSTRUCT_CUSTOMER_ECR_REPOSITORY_NAME:-agentconstruct-customer-ai-platform-control-plane}"
+service_name="${AGENTCONSTRUCT_CUSTOMER_SERVICE_NAME:-agentconstruct-customer-sandbox-workload}"
+repository_name="${AGENTCONSTRUCT_CUSTOMER_ECR_REPOSITORY_NAME:-agentconstruct-customer-sandbox-workload}"
+deployment_scope="${AGENTCONSTRUCT_CUSTOMER_DEPLOYMENT_SCOPE:-customer-sandbox}"
+customer_vpc_cidr="${AGENTCONSTRUCT_CUSTOMER_VPC_CIDR:-10.84.0.0/16}"
+platform_vpc_cidr="${AGENTCONSTRUCT_PLATFORM_VPC_CIDR:-10.42.0.0/16}"
 source_repository="${AGENTCONSTRUCT_CUSTOMER_SOURCE_REPOSITORY:-https://github.com/Bepoadewale/ai-platform-control-plane}"
 source_commit="${AGENTCONSTRUCT_CUSTOMER_SOURCE_COMMIT:-unknown}"
 plan_digest="${AGENTCONSTRUCT_CUSTOMER_PLAN_DIGEST:-customer-workload-pilot-local-approval}"
@@ -29,10 +32,15 @@ fi
 
 account="$(aws sts get-caller-identity "${aws_args[@]}" --query Account --output text)"
 [[ "$account" == "$EXPECTED_AWS_ACCOUNT_ID" ]] || { echo "AWS account guard failed: got ${account}, expected ${EXPECTED_AWS_ACCOUNT_ID}" >&2; exit 3; }
+[[ "$deployment_scope" == "customer-sandbox" ]] || { echo "Customer deployment scope guard failed" >&2; exit 3; }
+[[ "$customer_vpc_cidr" != "$platform_vpc_cidr" ]] || { echo "Customer and platform VPC CIDRs must differ" >&2; exit 3; }
 
 tf_vars=(
   "-var=region=${AWS_REGION}"
   "-var=expected_account_id=${EXPECTED_AWS_ACCOUNT_ID}"
+  "-var=deployment_scope=${deployment_scope}"
+  "-var=customer_vpc_cidr=${customer_vpc_cidr}"
+  "-var=platform_vpc_cidr=${platform_vpc_cidr}"
   "-var=service_name=${service_name}"
   "-var=ecr_repository_name=${repository_name}"
   "-var=source_repository=${source_repository}"
@@ -43,9 +51,9 @@ tf_vars=(
 )
 
 tf_init() {
-  terraform -chdir="$root" init -input=false \
+  terraform -chdir="$root" init -input=false -reconfigure \
     -backend-config="bucket=${TF_STATE_BUCKET}" \
-    -backend-config="key=agentconstruct/customer-workload-app-runner-pilot.tfstate" \
+    -backend-config="key=agentconstruct/customer-sandbox/workload-app-runner.tfstate" \
     -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
     -backend-config="region=${AWS_REGION}"
 }
@@ -138,7 +146,19 @@ case "$operation" in
       echo "ECR repository still exists: ${repository_name}" >&2
       exit 1
     fi
-    echo "Customer workload AWS resources absent: service=${missing_service}, ecr_repository=deleted"
+    if aws ec2 describe-vpcs "${aws_args[@]}" --region "$AWS_REGION" \
+      --filters "Name=tag:Scope,Values=customer-sandbox" \
+      --query 'Vpcs[0].VpcId' --output text | grep -qv '^None$'; then
+      echo "Customer sandbox VPC still exists" >&2
+      exit 1
+    fi
+    for role_name in agentconstruct-customer-sandbox-apprunner-ecr agentconstruct-customer-sandbox-apprunner-runtime; do
+      if aws iam get-role "${aws_args[@]}" --role-name "$role_name" >/dev/null 2>&1; then
+        echo "Customer sandbox IAM role still exists: ${role_name}" >&2
+        exit 1
+      fi
+    done
+    echo "Customer workload AWS resources absent: service=${missing_service}, ecr_repository=deleted, vpc=deleted, roles=deleted"
     ;;
   output)
     tf_init
