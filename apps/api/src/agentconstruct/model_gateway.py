@@ -270,11 +270,9 @@ class BedrockNovaGateway:
                 text = next(
                     block["text"] for block in content if isinstance(block.get("text"), str)
                 )
-                candidate = json.loads(text)
-                if isinstance(candidate, dict):
-                    output = candidate
-                    break
-            except (KeyError, StopIteration, TypeError, json.JSONDecodeError):
+                output = decode_structured_json(text)
+                break
+            except (KeyError, StopIteration, TypeError, ValueError):
                 pass
             retry_count += 1
         if output is None:
@@ -475,6 +473,18 @@ def guarded_generate_structured(
 
 def model_input_digest(document: dict[str, Any]) -> str:
     return hashlib.sha256(_canonical_json(document).encode()).hexdigest()
+
+
+def decode_structured_json(text: str) -> dict[str, Any]:
+    """Decode a plain object or one exact JSON fence, never surrounding prose."""
+
+    candidate = text.strip()
+    if candidate.startswith("```json\n") and candidate.endswith("\n```"):
+        candidate = candidate.removeprefix("```json\n").removesuffix("\n```")
+    decoded = json.loads(candidate)
+    if not isinstance(decoded, dict):
+        raise TypeError("structured model output must be a JSON object")
+    return decoded
 
 
 def _canonical_json(value: Any) -> str:

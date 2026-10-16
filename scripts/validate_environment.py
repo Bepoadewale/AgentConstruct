@@ -13,8 +13,18 @@ def main() -> int:
     errors: list[str] = []
     if hosted and database_url.startswith("sqlite"):
         errors.append("hosted mode requires PostgreSQL, not SQLite")
-    if hosted and not os.getenv("AGENTCONSTRUCT_JWKS_URL"):
-        errors.append("hosted mode requires AGENTCONSTRUCT_JWKS_URL")
+    for name in (
+        "AGENTCONSTRUCT_JWKS_URL",
+        "AGENTCONSTRUCT_OIDC_ISSUER",
+        "AGENTCONSTRUCT_OIDC_AUDIENCE",
+        "AGENTCONSTRUCT_OPA_URL",
+    ):
+        if hosted and not os.getenv(name):
+            errors.append(f"hosted mode requires {name}")
+    for name in ("AGENTCONSTRUCT_JWKS_URL", "AGENTCONSTRUCT_OIDC_ISSUER", "AGENTCONSTRUCT_OPA_URL"):
+        value = os.getenv(name, "")
+        if hosted and value and not value.startswith("https://"):
+            errors.append(f"hosted mode requires an HTTPS {name}")
     if hosted and os.getenv("AGENTCONSTRUCT_LOCAL_SIGNING_KEY"):
         errors.append("hosted mode must not use AGENTCONSTRUCT_LOCAL_SIGNING_KEY")
     errors.extend(ProviderConfiguration.from_environment().validation_errors(hosted=hosted))

@@ -6,7 +6,7 @@
 
 | Capability | Evidence |
 | --- | --- |
-| Intent to typed specification | Provider interface, deterministic fixture, optional Nova 2 Lite/Bedrock adapter, local schema validation, bounded repair, provenance, usage metadata and material follow-up questions |
+| Intent to typed specification | Provider interface, deterministic fixture, optional Nova 2 Lite/Bedrock adapter, local schema validation, bounded repair, provenance, usage metadata and material follow-up questions. A capped two-case live synthetic Nova evaluation passed in the pilot account; customer activation remains gated on the broader benchmark, pricing catalog and tenant rollout controls. |
 | Architecture and cost proposal | Constrained AWS V1 candidate planner: hard-constraint rejection, fixture inventory reuse, component cost ranges, complexity scores, rejected alternatives and upgrade triggers |
 | Governance | Live OPA policy, immutable SHA-256 plan hash, independent approval and audit |
 | Durable state | PostgreSQL in Compose; SQLite only in fast unit tests |
@@ -42,7 +42,7 @@
 
 ## Simulated
 
-- Natural-language understanding uses deterministic parsing by default. A governed Nova 2 Lite adapter is implemented but remains disabled until Bedrock access, pricing, evaluation and tenant rollout gates are configured.
+- Natural-language understanding uses deterministic parsing by default. A governed Nova 2 Lite adapter is implemented and its basic live transport/response shape was verified with two synthetic cases, but it remains disabled for customers until current pricing, broader evaluation and tenant rollout gates are configured.
 - The default planner inventory and pricing remain local fixtures. The separately recorded customer discovery snapshot is live, read-only evidence; it does not grant deployment permission.
 - Customer-plan dry-run deployment, destroy and Day-2 change application are bounded local fixtures, not AWS, Terraform, Docker or Kubernetes execution.
 - Deployment outputs/resource inventory are currently populated from the bounded fixture observer. Real AWS App Runner outputs were proven in PR #42 scripts/evidence, but they are not yet ingested through the product UI execution path.
