@@ -20,7 +20,6 @@ locals {
   secret_prefix       = trim(var.connection_secret_prefix, "/")
   database_secret_arn = var.enable_durable_database ? aws_db_instance.control_plane[0].master_user_secret[0].secret_arn : ""
   runtime_env_common = {
-    AGENTCONSTRUCT_WEB_ROOT                    = "/app/apps/web"
     AGENTCONSTRUCT_POLICY_FIXTURE              = "false"
     AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED  = "true"
     AGENTCONSTRUCT_AWS_VERIFY_INLINE           = "true"
@@ -51,10 +50,11 @@ locals {
     AGENTCONSTRUCT_MODEL_PROVIDER = "fixture"
   }
   runtime_env_identity = var.enable_service ? {
-    AGENTCONSTRUCT_JWKS_URL      = var.oidc_jwks_url
-    AGENTCONSTRUCT_OIDC_ISSUER   = var.oidc_issuer
-    AGENTCONSTRUCT_OIDC_AUDIENCE = var.oidc_audience
-    AGENTCONSTRUCT_OPA_URL       = var.policy_url
+    AGENTCONSTRUCT_JWKS_URL                 = var.oidc_jwks_url
+    AGENTCONSTRUCT_OIDC_ISSUER              = var.oidc_issuer
+    AGENTCONSTRUCT_OIDC_AUDIENCE            = var.oidc_audience
+    AGENTCONSTRUCT_OPA_URL                  = var.policy_url
+    AGENTCONSTRUCT_ALLOWED_FRONTEND_ORIGINS = var.frontend_origin
   } : {}
   runtime_env_local_signing = var.enable_durable_database ? {} : {
     AGENTCONSTRUCT_LOCAL_SIGNING_KEY_SECRET_ARN = aws_secretsmanager_secret.runtime_signing_key[0].arn
@@ -84,6 +84,13 @@ resource "terraform_data" "runtime_guard" {
         can(regex("^https://", var.policy_url))
       )
       error_message = "Hosted service activation requires HTTPS JWKS, issuer and policy URLs plus an exact OIDC audience."
+    }
+    precondition {
+      condition = !var.enable_service || (
+        can(regex("^https://[^/]+$", var.frontend_origin)) &&
+        !strcontains(var.frontend_origin, "*")
+      )
+      error_message = "Hosted service activation requires one exact HTTPS frontend origin without a path or wildcard."
     }
     precondition {
       condition     = !var.enable_service || var.image_identifier != "placeholder.invalid/agentconstruct:unset"

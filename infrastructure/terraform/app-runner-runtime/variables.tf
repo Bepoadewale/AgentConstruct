@@ -27,6 +27,12 @@ variable "oidc_audience" {
   default     = ""
 }
 
+variable "frontend_origin" {
+  type        = string
+  description = "Exact HTTPS origin of the separately hosted static frontend. Required before the hosted service can be enabled."
+  default     = ""
+}
+
 variable "policy_url" {
   type        = string
   description = "HTTPS endpoint for the independent production OPA decision service. Required before the hosted service can be enabled."

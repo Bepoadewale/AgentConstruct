@@ -70,7 +70,7 @@ jobs:
         with: { python-version: '3.12' }
       - run: make bootstrap-local
       - run: >-
-          make smoke && make browser-contract && make demo-simple && make demo-complex
+          make smoke && make api-contract && make demo-simple && make demo-complex
           && make demo-degraded && make demo-day2 && make demo && make demo-failure
           && make demo-readiness-failure && make customer-plan-e2e
           && make seed-demo-data

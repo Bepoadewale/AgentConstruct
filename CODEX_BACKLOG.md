@@ -23,7 +23,7 @@
 - [x] Add stale-plan/replay/idempotency/restart-recovery, prompt-injection and readiness-failure coverage.
 - [x] Complete visible UI constraints, environment health, governed destroy and audit views.
 - [x] Add durable worker jobs, local OTel/Tempo business spans and outcome metrics.
-- [x] Add Compose-backed API/UI contract CI and repeat clean project-runtime bootstrap, success, failure, trace and cleanup evidence twice.
+- [x] Add independent frontend static CI plus Compose-backed API contract CI and repeat clean project-runtime bootstrap, success, failure, trace and cleanup evidence twice.
 
 ### PR 2 — Cloud-pilot architecture and safe runtime contracts
 
@@ -39,7 +39,8 @@
 
 - [x] Rename product internally to AgentConstruct.
 - [x] Build typed intent, architecture, cost, policy, plan, approval, audit and bounded execution paths.
-- [x] Build the local UI and Docker Compose stack.
+- [x] Build the product UI, then extract it into the private static React
+  `agentconstruct-frontend` repository with a versioned API boundary.
 - [x] Record two local validation cycles; repeat fully cold bootstrap in PR 1.
 - [x] Expose the governed product API through a thin CLI and a stdio MCP server without granting agents approval, cloud, shell, Terraform, Kubernetes or secret authority.
 - [x] Demonstrate a bounded Day-2 loop: evidence, recommendation, exact change plan, independent approval, observed local change and audit.
