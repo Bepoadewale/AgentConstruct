@@ -2,7 +2,7 @@
 
 - PR: #81
 - Branch: `feat/platform-runtime-readiness`
-- Status: in progress
+- Status: complete
 
 ## Problem / goal
 
@@ -23,6 +23,16 @@ and must not create an AWS Organizations member account.
   Google Workspace identity has not been configured yet.
 - Account `654654474502` currently has no AgentConstruct App Runner service or
   RDS instance.
+
+## Research / references used
+
+- AWS App Runner CloudWatch service metrics and dimensions.
+- Amazon RDS metrics, backup, snapshot and restore documentation.
+- AWS Budgets actual and forecast notification contracts.
+- Amazon Nova 2 Lite model card, Converse API and geographic inference profile
+  guidance.
+- Existing AgentConstruct hosted-persistence, identity, policy, model-gateway,
+  same-account placement and clean-room validation contracts.
 
 ## Work planned for the PR
 
@@ -49,18 +59,33 @@ and must not create an AWS Organizations member account.
 
 ## Acceptance status
 
-- [ ] Account and placement guards are enforced.
-- [ ] Hosted identity is a hard service activation gate.
-- [ ] Nova live evaluation is bounded and evidenced.
-- [ ] Budget and actionable alarms are implemented.
-- [ ] Database recovery safeguards are implemented.
-- [ ] Operations and release gates are documented and tested.
-- [ ] Two clean-room cycles and CI pass.
+- [x] Account and placement guards are enforced.
+- [x] Hosted identity is a hard service activation gate.
+- [x] Nova live evaluation is bounded and evidenced.
+- [x] Budget and actionable alarms are implemented.
+- [x] Database recovery safeguards are implemented.
+- [x] Operations and release gates are documented and tested.
+- [x] Two clean-room cycles pass; required PR CI is pending remote execution.
+
+## Tests / validation performed
+
+- Ruff passed.
+- Pytest passed 196 tests with one upstream Starlette/httpx deprecation warning.
+- Documentation conventions and shell syntax checks passed.
+- Every Terraform root formatted and validated.
+- Authenticated foundation plan: 20 add, 0 change, 0 destroy, with no NAT,
+  Internet gateway, App Runner service or fixture signing key.
+- Service activation without immutable image, HTTPS identity and HTTPS policy
+  settings failed closed before apply.
+- Two-case live synthetic Nova evaluation passed with 700 combined billed
+  tokens and no retained content.
+- Two full clean-room cycles passed and ended clean. An intervening stopped
+  attempt was diagnosed and replaced by a complete clean retry.
 
 ## Evidence files produced
 
-Live platform and Nova evidence will be recorded under `docs/test/test81.md`.
-It will distinguish created AWS resources, API calls, plans and offline checks.
+- `docs/test/test81.md` records the authenticated plans, live bounded Nova
+  calls, local/static verification, clean-room cycles and zero-resource result.
 
 ## Boundaries
 

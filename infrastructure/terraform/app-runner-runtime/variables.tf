@@ -9,6 +9,30 @@ variable "enable_service" {
   default     = false
 }
 
+variable "oidc_jwks_url" {
+  type        = string
+  description = "Trusted production identity JWKS URL. Required before the hosted service can be enabled."
+  default     = ""
+}
+
+variable "oidc_issuer" {
+  type        = string
+  description = "Exact trusted OIDC issuer. Required before the hosted service can be enabled."
+  default     = ""
+}
+
+variable "oidc_audience" {
+  type        = string
+  description = "Exact AgentConstruct OIDC audience. Required before the hosted service can be enabled."
+  default     = ""
+}
+
+variable "policy_url" {
+  type        = string
+  description = "HTTPS endpoint for the independent production OPA decision service. Required before the hosted service can be enabled."
+  default     = ""
+}
+
 variable "enable_nova_model" {
   type        = bool
   description = "Enable governed Amazon Nova 2 Lite intent extraction and its least-privilege runtime permission."
@@ -83,6 +107,11 @@ variable "database_backup_retention_days" {
   type        = number
   description = "RDS automated backup retention in days."
   default     = 7
+
+  validation {
+    condition     = var.database_backup_retention_days >= 7 && var.database_backup_retention_days <= 35
+    error_message = "database_backup_retention_days must be between 7 and 35 days."
+  }
 }
 
 variable "database_deletion_protection" {
@@ -95,4 +124,32 @@ variable "runtime_vpc_cidr" {
   type        = string
   description = "CIDR block for the optional hosted runtime VPC."
   default     = "10.42.0.0/16"
+
+  validation {
+    condition     = var.runtime_vpc_cidr == "10.42.0.0/16"
+    error_message = "The controlled platform VPC CIDR must be 10.42.0.0/16."
+  }
+}
+
+variable "monthly_platform_budget_usd" {
+  type        = number
+  description = "Monthly AgentConstruct platform cost guardrail. Alerts do not automatically stop resources."
+  default     = 250
+
+  validation {
+    condition     = var.monthly_platform_budget_usd >= 25 && var.monthly_platform_budget_usd <= 5000
+    error_message = "monthly_platform_budget_usd must be between 25 and 5000."
+  }
+}
+
+variable "monitoring_notification_email" {
+  type        = string
+  description = "Operator email for platform budget and alarm notifications. Empty creates the controls without an email subscription."
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = var.monitoring_notification_email == "" || can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.monitoring_notification_email))
+    error_message = "monitoring_notification_email must be empty or a valid email address."
+  }
 }

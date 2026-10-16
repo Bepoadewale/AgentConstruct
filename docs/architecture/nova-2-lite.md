@@ -13,10 +13,11 @@ shell, or mutate a customer cloud. Pydantic validation, deterministic planning,
 policy, human approval, and the bounded runner remain independent.
 
 The current Nova 2 Lite Bedrock model card marks native structured outputs as
-unsupported. AgentConstruct therefore sends a JSON schema with the request,
-accepts only a plain JSON object, validates it locally, permits one bounded repair
-attempt, and fails closed if validation still fails. It does not claim provider-
-enforced schema compliance.
+unsupported. AgentConstruct therefore sends a JSON schema with the request and
+accepts only a plain JSON object or that object inside one exact `json` code
+fence. It rejects surrounding prose and non-object JSON, validates the decoded
+object locally, permits one bounded repair attempt, and fails closed if
+validation still fails. It does not claim provider-enforced schema compliance.
 
 ## Configuration
 
@@ -72,6 +73,12 @@ Before enabling Nova for a tenant:
 3. run the offline intent benchmark plus an authorized, capped live evaluation;
 4. review prompt-injection, unsupported-request, and schema-failure results;
 5. enable a small tenant allowlist before a wider rollout.
+
+PR #81 completed a capped live integration evaluation in the pilot account:
+two fixed synthetic cases passed with 700 combined billed tokens and no retained
+prompt or response content. This satisfies the basic transport and response-
+shape check only. The broader benchmark, current pricing catalog and tenant
+allowlist gates remain required before customer activation.
 
 References:
 

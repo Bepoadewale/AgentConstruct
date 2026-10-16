@@ -20,16 +20,15 @@ locals {
   secret_prefix       = trim(var.connection_secret_prefix, "/")
   database_secret_arn = var.enable_durable_database ? aws_db_instance.control_plane[0].master_user_secret[0].secret_arn : ""
   runtime_env_common = {
-    AGENTCONSTRUCT_WEB_ROOT                     = "/app/apps/web"
-    AGENTCONSTRUCT_POLICY_FIXTURE               = "true"
-    AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED   = "true"
-    AGENTCONSTRUCT_AWS_VERIFY_INLINE            = "true"
-    AGENTCONSTRUCT_CONNECTION_SECRET_BACKEND    = "aws_secrets_manager"
-    AGENTCONSTRUCT_CONNECTION_SECRET_PREFIX     = local.secret_prefix
-    AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL  = var.customer_template_url
-    AGENTCONSTRUCT_LOCAL_SIGNING_KEY_SECRET_ARN = aws_secretsmanager_secret.runtime_signing_key.arn
-    AWS_DEFAULT_REGION                          = var.region
-    AWS_REGION                                  = var.region
+    AGENTCONSTRUCT_WEB_ROOT                    = "/app/apps/web"
+    AGENTCONSTRUCT_POLICY_FIXTURE              = "false"
+    AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED  = "true"
+    AGENTCONSTRUCT_AWS_VERIFY_INLINE           = "true"
+    AGENTCONSTRUCT_CONNECTION_SECRET_BACKEND   = "aws_secrets_manager"
+    AGENTCONSTRUCT_CONNECTION_SECRET_PREFIX    = local.secret_prefix
+    AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL = var.customer_template_url
+    AWS_DEFAULT_REGION                         = var.region
+    AWS_REGION                                 = var.region
   }
   runtime_env_database = var.enable_durable_database ? {
     AGENTCONSTRUCT_HOSTED_MODE         = "true"
@@ -51,16 +50,56 @@ locals {
     } : {
     AGENTCONSTRUCT_MODEL_PROVIDER = "fixture"
   }
-  runtime_env = merge(local.runtime_env_common, local.runtime_env_database, local.runtime_env_model)
-  azs         = slice(data.aws_availability_zones.available.names, 0, 2)
+  runtime_env_identity = var.enable_service ? {
+    AGENTCONSTRUCT_JWKS_URL      = var.oidc_jwks_url
+    AGENTCONSTRUCT_OIDC_ISSUER   = var.oidc_issuer
+    AGENTCONSTRUCT_OIDC_AUDIENCE = var.oidc_audience
+    AGENTCONSTRUCT_OPA_URL       = var.policy_url
+  } : {}
+  runtime_env_local_signing = var.enable_durable_database ? {} : {
+    AGENTCONSTRUCT_LOCAL_SIGNING_KEY_SECRET_ARN = aws_secretsmanager_secret.runtime_signing_key[0].arn
+  }
+  runtime_env = merge(
+    local.runtime_env_common,
+    local.runtime_env_database,
+    local.runtime_env_model,
+    local.runtime_env_identity,
+    local.runtime_env_local_signing,
+  )
+  azs                     = slice(data.aws_availability_zones.available.names, 0, 2)
+  service_network_enabled = var.enable_durable_database && var.enable_service
+}
+
+resource "terraform_data" "runtime_guard" {
+  lifecycle {
+    precondition {
+      condition     = !var.enable_service || var.enable_durable_database
+      error_message = "Hosted App Runner service activation requires the durable PostgreSQL database."
+    }
+    precondition {
+      condition = !var.enable_service || (
+        can(regex("^https://", var.oidc_jwks_url)) &&
+        can(regex("^https://", var.oidc_issuer)) &&
+        length(trimspace(var.oidc_audience)) > 0 &&
+        can(regex("^https://", var.policy_url))
+      )
+      error_message = "Hosted service activation requires HTTPS JWKS, issuer and policy URLs plus an exact OIDC audience."
+    }
+    precondition {
+      condition     = !var.enable_service || var.image_identifier != "placeholder.invalid/agentconstruct:unset"
+      error_message = "Hosted service activation requires an immutable ECR image identifier."
+    }
+  }
 }
 
 resource "random_password" "runtime_signing_key" {
+  count   = var.enable_durable_database ? 0 : 1
   length  = 48
   special = false
 }
 
 resource "aws_secretsmanager_secret" "runtime_signing_key" {
+  count                   = var.enable_durable_database ? 0 : 1
   name                    = "agentconstruct/runtime/local-signing-key"
   description             = "Temporary fixture signing key for the hosted AgentConstruct verification runtime."
   recovery_window_in_days = 0
@@ -68,8 +107,9 @@ resource "aws_secretsmanager_secret" "runtime_signing_key" {
 }
 
 resource "aws_secretsmanager_secret_version" "runtime_signing_key" {
-  secret_id     = aws_secretsmanager_secret.runtime_signing_key.id
-  secret_string = random_password.runtime_signing_key.result
+  count         = var.enable_durable_database ? 0 : 1
+  secret_id     = aws_secretsmanager_secret.runtime_signing_key[0].id
+  secret_string = random_password.runtime_signing_key[0].result
 }
 
 resource "aws_ecr_repository" "runtime" {
@@ -154,11 +194,14 @@ data "aws_iam_policy_document" "runtime_permissions" {
     ]
   }
 
-  statement {
-    sid       = "ReadRuntimeFixtureSigningKey"
-    effect    = "Allow"
-    actions   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.runtime_signing_key.arn]
+  dynamic "statement" {
+    for_each = var.enable_durable_database ? [] : [aws_secretsmanager_secret.runtime_signing_key[0].arn]
+    content {
+      sid       = "ReadRuntimeFixtureSigningKey"
+      effect    = "Allow"
+      actions   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
+      resources = [statement.value]
+    }
   }
 
   dynamic "statement" {
@@ -209,6 +252,56 @@ resource "aws_cloudwatch_log_group" "runtime" {
   tags              = local.tags
 }
 
+resource "aws_sns_topic" "platform_alerts" {
+  name              = "agentconstruct-platform-alerts"
+  kms_master_key_id = "alias/aws/sns"
+  tags              = local.tags
+}
+
+resource "aws_sns_topic_subscription" "platform_alert_email" {
+  count     = var.monitoring_notification_email == "" ? 0 : 1
+  topic_arn = aws_sns_topic.platform_alerts.arn
+  protocol  = "email"
+  endpoint  = var.monitoring_notification_email
+}
+
+resource "aws_budgets_budget" "platform" {
+  name         = "agentconstruct-platform-monthly"
+  budget_type  = "COST"
+  limit_amount = tostring(var.monthly_platform_budget_usd)
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  cost_filter {
+    name   = "TagKeyValue"
+    values = ["user:Project$agentconstruct"]
+  }
+
+  dynamic "notification" {
+    for_each = var.monitoring_notification_email == "" ? [] : [50, 80, 100]
+    content {
+      comparison_operator        = "GREATER_THAN"
+      threshold                  = notification.value
+      threshold_type             = "PERCENTAGE"
+      notification_type          = "ACTUAL"
+      subscriber_email_addresses = [var.monitoring_notification_email]
+    }
+  }
+
+  dynamic "notification" {
+    for_each = var.monitoring_notification_email == "" ? [] : [100]
+    content {
+      comparison_operator        = "GREATER_THAN"
+      threshold                  = notification.value
+      threshold_type             = "PERCENTAGE"
+      notification_type          = "FORECASTED"
+      subscriber_email_addresses = [var.monitoring_notification_email]
+    }
+  }
+
+  tags = local.tags
+}
+
 resource "aws_vpc" "runtime" {
   count                = var.enable_durable_database ? 1 : 0
   cidr_block           = var.runtime_vpc_cidr
@@ -218,13 +311,13 @@ resource "aws_vpc" "runtime" {
 }
 
 resource "aws_internet_gateway" "runtime" {
-  count  = var.enable_durable_database ? 1 : 0
+  count  = local.service_network_enabled ? 1 : 0
   vpc_id = aws_vpc.runtime[0].id
   tags   = merge(local.tags, { Name = "${local.name}-igw" })
 }
 
 resource "aws_subnet" "public" {
-  count                   = var.enable_durable_database ? 2 : 0
+  count                   = local.service_network_enabled ? 2 : 0
   vpc_id                  = aws_vpc.runtime[0].id
   cidr_block              = cidrsubnet(var.runtime_vpc_cidr, 8, count.index)
   availability_zone       = local.azs[count.index]
@@ -241,13 +334,13 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_eip" "nat" {
-  count  = var.enable_durable_database ? 1 : 0
+  count  = local.service_network_enabled ? 1 : 0
   domain = "vpc"
   tags   = merge(local.tags, { Name = "${local.name}-nat" })
 }
 
 resource "aws_nat_gateway" "runtime" {
-  count         = var.enable_durable_database ? 1 : 0
+  count         = local.service_network_enabled ? 1 : 0
   allocation_id = aws_eip.nat[0].id
   subnet_id     = aws_subnet.public[0].id
   tags          = merge(local.tags, { Name = "${local.name}-nat" })
@@ -255,7 +348,7 @@ resource "aws_nat_gateway" "runtime" {
 }
 
 resource "aws_route_table" "public" {
-  count  = var.enable_durable_database ? 1 : 0
+  count  = local.service_network_enabled ? 1 : 0
   vpc_id = aws_vpc.runtime[0].id
   route {
     cidr_block = "0.0.0.0/0"
@@ -265,13 +358,13 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table_association" "public" {
-  count          = var.enable_durable_database ? 2 : 0
+  count          = local.service_network_enabled ? 2 : 0
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public[0].id
 }
 
 resource "aws_route_table" "private" {
-  count  = var.enable_durable_database ? 1 : 0
+  count  = local.service_network_enabled ? 1 : 0
   vpc_id = aws_vpc.runtime[0].id
   route {
     cidr_block     = "0.0.0.0/0"
@@ -281,7 +374,7 @@ resource "aws_route_table" "private" {
 }
 
 resource "aws_route_table_association" "private" {
-  count          = var.enable_durable_database ? 2 : 0
+  count          = local.service_network_enabled ? 2 : 0
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[0].id
 }
@@ -339,20 +432,87 @@ resource "aws_db_instance" "control_plane" {
   manage_master_user_password = true
   publicly_accessible         = false
   skip_final_snapshot         = false
+  final_snapshot_identifier   = "${local.name}-postgres-final"
   deletion_protection         = var.database_deletion_protection
   db_subnet_group_name        = aws_db_subnet_group.control_plane[0].name
   vpc_security_group_ids      = [aws_security_group.database[0].id]
   storage_encrypted           = true
+  storage_type                = "gp3"
   backup_retention_period     = var.database_backup_retention_days
+  backup_window               = "03:00-04:00"
+  maintenance_window          = "sun:04:30-sun:05:30"
+  auto_minor_version_upgrade  = true
+  copy_tags_to_snapshot       = true
+  delete_automated_backups    = false
   tags                        = local.tags
 }
 
 resource "aws_apprunner_vpc_connector" "runtime" {
-  count              = var.enable_durable_database ? 1 : 0
+  count              = local.service_network_enabled ? 1 : 0
   vpc_connector_name = "${local.name}-database"
   subnets            = aws_subnet.private[*].id
   security_groups    = [aws_security_group.runtime[0].id]
   tags               = local.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "database_cpu_high" {
+  count               = var.enable_durable_database ? 1 : 0
+  alarm_name          = "agentconstruct-platform-rds-cpu-high"
+  alarm_description   = "AgentConstruct platform PostgreSQL CPU exceeded 80 percent for 15 minutes."
+  namespace           = "AWS/RDS"
+  metric_name         = "CPUUtilization"
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 3
+  threshold           = 80
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.platform_alerts.arn]
+  ok_actions          = [aws_sns_topic.platform_alerts.arn]
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.control_plane[0].identifier
+  }
+  tags = local.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "database_storage_low" {
+  count               = var.enable_durable_database ? 1 : 0
+  alarm_name          = "agentconstruct-platform-rds-storage-low"
+  alarm_description   = "AgentConstruct platform PostgreSQL has less than 2 GiB free storage."
+  namespace           = "AWS/RDS"
+  metric_name         = "FreeStorageSpace"
+  statistic           = "Minimum"
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = 2147483648
+  comparison_operator = "LessThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.platform_alerts.arn]
+  ok_actions          = [aws_sns_topic.platform_alerts.arn]
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.control_plane[0].identifier
+  }
+  tags = local.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "database_connections_high" {
+  count               = var.enable_durable_database ? 1 : 0
+  alarm_name          = "agentconstruct-platform-rds-connections-high"
+  alarm_description   = "AgentConstruct platform PostgreSQL connection count exceeded the pilot threshold."
+  namespace           = "AWS/RDS"
+  metric_name         = "DatabaseConnections"
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = 60
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.platform_alerts.arn]
+  ok_actions          = [aws_sns_topic.platform_alerts.arn]
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.control_plane[0].identifier
+  }
+  tags = local.tags
 }
 
 resource "aws_apprunner_service" "runtime" {
@@ -387,7 +547,7 @@ resource "aws_apprunner_service" "runtime" {
   }
 
   dynamic "network_configuration" {
-    for_each = var.enable_durable_database ? [1] : []
+    for_each = local.service_network_enabled ? [1] : []
     content {
       egress_configuration {
         egress_type       = "VPC"
@@ -411,5 +571,48 @@ resource "aws_apprunner_service" "runtime" {
     aws_iam_role_policy_attachment.apprunner_ecr_access,
     aws_secretsmanager_secret_version.runtime_signing_key,
     aws_db_instance.control_plane,
+    terraform_data.runtime_guard,
   ]
+}
+
+resource "aws_cloudwatch_metric_alarm" "service_5xx" {
+  count               = var.enable_service ? 1 : 0
+  alarm_name          = "agentconstruct-platform-apprunner-5xx"
+  alarm_description   = "AgentConstruct App Runner returned five or more 5xx responses in five minutes."
+  namespace           = "AWS/AppRunner"
+  metric_name         = "5xxStatusResponses"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 5
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.platform_alerts.arn]
+  ok_actions          = [aws_sns_topic.platform_alerts.arn]
+  dimensions = {
+    ServiceName = aws_apprunner_service.runtime[0].service_name
+    ServiceID   = aws_apprunner_service.runtime[0].service_id
+  }
+  tags = local.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "service_latency" {
+  count               = var.enable_service ? 1 : 0
+  alarm_name          = "agentconstruct-platform-apprunner-latency"
+  alarm_description   = "AgentConstruct App Runner p95 latency exceeded two seconds for ten minutes."
+  namespace           = "AWS/AppRunner"
+  metric_name         = "RequestLatency"
+  extended_statistic  = "p95"
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = 2000
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.platform_alerts.arn]
+  ok_actions          = [aws_sns_topic.platform_alerts.arn]
+  dimensions = {
+    ServiceName = aws_apprunner_service.runtime[0].service_name
+    ServiceID   = aws_apprunner_service.runtime[0].service_id
+  }
+  tags = local.tags
 }

@@ -13,6 +13,7 @@ from agentconstruct.model_gateway import (
     ModelCallPolicy,
     ModelGatewayUnavailable,
     NovaGatewayConfig,
+    decode_structured_json,
     guarded_complete,
     guarded_generate_structured,
     model_input_digest,
@@ -210,6 +211,15 @@ def test_nova_gateway_requests_json_schema_and_records_safe_usage():
     assert response.usage.estimated_cost_usd == 0.000018
     assert response.evidence[0].kind.value == "model_inference"
     assert response.safety_result == "bedrock-json-locally-schema-validated"
+
+
+def test_nova_gateway_accepts_only_plain_or_exact_fenced_json_objects():
+    assert decode_structured_json('{"ok":true}') == {"ok": True}
+    assert decode_structured_json('```json\n{"ok":true}\n```') == {"ok": True}
+    with pytest.raises(json.JSONDecodeError):
+        decode_structured_json('Here is the result:\n```json\n{"ok":true}\n```')
+    with pytest.raises(TypeError, match="JSON object"):
+        decode_structured_json('["not-an-object"]')
 
 
 def test_nova_gateway_rejects_digest_mismatch_and_incomplete_output():

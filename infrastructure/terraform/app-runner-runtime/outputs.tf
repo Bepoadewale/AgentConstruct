@@ -29,6 +29,40 @@ output "database_secret_arn" {
 }
 
 output "runtime_vpc_connector_arn" {
-  value       = var.enable_durable_database ? aws_apprunner_vpc_connector.runtime[0].arn : null
+  value       = var.enable_service && var.enable_durable_database ? aws_apprunner_vpc_connector.runtime[0].arn : null
   description = "App Runner VPC connector used to reach the private control-plane database."
+}
+
+output "platform_vpc_id" {
+  value       = var.enable_durable_database ? aws_vpc.runtime[0].id : null
+  description = "Dedicated same-account AgentConstruct platform VPC."
+}
+
+output "platform_private_subnet_ids" {
+  value       = var.enable_durable_database ? aws_subnet.private[*].id : []
+  description = "Private platform subnets containing RDS and, after activation, the App Runner connector."
+}
+
+output "platform_alert_topic_arn" {
+  value       = aws_sns_topic.platform_alerts.arn
+  description = "SNS topic used by actionable platform alarms. Email subscriptions require confirmation."
+}
+
+output "platform_budget_name" {
+  value       = aws_budgets_budget.platform.name
+  description = "Tag-scoped monthly platform budget guardrail."
+}
+
+output "database_alarm_names" {
+  value = var.enable_durable_database ? [
+    aws_cloudwatch_metric_alarm.database_cpu_high[0].alarm_name,
+    aws_cloudwatch_metric_alarm.database_storage_low[0].alarm_name,
+    aws_cloudwatch_metric_alarm.database_connections_high[0].alarm_name,
+  ] : []
+  description = "CloudWatch database alarms created for the durable platform."
+}
+
+output "service_activation_state" {
+  value       = var.enable_service ? "HOSTED_SERVICE_ENABLED" : "FOUNDATION_ONLY_IDENTITY_AND_POLICY_REQUIRED"
+  description = "Explicitly distinguishes a platform foundation from a customer-ready hosted service."
 }
