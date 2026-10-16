@@ -2,11 +2,19 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
 locals {
+  azs = slice(data.aws_availability_zones.available.names, 0, 2)
   tags = {
     Project                    = "agentconstruct"
     ManagedBy                  = "terraform"
-    Scope                      = "customer-workload-pilot"
+    Scope                      = var.deployment_scope
+    Placement                  = "customer-sandbox"
+    AccountBoundary            = "same-account-pilot"
+    Cell                       = "customer-sandbox-1"
     Purpose                    = "real-app-runner-create-validate-destroy"
     AgentConstructPlanDigest   = var.plan_digest
     AgentConstructSourceRepo   = "Bepoadewale/ai-platform-control-plane"
@@ -29,10 +37,49 @@ resource "terraform_data" "account_guard" {
     }
 
     precondition {
+      condition     = var.deployment_scope == "customer-sandbox" && var.customer_vpc_cidr != var.platform_vpc_cidr
+      error_message = "Customer resources require the customer-sandbox scope and a VPC CIDR distinct from the platform VPC."
+    }
+
+    precondition {
       condition     = !var.enable_service || var.image_identifier != "placeholder.invalid/agentconstruct-customer-workload:unset"
       error_message = "image_identifier must be set before enabling the App Runner service."
     }
   }
+}
+
+resource "aws_vpc" "customer_sandbox" {
+  cidr_block           = var.customer_vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = merge(local.tags, { Name = "agentconstruct-customer-sandbox-vpc" })
+
+  depends_on = [terraform_data.account_guard]
+}
+
+resource "aws_subnet" "customer_private" {
+  count             = 2
+  vpc_id            = aws_vpc.customer_sandbox.id
+  cidr_block        = cidrsubnet(var.customer_vpc_cidr, 8, count.index + 10)
+  availability_zone = local.azs[count.index]
+
+  tags = merge(local.tags, { Name = "agentconstruct-customer-sandbox-private-${count.index + 1}" })
+}
+
+resource "aws_security_group" "customer_runtime" {
+  name        = "agentconstruct-customer-sandbox-runtime"
+  description = "No-default-egress boundary for the customer sandbox App Runner workload."
+  vpc_id      = aws_vpc.customer_sandbox.id
+
+  tags = merge(local.tags, { Name = "agentconstruct-customer-sandbox-runtime" })
+}
+
+resource "aws_apprunner_vpc_connector" "customer_sandbox" {
+  vpc_connector_name = "agentconstruct-customer-sandbox"
+  subnets            = aws_subnet.customer_private[*].id
+  security_groups    = [aws_security_group.customer_runtime.id]
+  tags               = local.tags
 }
 
 resource "aws_ecr_repository" "customer_workload" {
@@ -63,7 +110,7 @@ data "aws_iam_policy_document" "apprunner_ecr_trust" {
 }
 
 resource "aws_iam_role" "apprunner_ecr_access" {
-  name                 = "agentconstruct-customer-apprunner-ecr"
+  name                 = "agentconstruct-customer-sandbox-apprunner-ecr"
   description          = "Allows App Runner to pull the AgentConstruct customer workload pilot image from ECR."
   assume_role_policy   = data.aws_iam_policy_document.apprunner_ecr_trust.json
   max_session_duration = 3600
@@ -89,7 +136,7 @@ data "aws_iam_policy_document" "runtime_trust" {
 }
 
 resource "aws_iam_role" "runtime" {
-  name                 = "agentconstruct-customer-apprunner-runtime"
+  name                 = "agentconstruct-customer-sandbox-apprunner-runtime"
   description          = "Minimal App Runner runtime role for the AgentConstruct customer workload pilot."
   assume_role_policy   = data.aws_iam_policy_document.runtime_trust.json
   max_session_duration = 3600
@@ -141,6 +188,13 @@ resource "aws_apprunner_service" "customer_workload" {
     instance_role_arn = aws_iam_role.runtime.arn
   }
 
+  network_configuration {
+    egress_configuration {
+      egress_type       = "VPC"
+      vpc_connector_arn = aws_apprunner_vpc_connector.customer_sandbox.arn
+    }
+  }
+
   health_check_configuration {
     protocol            = "HTTP"
     path                = "/healthz"
@@ -154,5 +208,6 @@ resource "aws_apprunner_service" "customer_workload" {
     terraform_data.account_guard,
     aws_cloudwatch_log_group.customer_workload,
     aws_iam_role_policy_attachment.apprunner_ecr_access,
+    aws_apprunner_vpc_connector.customer_sandbox,
   ]
 }

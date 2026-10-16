@@ -1,5 +1,13 @@
 # Terraform cloud-pilot contract
 
+The current owner-controlled pilot uses two explicit placements in the same AWS
+account. The platform runtime uses VPC `10.42.0.0/16` and state key
+`agentconstruct/platform/app-runner-runtime.tfstate`; the customer sandbox uses
+VPC `10.84.0.0/16` and state key
+`agentconstruct/customer-sandbox/workload-app-runner.tfstate`. This is not a
+cross-account isolation claim. See the
+[same-account pilot boundary](../../docs/architecture/same-account-pilot.md).
+
 **State: statically validated design. Nothing here has been applied to AWS.**
 
 `bootstrap/` describes a separate encrypted/versioned state bucket, DynamoDB lock and budget guardrail. `customer-connection/` describes customer-account IAM roles only: a discovery role and an empty future-execution role. `connection-template-host/` describes the separate, public-but-non-secret versioned template object that AWS CloudFormation needs for Quick Create. `pilot/` describes the private VPC, EKS, ECR, RDS, Secrets Manager and workload-identity foundation. Every resource uses project tags.

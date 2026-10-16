@@ -9,10 +9,13 @@ data "aws_availability_zones" "available" {
 locals {
   name = "agentconstruct-runtime"
   tags = {
-    Project   = "agentconstruct"
-    ManagedBy = "terraform"
-    Scope     = "control-plane-runtime"
-    Purpose   = "live-customer-aws-connection-verification"
+    Project         = "agentconstruct"
+    ManagedBy       = "terraform"
+    Scope           = "platform"
+    Placement       = "platform"
+    AccountBoundary = "same-account-pilot"
+    Cell            = "platform-1"
+    Purpose         = "agentconstruct-control-plane"
   }
   secret_prefix       = trim(var.connection_secret_prefix, "/")
   database_secret_arn = var.enable_durable_database ? aws_db_instance.control_plane[0].master_user_secret[0].secret_arn : ""
