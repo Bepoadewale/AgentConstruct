@@ -15,7 +15,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 - OPA policy, immutable plan hashes, independent production approval and durable audit.
 - Tenant-scoped GitHub repository and AWS BYOC connection metadata. No reusable cloud credentials are stored.
 - Durable local execution jobs processed by a separate bounded worker, with observed READY, FAILED and DESTROYED states.
-- Web UI with editable region, data, budget, environment, availability, workload, access and assumption controls; Prometheus metrics, OpenTelemetry business traces, Tempo and Grafana dashboard provisioning.
+- A separately versioned static React frontend in the private `agentconstruct-frontend` repository, consuming this API through a committed OpenAPI contract and exact-origin CORS; Prometheus metrics, OpenTelemetry business traces, Tempo and Grafana dashboard provisioning remain here.
 - One governed REST API shared by the browser, a thin CLI, and a stdio MCP server. Agent clients can analyse, plan, compare, estimate, inspect, request eligible execution, create desired-state PR publications, and create a destroy plan; they cannot self-approve, merge GitHub PRs, or receive cloud, shell, Terraform, Kubernetes, or secret access.
 - GitHub App repository discovery, repository intelligence, webhook workflow contract, and guarded desired-state PR publication. The selected `Bepoadewale/ai-platform-control-plane` repository was read through a short-lived installation token. The adapter can inspect safe repository metadata plus selected manifest files, persists credential-free runtime/framework/data/deployment hints, and can create a reviewed desired-state branch/PR only when `AGENTCONSTRUCT_GITHUB_APP_WRITES_ENABLED=true` is explicitly configured. Signed fixture webhooks now persist installation state and deduplicated deliveries; default local publication remains fixture-only.
 - Executed customer-AWS discovery connection: Terraform created an encrypted, versioned AgentConstruct state bucket, a DynamoDB lock table, GitHub OIDC control-plane identity, one read-only discovery role and one empty future-execution role. STS role chaining, real account inventory and Cost Explorer discovery were proved. No workload, network, database or compute resource was created.
@@ -60,7 +60,7 @@ The GitHub repository has been renamed from `ai-platform-product-strategy` to `A
 
 ## Clean-room reproducibility
 
-Status: the earlier V1 proof completed two clean local-runtime cycles plus one rebuilt-image confirmation. This hardening change records two additional clean-room cycles with the durable worker and browser contract. Cached Docker images are not treated as runtime state.
+Status: the earlier V1 proof completed two clean local-runtime cycles plus one rebuilt-image confirmation. The frontend separation is independently verified and this backend uses an API/CORS contract in place of the retired embedded-browser contract. Cached Docker images are not treated as runtime state.
 
 ## Cloud contract validation
 

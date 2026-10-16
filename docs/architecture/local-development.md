@@ -1,6 +1,11 @@
 # Local Development
 
-The local stack starts PostgreSQL, OPA, the AgentConstruct API/UI, a bounded fixture executor, Prometheus, OpenTelemetry Collector, Tempo and Grafana. The browser can create a tenant-scoped GitHub repository record and an AWS BYOC role-contract record. They contain metadata only; no real GitHub or AWS credentials are accepted.
+The local stack starts PostgreSQL, OPA, the AgentConstruct API, a bounded
+fixture executor, Prometheus, OpenTelemetry Collector, Tempo and Grafana. Run
+the private `agentconstruct-frontend` repository separately on port 5173; the
+Compose API allows that exact development origin. The browser can create a
+tenant-scoped GitHub repository record and an AWS BYOC role-contract record.
+They contain metadata only; no real GitHub or AWS credentials are accepted.
 
 The canonical demo request is: deploy a private AWS AI API with 20 average RPS, 100 peak RPS, staging and production, monitoring and a budget below $1,500. The UI shows the typed interpretation, architecture choice, assumptions, cost range and governance result.
 

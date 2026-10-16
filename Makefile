@@ -3,7 +3,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export PYTHONPATH := apps/api/src
 
-.PHONY: help install lint test bootstrap-local smoke local-load-smoke seed-demo-data demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check browser-contract frontend-contract frontend-responsive-contract frontend-accessibility-contract customer-plan-e2e customer-plan-persistence local-proof verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local validate-environment admin-diagnostics customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy customer-aws-template-host-plan customer-aws-template-host-apply customer-aws-template-host-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
+.PHONY: help install lint test bootstrap-local smoke local-load-smoke seed-demo-data demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check api-contract openapi-check openapi-update customer-plan-e2e customer-plan-persistence local-proof verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local validate-environment admin-diagnostics customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy customer-aws-template-host-plan customer-aws-template-host-apply customer-aws-template-host-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
 
 help:
 	@echo "AgentConstruct local commands"
@@ -12,7 +12,7 @@ help:
 	@echo "  make bootstrap-local         Build/start local API, worker, Postgres, OPA, Prometheus, Grafana, Tempo"
 	@echo "  make smoke                   Check local service readiness"
 	@echo "  make seed-demo-data          Seed realistic local developer/admin demo records"
-	@echo "  make local-proof             Bootstrap, then run smoke, UI contract, customer-plan E2E, seed data, trace check, verify"
+	@echo "  make local-proof             Bootstrap, then run API contract, customer-plan E2E, seed data, trace check, verify"
 	@echo "  make customer-plan-e2e       Prove developer submit, admin decision, self-approval, dry-run, destroy"
 	@echo "  make verify                  Run lint, tests, and Compose config validation"
 	@echo "  make validate-environment    Validate self-hosted configuration without cloud access"
@@ -71,17 +71,14 @@ trace-check:
 	curl -fsS 'http://127.0.0.1:3200/api/search?limit=1' | grep -q 'agentconstruct-api'
 	@echo "Tempo received AgentConstruct traces."
 
-browser-contract:
-	./scripts/browser-contract.sh
+api-contract:
+	./scripts/api-contract.sh
 
-frontend-contract:
-	./scripts/frontend-contract.sh
+openapi-check:
+	$(PY) scripts/export_openapi.py
 
-frontend-responsive-contract:
-	./scripts/frontend-responsive-contract.sh
-
-frontend-accessibility-contract:
-	./scripts/frontend-accessibility-contract.sh
+openapi-update:
+	$(PY) scripts/export_openapi.py --write
 
 customer-plan-e2e:
 	$(PY) scripts/customer_plan_e2e.py
@@ -89,7 +86,7 @@ customer-plan-e2e:
 customer-plan-persistence:
 	$(PY) scripts/customer_plan_e2e.py --verify-persistence
 
-local-proof: bootstrap-local smoke browser-contract customer-plan-e2e seed-demo-data trace-check verify
+local-proof: bootstrap-local smoke api-contract customer-plan-e2e seed-demo-data trace-check verify
 
 opa-test:
 	docker compose exec -T opa opa test /policies
@@ -150,6 +147,7 @@ pilot-cloud-destroy:
 verify:
 	$(MAKE) lint
 	$(MAKE) test
+	$(MAKE) openapi-check
 	docker compose config --quiet
 
 validate-environment:

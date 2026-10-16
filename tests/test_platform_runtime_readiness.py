@@ -18,6 +18,10 @@ def test_hosted_service_requires_durable_data_identity_policy_and_image():
     assert "AGENTCONSTRUCT_OPA_URL" in MAIN
     assert "Hosted service activation requires" in MAIN
     assert "production AGENTCONSTRUCT_JWKS_URL" in RUNTIME_SCRIPT
+    assert "AGENTCONSTRUCT_ALLOWED_FRONTEND_ORIGINS" in MAIN
+    assert 'can(regex("^https://[^/]+$", var.frontend_origin))' in MAIN
+    assert 'var=frontend_origin=${frontend_origin}' in RUNTIME_SCRIPT
+    assert "one exact HTTPS AGENTCONSTRUCT_ALLOWED_FRONTEND_ORIGINS" in RUNTIME_SCRIPT
 
 
 def test_platform_database_has_recovery_and_privacy_controls():

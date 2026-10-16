@@ -1,5 +1,10 @@
 # ADR-009: Keep the V1 frontend as plain JavaScript
 
+## Status
+
+Superseded by [ADR-012](ADR-012-separated-static-frontend.md). This file is
+retained as the historical V1 decision.
+
 ## Context
 
 The V1 UI is one small product workflow. Adding a TypeScript/React build would add a package manager, lockfile, build pipeline and dependency surface without improving the current evidence.

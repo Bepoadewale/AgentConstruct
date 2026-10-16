@@ -39,6 +39,7 @@ oidc_jwks_url="${AGENTCONSTRUCT_JWKS_URL:-}"
 oidc_issuer="${AGENTCONSTRUCT_OIDC_ISSUER:-}"
 oidc_audience="${AGENTCONSTRUCT_OIDC_AUDIENCE:-}"
 policy_url="${AGENTCONSTRUCT_OPA_URL:-}"
+frontend_origin="${AGENTCONSTRUCT_ALLOWED_FRONTEND_ORIGINS:-}"
 vars=(
   "-var=region=${AWS_REGION}"
   "-var=customer_template_url=${AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL}"
@@ -54,6 +55,7 @@ vars=(
   "-var=oidc_issuer=${oidc_issuer}"
   "-var=oidc_audience=${oidc_audience}"
   "-var=policy_url=${policy_url}"
+  "-var=frontend_origin=${frontend_origin}"
 )
 
 case "$operation" in
@@ -74,6 +76,7 @@ case "$operation" in
       echo "Set the production AGENTCONSTRUCT_JWKS_URL, AGENTCONSTRUCT_OIDC_ISSUER and AGENTCONSTRUCT_OIDC_AUDIENCE" >&2; exit 2;
     }
     [[ "${policy_url}" == https://* ]] || { echo "Set an HTTPS AGENTCONSTRUCT_OPA_URL for the independent policy service" >&2; exit 2; }
+    [[ "${frontend_origin}" == https://* && "${frontend_origin}" != *'*'* ]] || { echo "Set one exact HTTPS AGENTCONSTRUCT_ALLOWED_FRONTEND_ORIGINS value" >&2; exit 2; }
     [[ "${CONFIRM_RUNTIME_SERVICE_APPLY:-}" == "APPLY_AGENTCONSTRUCT_RUNTIME_SERVICE" ]] || {
       echo "Set CONFIRM_RUNTIME_SERVICE_APPLY=APPLY_AGENTCONSTRUCT_RUNTIME_SERVICE after reviewing the plan" >&2; exit 2;
     }

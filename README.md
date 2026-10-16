@@ -2,7 +2,7 @@
 
 AgentConstruct turns an AI workload request into a governed infrastructure plan. A developer describes the outcome, reviews one recommended AWS design, then submits its exact digest for workspace-administrator approval or rejection. Approval never means deployment.
 
-**Delivery state: executable local V1 foundation plus an AWS-hosted control-plane runtime for customer-AWS discovery.** The local workflow is real: FastAPI, PostgreSQL, OPA, a bounded execution fixture, Prometheus, Tempo and Grafana run in Docker Compose. Terraform created the customer discovery identity path and AgentConstruct recorded live inventory snapshots. The GitHub App read real repository metadata through a short-lived installation token and has a guarded reviewed-PR publisher for desired-state packages. The AgentConstruct API/UI is also deployed to AWS App Runner for read-only customer-account connection verification. A durable hosted PostgreSQL/RDS contract is implemented and statically validated but has not yet been applied. Approved customer-plan revisions can still run only a bounded local dry run and observed local destroy. No customer workload, VPC, database, compute service, GitOps sync, or Terraform apply for workload infrastructure has been executed by the product UI.
+**Delivery state: executable local V1 foundation plus an AWS-hosted control-plane runtime for customer-AWS discovery.** The local workflow is real: FastAPI, PostgreSQL, OPA, a bounded execution fixture, Prometheus, Tempo and Grafana run in Docker Compose. Terraform created the customer discovery identity path and AgentConstruct recorded live inventory snapshots. The GitHub App read real repository metadata through a short-lived installation token and has a guarded reviewed-PR publisher for desired-state packages. The AgentConstruct API is also deployed to AWS App Runner for read-only customer-account connection verification. The static React frontend now lives in the private [`agentconstruct-frontend`](https://github.com/Bepoadewale/agentconstruct-frontend) repository and is prepared for Cloudflare Pages Free; it has not been deployed there yet. A durable hosted PostgreSQL/RDS contract is implemented and statically validated but has not yet been applied. Approved customer-plan revisions can still run only a bounded local dry run and observed local destroy. No customer workload, VPC, database, compute service, GitOps sync, or Terraform apply for workload infrastructure has been executed by the product UI.
 
 ## What it does
 
@@ -39,13 +39,17 @@ make local-proof
 make clean-local
 ```
 
-`make local-proof` bootstraps the local stack, then runs service readiness, the browser contract, customer-plan E2E, demo-data seeding, Tempo trace verification and `make verify`. Individual setup and demo targets remain available for narrower checks: `make install`, `make bootstrap-local`, `make demo-simple`, `make demo-complex`, `make demo-day2`, `make demo-degraded`, `make demo-failure`, `make demo-readiness-failure`, `make customer-plan-persistence`.
+`make local-proof` bootstraps the local stack, then runs service readiness, the API/CORS contract, customer-plan E2E, demo-data seeding, Tempo trace verification and `make verify`. Individual setup and demo targets remain available for narrower checks: `make install`, `make bootstrap-local`, `make demo-simple`, `make demo-complex`, `make demo-day2`, `make demo-degraded`, `make demo-failure`, `make demo-readiness-failure`, `make customer-plan-persistence`.
 
-Open http://localhost:8080. Grafana is at http://localhost:3000 and Prometheus is at http://localhost:9090. The local login is a documented signed fixture, not production identity.
+The API is at http://localhost:8080, Grafana at http://localhost:3000 and
+Prometheus at http://localhost:9090. Run the frontend repository separately at
+http://localhost:5173. The local login is a documented signed fixture, not
+production identity.
 
 For customer AWS onboarding, see [Connect an AWS account](docs/customer-aws-connection.md). The UI includes an account picker, AWS account-ID setup, a Quick Create handoff, and a durable server-side verification job. It is safe by default: customers provide no access keys or administrator access. The AWS-hosted App Runner runtime uses a separate runtime IAM role and Secrets Manager-backed ExternalId storage; it never uses the GitHub Actions role as the control-plane runtime. The public CloudFormation template host and hosted read-only verification path have been applied and verified.
 
-The V1 browser is deliberately plain HTML/CSS/JavaScript; see [ADR-009](docs/decisions/ADR-009-plain-web-ui.md). It keeps the first product flow small and does not move privileged logic into the browser.
+The frontend/backend ownership and contract are documented in the
+[migration audit](docs/MIGRATION_AUDIT.md) and [ADR-012](docs/decisions/ADR-012-separated-static-frontend.md).
 
 ## What is real, simulated and next
 

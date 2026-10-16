@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import os
 from contextlib import asynccontextmanager
-from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_client import Counter, generate_latest
 from sqlalchemy.orm import Session
@@ -70,9 +70,59 @@ API_CONTRACT_VERSION = "v1"
 RATE_LIMIT = SlidingWindowRateLimiter(int(os.getenv("AGENTCONSTRUCT_RATE_LIMIT_PER_MINUTE", "0")))
 
 
+def parse_frontend_origins(value: str | None) -> list[str]:
+    """Return distinct, exact browser origins or fail closed."""
+    origins: list[str] = []
+    for candidate in (item.strip().rstrip("/") for item in (value or "").split(",")):
+        if not candidate:
+            continue
+        if candidate == "*":
+            raise RuntimeError("wildcard frontend origins are not permitted")
+        parsed = urlsplit(candidate)
+        localhost = parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username
+            or parsed.password
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+            or (parsed.scheme != "https" and not localhost)
+        ):
+            raise RuntimeError(f"invalid frontend origin: {candidate}")
+        if candidate not in origins:
+            origins.append(candidate)
+    return origins
+
+
+def configure_frontend_cors(application: FastAPI, origins: list[str]) -> None:
+    if not origins:
+        return
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
+        expose_headers=[
+            "X-AgentConstruct-API-Version",
+            "X-Request-ID",
+            "X-Correlation-ID",
+        ],
+        max_age=600,
+    )
+
+
+configure_frontend_cors(
+    app,
+    parse_frontend_origins(os.getenv("AGENTCONSTRUCT_ALLOWED_FRONTEND_ORIGINS")),
+)
+
+
 @app.middleware("http")
-async def prevent_stale_local_ui(request: Request, call_next):
-    """Keep the local demo from serving an older cached HTML/CSS/JS build."""
+async def apply_api_guardrails(request: Request, call_next):
+    """Apply bounded abuse protection, contract metadata and security headers."""
     client = request.client.host if request.client else "unknown"
     if RATE_LIMIT.limit and not request.url.path.startswith("/healthz") and not RATE_LIMIT.allow(client):
         return Response(status_code=429, content='{"detail":"rate limit exceeded"}', media_type="application/json", headers={"Retry-After": "60"})
@@ -80,8 +130,6 @@ async def prevent_stale_local_ui(request: Request, call_next):
     response.headers["X-AgentConstruct-API-Version"] = API_CONTRACT_VERSION
     for name, value in security_headers().items():
         response.headers[name] = value
-    if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"}:
-        response.headers["Cache-Control"] = "no-store, max-age=0"
     return response
 
 
@@ -97,6 +145,16 @@ def translate(error: Exception) -> None:
     if isinstance(error, ModelGatewayUnavailable):
         raise HTTPException(503, str(error)) from error
     raise error
+
+
+@app.get("/")
+def api_root():
+    return {
+        "product": "AgentConstruct",
+        "surface": "control-plane-api",
+        "api_version": API_CONTRACT_VERSION,
+        "openapi": "/openapi.json",
+    }
 
 
 @app.get("/healthz")
@@ -1124,7 +1182,3 @@ def audit_evidence(
 ):
     REQUESTS.labels("audit.evidence").inc()
     return service.audit_evidence(principal, entity_id)
-
-
-web_root = Path(os.getenv("AGENTCONSTRUCT_WEB_ROOT", str(Path(__file__).parents[3] / "web")))
-app.mount("/", StaticFiles(directory=web_root, html=True), name="web")
