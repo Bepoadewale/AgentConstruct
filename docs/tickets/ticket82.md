@@ -2,7 +2,7 @@
 
 - PR: #82
 - Branch: `feat/deploy-platform-foundation`
-- Status: in progress
+- Status: canceled after verified cleanup
 
 ## Problem / goal
 
@@ -57,22 +57,31 @@ member account or customer-sandbox workload.
 
 ## Acceptance status
 
-- [ ] Exact account, Region, scope and state guards pass.
-- [ ] Foundation apply completes from the merged reviewed contract.
-- [ ] Database, alarm, budget, VPC and Nova verification passes.
-- [ ] Snapshot and restore/delete drill passes.
-- [ ] App Runner, NAT and temporary restore resources are absent.
-- [ ] Evidence and recurring-cost boundary are documented.
-- [ ] Required local validation and CI pass.
+- [x] Exact account, Region, scope and state guards passed.
+- [ ] Foundation apply completes from the merged reviewed contract — canceled
+  by the owner before completion.
+- [ ] Database, alarm, budget, VPC and Nova verification passes — intentionally
+  not retained or claimed.
+- [ ] Snapshot and restore/delete drill passes — not run; the empty transient
+  database was deleted without a snapshot.
+- [x] App Runner, NAT, database, snapshot and platform resources are absent.
+- [x] Interrupted operation, cleanup and cost boundary are documented.
+- [ ] Required documentation CI is pending remote execution.
 
 ## Tests / validation performed
 
-Pending the guarded AWS operation and post-apply verification.
+- Authenticated plan confirmed 20 additions, zero changes and zero destroys.
+- Apply was interrupted at the owner's request and the surviving background
+  Terraform process was explicitly terminated.
+- Two state-backed destroy passes and an exact RDS delete removed all partially
+  created resources.
+- Absence verification returned Terraform state 0, tagged platform resources
+  0, budget 0, alarms 0, snapshots 0 and NAT gateways 0.
 
 ## Evidence files produced
 
-`docs/test/test82.md` will be the PR-numbered source of truth for the real AWS
-foundation operation and recovery drill.
+`docs/test/test82.md` is the PR-numbered source of truth for the interrupted AWS
+operation, exact cleanup and final absence checks.
 
 ## Boundaries
 
@@ -86,7 +95,6 @@ foundation operation and recovery drill.
 
 ## Follow-up work
 
-- Configure real identity and HTTPS policy endpoints before activating the
-  hosted service in a separate reviewed PR.
-- Exercise the separate customer-sandbox create/observe/destroy lifecycle in a
-  later PR without creating a member account.
+- Revisit a smaller platform architecture and lower cost guardrail only in a
+  new reviewed PR after explicit owner approval.
+- Do not retry this foundation deployment from this PR.
