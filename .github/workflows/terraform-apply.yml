@@ -90,6 +90,8 @@ jobs:
           test "$(jq -r '.commit' tfplan-manifest.json)" = "${{ steps.plan_run.outputs.sha }}" || { echo "Plan commit mismatch" >&2; exit 1; }
           test "$(jq -r '.run_id' tfplan-manifest.json)" = "${{ inputs.plan_run_id }}" || { echo "Plan run mismatch" >&2; exit 1; }
           test "$(jq -r '.run_attempt' tfplan-manifest.json)" = "${{ inputs.plan_run_attempt }}" || { echo "Plan run attempt mismatch" >&2; exit 1; }
+          test "$(jq -r '.manifest_version' tfplan-manifest.json)" = "2" || { echo "Unsupported saved-plan manifest" >&2; exit 1; }
+          test "$(jq -r '.deployment' tfplan-manifest.json)" = "production" || { echo "Saved plan is not for the production control plane" >&2; exit 1; }
           echo "$(jq -r '.sha256' tfplan-manifest.json)  tfplan" | sha256sum --check --strict
 
       - name: Initialize the recorded state and apply only the saved plan
@@ -97,10 +99,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          deployment_environment="$(jq -r '.environment' tfplan-manifest.json)"
           terraform init -input=false -reconfigure \
             -backend-config="bucket=${TF_STATE_BUCKET}" \
-            -backend-config="key=serverless-control-plane/${deployment_environment}.tfstate" \
+            -backend-config="key=serverless-control-plane/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
             -backend-config="dynamodb_table=${TF_STATE_LOCK_TABLE}" \
             -backend-config="encrypt=true"

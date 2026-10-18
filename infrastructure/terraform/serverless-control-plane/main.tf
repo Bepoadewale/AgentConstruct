@@ -1,8 +1,8 @@
 locals {
-  name = "agentconstruct-${var.environment}"
+  name = "agentconstruct"
   common_tags = {
     Product     = "AgentConstruct"
-    Environment = var.environment
+    Environment = "production"
     ManagedBy   = "Terraform"
   }
 }

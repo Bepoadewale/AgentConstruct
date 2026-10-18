@@ -51,9 +51,10 @@ def test_apply_role_is_limited_to_required_control_plane_services() -> None:
     assert 'values   = ["rds.amazonaws.com"]' in source
 
 
-def test_plan_workflow_uses_environment_specific_cognito_domain() -> None:
+def test_plan_workflow_uses_one_production_cognito_domain() -> None:
     workflow = (ROOT / ".github" / "workflows" / "terraform-plan.yml").read_text(
         encoding="utf-8"
     )
 
-    assert "format('{0}-{1}', vars.COGNITO_DOMAIN_PREFIX, inputs.environment)" in workflow
+    assert "TF_VAR_cognito_domain_prefix: ${{ vars.COGNITO_DOMAIN_PREFIX }}" in workflow
+    assert "inputs.environment" not in workflow

@@ -23,6 +23,31 @@ def test_serverless_plan_and_apply_are_manual_and_separate() -> None:
     assert "APPLY_SAVED_SERVERLESS_PLAN" in apply
 
 
+def test_serverless_workflows_use_one_production_state() -> None:
+    plan = workflow("terraform-plan.yml")
+    apply = workflow("terraform-apply.yml")
+
+    assert "options: [staging, production]" not in plan
+    assert "inputs.environment" not in plan
+    assert "TF_VAR_environment" not in plan
+    assert 'key=serverless-control-plane/terraform.tfstate' in plan
+    assert 'key=serverless-control-plane/terraform.tfstate' in apply
+    assert '--arg deployment "production"' in plan
+    assert "Unsupported saved-plan manifest" in apply
+    assert "Saved plan is not for the production control plane" in apply
+
+
+def test_serverless_terraform_uses_canonical_production_namespace() -> None:
+    root = ROOT / "infrastructure" / "terraform" / "serverless-control-plane"
+    variables = (root / "variables.tf").read_text(encoding="utf-8")
+    main = (root / "main.tf").read_text(encoding="utf-8")
+
+    assert 'variable "environment"' not in variables
+    assert 'name = "agentconstruct"' in main
+    assert 'Environment = "production"' in main
+    assert "var.environment" not in main
+
+
 def test_apply_verifies_exact_successful_saved_plan() -> None:
     apply = workflow("terraform-apply.yml")
 
@@ -32,6 +57,8 @@ def test_apply_verifies_exact_successful_saved_plan() -> None:
     assert '"success"' in apply
     assert '"main"' in apply
     assert "plan_run_attempt" in apply
+    assert "manifest_version" in apply
+    assert "production" in apply
     assert "sha256sum --check --strict" in apply
     assert "actions: read" in apply
     assert "environment: terraform-apply" in apply
