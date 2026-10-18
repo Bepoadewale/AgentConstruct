@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP = ROOT / "infrastructure" / "terraform" / "terraform-operations-bootstrap"
 
