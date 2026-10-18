@@ -1,14 +1,14 @@
 import pytest
-from agentconstruct.api_compat import compatibility_headers
-from agentconstruct.boundaries import FeatureFlag, TenantBoundaryError, TenantContext
-from agentconstruct.contracts import (
+from davdeploy.api_compat import compatibility_headers
+from davdeploy.boundaries import FeatureFlag, TenantBoundaryError, TenantContext
+from davdeploy.contracts import (
     ArchitecturePlanV1,
     Entitlement,
     EvidenceKind,
     EvidenceRef,
     UsageEvent,
 )
-from agentconstruct.production_readiness import (
+from davdeploy.production_readiness import (
     EntitlementEnforcer,
     LocalRecordStore,
     PersistentFeatureFlags,
@@ -78,6 +78,6 @@ def test_persistent_rollout_and_api_compatibility_are_auditable() -> None:
     assert flags.enabled("new-planner", context()) is True
     assert flags.enabled("new-planner", context("org-b")) is False
     assert flags.audit("new-planner")[0]["version"] == "v2"
-    assert compatibility_headers() == {"X-AgentConstruct-API-Version": "v1"}
+    assert compatibility_headers() == {"X-davdeploy-API-Version": "v1"}
     with pytest.raises(ValueError):
         compatibility_headers("v99")

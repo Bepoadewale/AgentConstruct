@@ -9,7 +9,7 @@ make validate-environment
 make admin-diagnostics
 ```
 
-For hosted mode, set a PostgreSQL URL and a trusted `AGENTCONSTRUCT_JWKS_URL`.
+For hosted mode, set a PostgreSQL URL and a trusted `DAVDEPLOY_JWKS_URL`.
 The validator rejects SQLite and the local fixture-signing key in hosted mode.
 
 ## Upgrade and rollback
@@ -32,5 +32,5 @@ The validator rejects SQLite and the local fixture-signing key in hosted mode.
 
 The API uses bearer tokens, not browser cookies; CSRF tokens are therefore not
 applicable. CSP, anti-framing, referrer and permissions headers are applied at
-the API boundary. Enable `AGENTCONSTRUCT_RATE_LIMIT_PER_MINUTE` at the local
+the API boundary. Enable `DAVDEPLOY_RATE_LIMIT_PER_MINUTE` at the local
 edge seam or replace it with a shared production limiter.

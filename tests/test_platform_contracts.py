@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 import pytest
-from agentconstruct.contracts import (
+from davdeploy.contracts import (
     CapabilityKind,
     CapabilityRequirement,
     ContractEnvelope,

@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from agentconstruct.contracts import ModelResponse, ModelUsage, TenantScope
-from agentconstruct.intent import NovaIntentProvider
-from agentconstruct.main import translate
-from agentconstruct.model_gateway import NOVA_2_LITE_MODEL_ID, ModelGatewayUnavailable
+from davdeploy.contracts import ModelResponse, ModelUsage, TenantScope
+from davdeploy.intent import NovaIntentProvider
+from davdeploy.main import translate
+from davdeploy.model_gateway import NOVA_2_LITE_MODEL_ID, ModelGatewayUnavailable
 from fastapi import HTTPException
 
 

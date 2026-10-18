@@ -2,7 +2,7 @@
 
 **Status: executed locally with deterministic fixtures.** This is not cloud telemetry or autonomous remediation evidence.
 
-AgentConstruct treats a running environment as something it must explain and improve safely, not merely create.
+davdeploy treats a running environment as something it must explain and improve safely, not merely create.
 
 ```text
 bounded telemetry evidence → diagnosis → recommendation → immutable change plan

@@ -4,29 +4,29 @@ import re
 from datetime import UTC, datetime
 
 import pytest
-from agentconstruct.contracts import TenantScope
-from agentconstruct.db import make_engine, run_migrations
-from agentconstruct.domain import (
+from davdeploy.contracts import TenantScope
+from davdeploy.db import make_engine, run_migrations
+from davdeploy.domain import (
     CloudInventorySnapshot,
     EnvironmentName,
     LifecycleState,
     PolicyResult,
     WorkloadSpec,
 )
-from agentconstruct.executor import ExecutionObservation
-from agentconstruct.intent import DeterministicIntentProvider
-from agentconstruct.models import Incident, Recommendation, RepositoryConnection, UsageRecord
-from agentconstruct.planner import AwsV1Planner
-from agentconstruct.policy import PolicyClient
-from agentconstruct.security import (
+from davdeploy.executor import ExecutionObservation
+from davdeploy.intent import DeterministicIntentProvider
+from davdeploy.models import Incident, Recommendation, RepositoryConnection, UsageRecord
+from davdeploy.planner import AwsV1Planner
+from davdeploy.policy import PolicyClient
+from davdeploy.security import (
     LOCAL_USERS,
     IdentityClaims,
     Principal,
     issue_local_token,
     verify_token,
 )
-from agentconstruct.service import ProductService
-from agentconstruct.state import require_transition
+from davdeploy.service import ProductService
+from davdeploy.state import require_transition
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
@@ -76,7 +76,7 @@ class LocalExecutor:
                         "external_id": f"arn:aws:apprunner:us-east-1:000000000000:service/test/{environment_id}",
                         "region": "us-east-1",
                         "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
-                        "tags": {"agentconstruct:environment-id": environment_id},
+                        "tags": {"davdeploy:environment-id": environment_id},
                     }
                 ],
             },
@@ -107,7 +107,7 @@ class LocalExecutor:
                         "external_id": f"arn:aws:apprunner:us-east-1:000000000000:service/test/{environment_id}",
                         "region": "us-east-1",
                         "status": "DESTROYED",
-                        "tags": {"agentconstruct:environment-id": environment_id},
+                        "tags": {"davdeploy:environment-id": environment_id},
                     }
                 ],
             },
@@ -369,7 +369,7 @@ def test_aws_quick_create_and_server_side_sts_verification_store_no_credentials(
     class VerifiedReadOnlyDiscovery:
         def verify(self, connection_id, role_arn, external_id, region):
             assert connection_id
-            assert role_arn.endswith(f"AgentConstructDiscovery-{connection_id}")
+            assert role_arn.endswith(f"davdeployDiscovery-{connection_id}")
             assert external_id
             return CloudInventorySnapshot(
                 region=region,
@@ -379,9 +379,9 @@ def test_aws_quick_create_and_server_side_sts_verification_store_no_credentials(
                 provenance="live-read-only-sts-discovery",
             )
 
-    monkeypatch.setenv("AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN", "arn:aws:iam::111122223333:role/agentconstruct-control-plane")
-    monkeypatch.setenv("AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL", "https://templates.example/customer.yaml")
-    monkeypatch.setenv("AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED", "true")
+    monkeypatch.setenv("DAVDEPLOY_CONTROL_PLANE_ROLE_ARN", "arn:aws:iam::111122223333:role/davdeploy-control-plane")
+    monkeypatch.setenv("DAVDEPLOY_AWS_CONNECTION_TEMPLATE_URL", "https://templates.example/customer.yaml")
+    monkeypatch.setenv("DAVDEPLOY_AWS_LIVE_DISCOVERY_ENABLED", "true")
     service, _ = make_service()
     connection = service.create_cloud_connection(founder(), "Customer AWS", "aws", "byoc_role_contract")
     setup = service.aws_quick_create_setup(founder(), connection.id, "123456789012")
@@ -398,9 +398,9 @@ def test_aws_quick_create_and_server_side_sts_verification_store_no_credentials(
 
 
 def test_aws_verification_is_durable_and_tenant_scoped(monkeypatch):
-    monkeypatch.setenv("AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN", "arn:aws:iam::111122223333:role/runtime")
-    monkeypatch.setenv("AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL", "https://templates.example/customer.yaml")
-    monkeypatch.setenv("AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED", "true")
+    monkeypatch.setenv("DAVDEPLOY_CONTROL_PLANE_ROLE_ARN", "arn:aws:iam::111122223333:role/runtime")
+    monkeypatch.setenv("DAVDEPLOY_AWS_CONNECTION_TEMPLATE_URL", "https://templates.example/customer.yaml")
+    monkeypatch.setenv("DAVDEPLOY_AWS_LIVE_DISCOVERY_ENABLED", "true")
     service, _ = make_service()
     connection = service.create_cloud_connection(founder(), "Customer AWS", "aws", "byoc_role_contract")
     service.aws_quick_create_setup(founder(), connection.id, "123456789012")
@@ -453,10 +453,10 @@ def test_cloud_connection_is_tenant_scoped_metadata_not_credentials():
 
 def test_aws_quick_create_setup_is_tenant_scoped_and_never_applies(monkeypatch):
     monkeypatch.setenv(
-        "AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN",
-        "arn:aws:iam::654654474502:role/agentconstruct-control-plane-github",
+        "DAVDEPLOY_CONTROL_PLANE_ROLE_ARN",
+        "arn:aws:iam::654654474502:role/davdeploy-control-plane-github",
     )
-    monkeypatch.setenv("AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL", "https://example.test/template.yaml")
+    monkeypatch.setenv("DAVDEPLOY_AWS_CONNECTION_TEMPLATE_URL", "https://example.test/template.yaml")
     service, _ = make_service()
     connection = service.create_cloud_connection(founder(), "Customer AWS", "aws", "byoc_role_contract")
     setup = service.aws_quick_create_setup(founder(), connection.id, "654654474502")
@@ -500,7 +500,7 @@ def test_repository_discovery_and_byoc_role_contract_are_fixture_only_and_tenant
     contract = service.cloud_role_contract(founder(), connection.id)
     assert repository["provider"] == "fixture"
     assert repository["execution"] == "SIMULATED"
-    assert contract["audience"] == "agentconstruct-byoc"
+    assert contract["audience"] == "davdeploy-byoc"
     assert "no AWS credentials" in contract["credential_boundary"]
     other_subject, other_org, other_role = LOCAL_USERS["other-tenant"]
     other = Principal(other_subject, other_org, other_role)
@@ -521,7 +521,7 @@ def test_approved_plan_can_only_shape_a_simulated_reviewed_desired_state_pull_re
     publication = service.desired_state_publication(founder(), project.id, plan.id)
     assert publication["execution"] == "SIMULATED"
     assert publication["pull_request_url"].startswith("fixture-pr://")
-    assert publication["required_checks"] == ("agentconstruct-plan", "agentconstruct-policy")
+    assert publication["required_checks"] == ("davdeploy-plan", "davdeploy-policy")
     assert any(event.action == "gitops.desired_state_contract_created" for event in service.audits(founder()))
 
 

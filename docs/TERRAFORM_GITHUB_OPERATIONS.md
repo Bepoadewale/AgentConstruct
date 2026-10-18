@@ -1,6 +1,6 @@
 # Manual Terraform plan and apply
 
-AgentConstruct uses two separate, manually dispatched GitHub Actions workflows for its single
+davdeploy uses two separate, manually dispatched GitHub Actions workflows for its single
 production serverless control plane. Merging Terraform code never provisions infrastructure.
 
 ## Safety sequence
@@ -73,7 +73,7 @@ contract and cannot be applied. Terraform apply has not been dispatched, so no s
 control-plane or customer workload resource has been created.
 
 The production workflow uses one remote state object at
-`serverless-control-plane/terraform.tfstate`, one canonical `agentconstruct` resource namespace,
+`serverless-control-plane/terraform.tfstate`, one canonical `davdeploy` resource namespace,
 and one Cognito domain. Future development or staging environments require a separately reviewed
 design change rather than an operator choice in the current workflow.
 

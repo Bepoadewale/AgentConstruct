@@ -14,7 +14,7 @@ Copy an entire public repository or start with an ungoverned LLM/Terraform agent
 
 ## Consequences
 
-AgentConstruct reuses patterns, not a fork. It remains coherent as a commercial product.
+davdeploy reuses patterns, not a fork. It remains coherent as a commercial product.
 
 ## Security and operations
 

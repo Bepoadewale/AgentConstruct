@@ -232,7 +232,7 @@ def record_plan_only_readiness(
                 "content_digest": approved["content_digest"],
                 "expected_account_id": None,
                 "allowed_regions": ["us-east-1"],
-                "required_tags": {"ManagedBy": "AgentConstruct"},
+                "required_tags": {"ManagedBy": "davdeploy"},
                 "budget_ceiling_usd": 1000,
                 "execution_mode": "PLAN_ONLY",
                 "require_reviewed_pr": True,

@@ -62,7 +62,7 @@ jobs:
         with: { scan-type: fs, ignore-unfixed: true, severity: CRITICAL,HIGH }
       - run: docker build -f apps/api/Dockerfile .
       - name: Build Lambda release package
-        run: bash scripts/build_lambda_packages.sh && unzip -t dist/lambda/agentconstruct-control-plane.zip
+        run: bash scripts/build_lambda_packages.sh && unzip -t dist/lambda/davdeploy-control-plane.zip
   local-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -80,6 +80,6 @@ jobs:
           && sleep 10 && make trace-check && make verify
       - run: >-
           printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-          | AGENTCONSTRUCT_TOKEN=fixture-token .venv/bin/agentconstruct-mcp
+          | DAVDEPLOY_TOKEN=fixture-token .venv/bin/davdeploy-mcp
       - if: always()
         run: make clean-local

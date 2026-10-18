@@ -1,0 +1,23 @@
+{
+  "uid": "davdeploy-local",
+  "title": "davdeploy Local Product",
+  "panels": [
+    {
+      "title": "Product API requests",
+      "type": "timeseries",
+      "targets": [{"expr": "sum by (route) (davdeploy_api_requests_total)", "refId": "A"}]
+    },
+    {
+      "title": "Plan policy outcomes",
+      "type": "timeseries",
+      "targets": [{"expr": "sum by (outcome) (davdeploy_plan_results_total)", "refId": "B"}]
+    },
+    {
+      "title": "Observed execution results",
+      "type": "timeseries",
+      "targets": [{"expr": "sum by (state) (davdeploy_execution_results_total)", "refId": "C"}]
+    }
+  ],
+  "schemaVersion": 41,
+  "version": 1
+}

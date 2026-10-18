@@ -1,7 +1,7 @@
 locals {
-  name = "agentconstruct"
+  name = "davdeploy"
   common_tags = {
-    Product     = "AgentConstruct"
+    Product     = "davdeploy"
     Environment = "production"
     ManagedBy   = "Terraform"
   }
@@ -47,7 +47,7 @@ resource "aws_rds_cluster" "control_plane" {
   engine_mode                     = "provisioned"
   engine_version                  = var.aurora_engine_version
   database_name                   = var.database_name
-  master_username                 = "agentconstruct_admin"
+  master_username                 = "davdeploy_admin"
   manage_master_user_password     = true
   enable_http_endpoint            = true
   db_subnet_group_name            = aws_db_subnet_group.control_plane.name
@@ -234,7 +234,7 @@ resource "aws_lambda_function" "policy" {
   function_name     = "${local.name}-policy"
   role              = aws_iam_role.policy.arn
   runtime           = "python3.12"
-  handler           = "agentconstruct.lambda_policy.handler"
+  handler           = "davdeploy.lambda_policy.handler"
   s3_bucket         = var.artifact_bucket
   s3_key            = var.artifact_key
   s3_object_version = var.artifact_object_version
@@ -247,7 +247,7 @@ resource "aws_lambda_function" "cognito_link" {
   function_name     = "${local.name}-cognito-link"
   role              = aws_iam_role.cognito_link.arn
   runtime           = "python3.12"
-  handler           = "agentconstruct.lambda_cognito_link.handler"
+  handler           = "davdeploy.lambda_cognito_link.handler"
   s3_bucket         = var.artifact_bucket
   s3_key            = var.artifact_key
   s3_object_version = var.artifact_object_version
@@ -266,18 +266,18 @@ resource "aws_lambda_permission" "cognito_link" {
 
 locals {
   runtime_environment = {
-    AGENTCONSTRUCT_HOSTED_MODE              = "true"
-    AGENTCONSTRUCT_AUTO_MIGRATE             = "false"
-    AGENTCONSTRUCT_AURORA_CLUSTER_ARN       = aws_rds_cluster.control_plane.arn
-    AGENTCONSTRUCT_DATABASE_SECRET_ARN      = aws_rds_cluster.control_plane.master_user_secret[0].secret_arn
-    AGENTCONSTRUCT_DATABASE_NAME            = var.database_name
-    AGENTCONSTRUCT_ALLOWED_FRONTEND_ORIGINS = var.frontend_origin
-    AGENTCONSTRUCT_JWKS_URL                 = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.identity.id}/.well-known/jwks.json"
-    AGENTCONSTRUCT_OIDC_ISSUER              = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.identity.id}"
-    AGENTCONSTRUCT_OIDC_AUDIENCE            = aws_cognito_user_pool_client.frontend.id
-    AGENTCONSTRUCT_POLICY_FUNCTION_ARN      = aws_lambda_function.policy.arn
-    AGENTCONSTRUCT_MODEL_PROVIDER           = "bedrock-nova"
-    AGENTCONSTRUCT_BEDROCK_MODEL_ID         = var.nova_model_id
+    DAVDEPLOY_HOSTED_MODE              = "true"
+    DAVDEPLOY_AUTO_MIGRATE             = "false"
+    DAVDEPLOY_AURORA_CLUSTER_ARN       = aws_rds_cluster.control_plane.arn
+    DAVDEPLOY_DATABASE_SECRET_ARN      = aws_rds_cluster.control_plane.master_user_secret[0].secret_arn
+    DAVDEPLOY_DATABASE_NAME            = var.database_name
+    DAVDEPLOY_ALLOWED_FRONTEND_ORIGINS = var.frontend_origin
+    DAVDEPLOY_JWKS_URL                 = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.identity.id}/.well-known/jwks.json"
+    DAVDEPLOY_OIDC_ISSUER              = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.identity.id}"
+    DAVDEPLOY_OIDC_AUDIENCE            = aws_cognito_user_pool_client.frontend.id
+    DAVDEPLOY_POLICY_FUNCTION_ARN      = aws_lambda_function.policy.arn
+    DAVDEPLOY_MODEL_PROVIDER           = "bedrock-nova"
+    DAVDEPLOY_BEDROCK_MODEL_ID         = var.nova_model_id
   }
 }
 
@@ -285,7 +285,7 @@ resource "aws_lambda_function" "api" {
   function_name     = "${local.name}-api"
   role              = aws_iam_role.api.arn
   runtime           = "python3.12"
-  handler           = "agentconstruct.lambda_api.handler"
+  handler           = "davdeploy.lambda_api.handler"
   s3_bucket         = var.artifact_bucket
   s3_key            = var.artifact_key
   s3_object_version = var.artifact_object_version
@@ -302,7 +302,7 @@ resource "aws_lambda_function" "migrate" {
   function_name     = "${local.name}-migrate"
   role              = aws_iam_role.api.arn
   runtime           = "python3.12"
-  handler           = "agentconstruct.lambda_migrate.handler"
+  handler           = "davdeploy.lambda_migrate.handler"
   s3_bucket         = var.artifact_bucket
   s3_key            = var.artifact_key
   s3_object_version = var.artifact_object_version
@@ -324,7 +324,7 @@ resource "aws_apigatewayv2_api" "control_plane" {
     allow_headers     = ["Authorization", "Content-Type", "Idempotency-Key"]
     allow_methods     = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     allow_origins     = [var.frontend_origin]
-    expose_headers    = ["X-AgentConstruct-API-Version", "X-Request-ID", "X-Correlation-ID"]
+    expose_headers    = ["X-davdeploy-API-Version", "X-Request-ID", "X-Correlation-ID"]
     max_age           = 600
   }
   tags = local.common_tags
@@ -420,7 +420,7 @@ resource "aws_lambda_function" "worker" {
   function_name     = "${local.name}-worker"
   role              = aws_iam_role.api.arn
   runtime           = "python3.12"
-  handler           = "agentconstruct.lambda_worker.handler"
+  handler           = "davdeploy.lambda_worker.handler"
   s3_bucket         = var.artifact_bucket
   s3_key            = var.artifact_key
   s3_object_version = var.artifact_object_version

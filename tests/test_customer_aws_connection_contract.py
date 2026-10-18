@@ -22,9 +22,9 @@ def test_customer_discovery_role_has_only_read_actions_and_execution_role_has_no
 def test_customer_connection_apply_and_destroy_require_explicit_confirmation():
     script = Path("scripts/customer-aws-connection.sh").read_text()
     assert "AWS account guard failed" in script
-    assert "APPLY_AGENTCONSTRUCT_CUSTOMER_CONNECTION" in script
-    assert "DESTROY_AGENTCONSTRUCT_CUSTOMER_CONNECTION" in script
-    assert "agentconstruct/customer-connections/${CUSTOMER_CONNECTION_ID}.tfstate" in script
+    assert "APPLY_DAVDEPLOY_CUSTOMER_CONNECTION" in script
+    assert "DESTROY_DAVDEPLOY_CUSTOMER_CONNECTION" in script
+    assert "davdeploy/customer-connections/${CUSTOMER_CONNECTION_ID}.tfstate" in script
 
 
 def test_quick_create_template_is_metadata_only_and_uses_external_id_trust():
@@ -44,10 +44,10 @@ def test_public_template_host_allows_only_versioned_template_reads_and_is_confir
     assert 'actions   = ["s3:GetObject"]' in configuration
     assert 'resources = ["${aws_s3_bucket.templates.arn}/cloudformation/*"]' in configuration
     assert "s3:ListBucket" not in configuration
-    assert "APPLY_AGENTCONSTRUCT_TEMPLATE_HOST" in script
-    assert "DESTROY_AGENTCONSTRUCT_TEMPLATE_HOST" in script
+    assert "APPLY_DAVDEPLOY_TEMPLATE_HOST" in script
+    assert "DESTROY_DAVDEPLOY_TEMPLATE_HOST" in script
 
 
 def test_control_plane_identity_can_assume_the_quick_create_role_name_pattern():
     configuration = Path("infrastructure/terraform/management-identity/main.tf").read_text()
-    assert "role/AgentConstructDiscovery-*" in configuration
+    assert "role/davdeployDiscovery-*" in configuration

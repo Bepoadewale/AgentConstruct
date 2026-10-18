@@ -21,7 +21,7 @@ flowchart LR
 
 ## Retain
 
-- Modular monolith and PostgreSQL model (`apps/api/src/agentconstruct`).
+- Modular monolith and PostgreSQL model (`apps/api/src/davdeploy`).
 - `WorkloadSpec`, `ArchitecturePlan`, candidate ranking, plan digests, policy, audit and tenant checks.
 - GitHub App read-only integration and AWS STS discovery boundary.
 - Local fixture worker, output/resource models, execution history, MCP and CLI surfaces.

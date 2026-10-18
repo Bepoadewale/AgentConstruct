@@ -1,7 +1,7 @@
 variable "region" { type = string }
 variable "github_repository" {
   type    = string
-  default = "Bepoadewale/AgentConstruct"
+  default = "Bepoadewale/davdeploy"
 }
 variable "bootstrap_operator_principal_arn" {
   type        = string

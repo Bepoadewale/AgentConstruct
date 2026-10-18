@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-base_url="${AGENTCONSTRUCT_API_BASE_URL:-http://127.0.0.1:8080}"
-allowed_origin="${AGENTCONSTRUCT_TEST_FRONTEND_ORIGIN:-http://localhost:5173}"
-headers_file="$(mktemp -t agentconstruct-api-headers.XXXXXX)"
+base_url="${DAVDEPLOY_API_BASE_URL:-http://127.0.0.1:8080}"
+allowed_origin="${DAVDEPLOY_TEST_FRONTEND_ORIGIN:-http://localhost:5173}"
+headers_file="$(mktemp -t davdeploy-api-headers.XXXXXX)"
 trap 'rm -f "$headers_file"' EXIT
 
 root="$(curl -fsS "$base_url/")"

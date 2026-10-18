@@ -1,8 +1,8 @@
 # Local Development
 
-The local stack starts PostgreSQL, OPA, the AgentConstruct API, a bounded
+The local stack starts PostgreSQL, OPA, the davdeploy API, a bounded
 fixture executor, Prometheus, OpenTelemetry Collector, Tempo and Grafana. Run
-the private `agentconstruct-frontend` repository separately on port 5173; the
+the private `davdeploy-frontend` repository separately on port 5173; the
 Compose API allows that exact development origin. The browser can create a
 tenant-scoped GitHub repository record and an AWS BYOC role-contract record.
 They contain metadata only; no real GitHub or AWS credentials are accepted.

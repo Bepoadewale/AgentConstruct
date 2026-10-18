@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from agentconstruct import security
+from davdeploy import security
 from fastapi import HTTPException
 
 
@@ -61,8 +61,8 @@ def test_external_identity_without_server_membership_is_denied(monkeypatch):
 
 
 def test_hosted_mode_requires_jwks_configuration(monkeypatch):
-    monkeypatch.setenv("AGENTCONSTRUCT_HOSTED_MODE", "true")
-    monkeypatch.delenv("AGENTCONSTRUCT_JWKS_URL", raising=False)
+    monkeypatch.setenv("DAVDEPLOY_HOSTED_MODE", "true")
+    monkeypatch.delenv("DAVDEPLOY_JWKS_URL", raising=False)
 
     with pytest.raises(HTTPException) as error:
         security.configured_verifier()

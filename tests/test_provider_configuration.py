@@ -1,4 +1,4 @@
-from agentconstruct.providers import ProviderConfiguration
+from davdeploy.providers import ProviderConfiguration
 
 
 def test_provider_defaults_are_local_and_safe():
@@ -9,4 +9,4 @@ def test_provider_defaults_are_local_and_safe():
 
 def test_google_workspace_requires_a_verified_domain_configuration():
     config = ProviderConfiguration("google_workspace", "gmail_api", "manual", "local", None)
-    assert config.validation_errors(hosted=True) == ["Google Workspace identity requires AGENTCONSTRUCT_GOOGLE_WORKSPACE_DOMAIN"]
+    assert config.validation_errors(hosted=True) == ["Google Workspace identity requires DAVDEPLOY_GOOGLE_WORKSPACE_DOMAIN"]

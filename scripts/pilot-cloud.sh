@@ -2,7 +2,7 @@
 set -euo pipefail
 
 operation="${1:-}"
-project="${PROJECT:-agentconstruct}"
+project="${PROJECT:-davdeploy}"
 environment="${ENVIRONMENT:-pilot}"
 
 require() {
@@ -45,10 +45,10 @@ case "$operation" in
   plan)
     check_identity; pilot_init; terraform -chdir=infrastructure/terraform/pilot plan -input=false "${pilot_vars[@]}" ;;
   apply)
-    check_identity; [[ "${CONFIRM_APPLY:-}" == "APPLY_AGENTCONSTRUCT_PILOT" ]] || { echo "Set CONFIRM_APPLY=APPLY_AGENTCONSTRUCT_PILOT" >&2; exit 2; }
+    check_identity; [[ "${CONFIRM_APPLY:-}" == "APPLY_DAVDEPLOY_PILOT" ]] || { echo "Set CONFIRM_APPLY=APPLY_DAVDEPLOY_PILOT" >&2; exit 2; }
     pilot_init; terraform -chdir=infrastructure/terraform/pilot apply -input=false "${pilot_vars[@]}" ;;
   destroy)
-    check_identity; [[ "${CONFIRM_DESTROY:-}" == "DESTROY_AGENTCONSTRUCT_PILOT" ]] || { echo "Set CONFIRM_DESTROY=DESTROY_AGENTCONSTRUCT_PILOT" >&2; exit 2; }
+    check_identity; [[ "${CONFIRM_DESTROY:-}" == "DESTROY_DAVDEPLOY_PILOT" ]] || { echo "Set CONFIRM_DESTROY=DESTROY_DAVDEPLOY_PILOT" >&2; exit 2; }
     pilot_init; terraform -chdir=infrastructure/terraform/pilot destroy -input=false "${pilot_vars[@]}" ;;
   push-image|bootstrap-runtime|smoke|validate)
     echo "${operation} is a future runtime action. See docs/cloud-operations.md; it needs a reviewed EKS cluster and scoped role." ;;

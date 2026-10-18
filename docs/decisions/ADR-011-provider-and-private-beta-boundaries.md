@@ -7,7 +7,7 @@ after provider accounts, domains, and legal material exist.
 
 ## Context
 
-AgentConstruct will initially use Google Workspace and AWS. The product needs a
+davdeploy will initially use Google Workspace and AWS. The product needs a
 low-cost private-beta path that preserves its tenant and audit boundaries while
 avoiding premature provider lock-in or customer-facing commercial claims.
 
@@ -27,7 +27,7 @@ by this decision.
 
 ### 2. Identity split
 
-Use Google Workspace OIDC for AgentConstruct's internal operators and Amazon
+Use Google Workspace OIDC for davdeploy's internal operators and Amazon
 Cognito User Pools for customer-facing identities. Both are mapped to the
 server-side `ProductUser` and workspace membership records; an identity-token
 organization, role, or email claim never grants access by itself.
@@ -58,7 +58,7 @@ validation.
 Private-beta customers receive manually assigned `ACTIVE` entitlements and
 explicit quota limits. No card collection, invoicing, or automatic upgrade path
 is enabled during the beta. Stripe Billing is the later payment processor; its
-verified webhook events may update AgentConstruct subscription records but may
+verified webhook events may update davdeploy subscription records but may
 not bypass entitlement checks or audit records.
 
 ### 6. Privacy, retention, and legal readiness

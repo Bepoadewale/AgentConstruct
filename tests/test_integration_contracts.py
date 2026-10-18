@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from agentconstruct.execution_profiles import execution_profile
-from agentconstruct.integrations import (
+from davdeploy.execution_profiles import execution_profile
+from davdeploy.integrations import (
     FixtureAwsDiscovery,
     FixtureGitHubConnection,
     GitHubAppReadOnlyConnection,
@@ -17,7 +17,7 @@ def test_github_fixture_models_reviewed_desired_state_and_webhook_contracts():
         "installation-1", "example/api", "desired/state.yaml", "safe fixture content"
     )
     assert pull_request.status == "SIMULATED"
-    assert pull_request.required_checks == ("agentconstruct-plan", "agentconstruct-policy")
+    assert pull_request.required_checks == ("davdeploy-plan", "davdeploy-policy")
     webhook = github.validate_webhook("push", "delivery-1", "fixture-sha256=valid")
     assert webhook.verification == "SIMULATED_VALID"
 
@@ -29,7 +29,7 @@ def test_live_github_adapter_parses_repository_and_refuses_writes():
         connection.publish_reviewed_desired_state(
             "456",
             "example/service",
-            "agentconstruct/package.json",
+            "davdeploy/package.json",
             json.dumps({"approved_digest": "a" * 64, "branch": "main", "files": []}),
         )
     try:
@@ -59,7 +59,7 @@ def test_live_github_adapter_publishes_reviewed_pr_when_explicitly_enabled(monke
         calls.append(("GET", url, kwargs.get("json")))
         if url.endswith("/git/ref/heads/main"):
             return Response({"object": {"sha": "base-sha"}})
-        if "/git/ref/heads/agentconstruct/desired-state-" in url:
+        if "/git/ref/heads/davdeploy/desired-state-" in url:
             return Response({"object": {"sha": "head-sha"}})
         raise AssertionError(f"unexpected GET {url}")
 
@@ -75,27 +75,27 @@ def test_live_github_adapter_publishes_reviewed_pr_when_explicitly_enabled(monke
 
     def fake_put(url, **kwargs):
         calls.append(("PUT", url, kwargs.get("json")))
-        assert kwargs["json"]["branch"].startswith("agentconstruct/desired-state-")
+        assert kwargs["json"]["branch"].startswith("davdeploy/desired-state-")
         return Response({"content": {"path": url.rsplit("/", 1)[-1]}}, 201)
 
     connection = GitHubAppReadOnlyConnection("123", "456", "/private/key.pem")
-    monkeypatch.setenv("AGENTCONSTRUCT_GITHUB_APP_WRITES_ENABLED", "true")
+    monkeypatch.setenv("DAVDEPLOY_GITHUB_APP_WRITES_ENABLED", "true")
     monkeypatch.setattr(connection, "_installation_token", lambda: "installation-token")
-    monkeypatch.setattr("agentconstruct.integrations.httpx.get", fake_get)
-    monkeypatch.setattr("agentconstruct.integrations.httpx.post", fake_post)
-    monkeypatch.setattr("agentconstruct.integrations.httpx.put", fake_put)
+    monkeypatch.setattr("davdeploy.integrations.httpx.get", fake_get)
+    monkeypatch.setattr("davdeploy.integrations.httpx.post", fake_post)
+    monkeypatch.setattr("davdeploy.integrations.httpx.put", fake_put)
     digest = "b" * 64
     pull_request = connection.publish_reviewed_desired_state(
         "456",
         "https://github.com/example/service",
-        "agentconstruct/package.json",
+        "davdeploy/package.json",
         json.dumps(
             {
                 "approved_digest": digest,
                 "branch": "main",
                 "files": [
                     {
-                        "path": "agentconstruct/approved-plan.json",
+                        "path": "davdeploy/approved-plan.json",
                         "content": {"digest": digest},
                     }
                 ],
@@ -105,7 +105,7 @@ def test_live_github_adapter_publishes_reviewed_pr_when_explicitly_enabled(monke
 
     assert pull_request.status == "EXECUTED_GITHUB_PR_CREATED"
     assert pull_request.pull_request_url == "https://github.com/example/service/pull/7"
-    assert pull_request.required_checks == ("agentconstruct/desired-state-review",)
+    assert pull_request.required_checks == ("davdeploy/desired-state-review",)
     assert any(call[0] == "POST" and call[1].endswith("/pulls") for call in calls)
     assert any(call[0] == "POST" and call[1].endswith("/statuses/head-sha") for call in calls)
     assert not any(call[1].endswith("/merge") for call in calls)
@@ -115,7 +115,7 @@ def test_aws_fixture_byoc_contract_never_returns_credentials():
     aws = FixtureAwsDiscovery()
     contract = aws.role_contract("connection-123")
     session = aws.assume_scoped_role(contract, "local-product-token")
-    assert contract.audience == "agentconstruct-byoc"
+    assert contract.audience == "davdeploy-byoc"
     assert session.session_reference.startswith("fixture-sts-session:")
     assert "no AWS access key" in session.credential_boundary
 

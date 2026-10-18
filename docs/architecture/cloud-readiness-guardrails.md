@@ -1,6 +1,6 @@
 # Cloud-readiness guardrails
 
-AgentConstruct now has a local preflight that answers:
+davdeploy now has a local preflight that answers:
 
 > If a future cloud operator workflow existed, would this approved plan be safe to take to the next review step?
 
@@ -19,7 +19,7 @@ The preflight records a checklist for:
 - required ownership tags;
 - budget ceiling;
 - reviewed desired-state PR/check state;
-- AgentConstruct runtime identity availability;
+- davdeploy runtime identity availability;
 - dry-run/plan-only execution mode.
 
 ## States

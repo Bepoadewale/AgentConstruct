@@ -1,6 +1,6 @@
 # Execution isolation and cell-ready boundaries
 
-AgentConstruct is designed for many customers without giving one tenant access to
+davdeploy is designed for many customers without giving one tenant access to
 another tenant's work. `ExecutionContext` carries organization, workspace, project,
 actor, plan digest, placement, timeout, network policy and an operation allowlist.
 

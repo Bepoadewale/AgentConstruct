@@ -2,7 +2,7 @@
 
 ## Mission
 
-Build and maintain **AgentConstruct**, the private commercial product. Use plain English first. Explain technical terms when they matter to a customer, operator or reviewer.
+Build and maintain **davdeploy**, the private commercial product. Use plain English first. Explain technical terms when they matter to a customer, operator or reviewer.
 
 ## Product rules
 

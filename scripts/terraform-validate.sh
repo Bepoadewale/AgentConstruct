@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-terraform_bin="${AGENTCONSTRUCT_TERRAFORM_BIN:-terraform}"
+terraform_bin="${DAVDEPLOY_TERRAFORM_BIN:-terraform}"
 temporary_parent="${TMPDIR:-/tmp}"
 temporary_parent="${temporary_parent%/}"
-validation_root="$(mktemp -d "${temporary_parent}/agentconstruct-tfvalidate.XXXXXX")"
-plugin_cache_dir="${TF_PLUGIN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/agentconstruct/terraform-plugin-cache}"
+validation_root="$(mktemp -d "${temporary_parent}/davdeploy-tfvalidate.XXXXXX")"
+plugin_cache_dir="${TF_PLUGIN_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/davdeploy/terraform-plugin-cache}"
 
 cleanup() {
   case "${validation_root}" in
-    "${temporary_parent}"/agentconstruct-tfvalidate.*)
+    "${temporary_parent}"/davdeploy-tfvalidate.*)
       rm -rf -- "${validation_root}"
       ;;
     *)
@@ -27,7 +27,7 @@ mkdir -p "${plugin_cache_dir}"
 export TF_PLUGIN_CACHE_DIR="${plugin_cache_dir}"
 
 roots=(
-  infrastructure/terraform/agentconstruct-bootstrap
+  infrastructure/terraform/davdeploy-bootstrap
   infrastructure/terraform/bootstrap
   infrastructure/terraform/management-identity
   infrastructure/terraform/control-plane-runtime-identity

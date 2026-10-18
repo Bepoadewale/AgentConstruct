@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 
-from agentconstruct.db import make_engine, run_migrations
-from agentconstruct.main import app, product_service
-from agentconstruct.models import GitHubWebhookDelivery
-from agentconstruct.policy import PolicyClient
-from agentconstruct.security import LOCAL_USERS, Principal
-from agentconstruct.service import ProductService
+from davdeploy.db import make_engine, run_migrations
+from davdeploy.main import app, product_service
+from davdeploy.models import GitHubWebhookDelivery
+from davdeploy.policy import PolicyClient
+from davdeploy.security import LOCAL_USERS, Principal
+from davdeploy.service import ProductService
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 from test_product import LocalExecutor, founder, make_service
@@ -105,7 +105,7 @@ def test_github_webhook_installation_states_are_persisted_and_visible():
             "repository_selection": "selected",
             "permissions": {"metadata": "read", "contents": "read"},
         },
-        "agentconstruct": {"organization_id": founder().organization_id},
+        "davdeploy": {"organization_id": founder().organization_id},
     }
 
     processed = signed_fixture_webhook(service, "installation", "delivery-install", payload)
@@ -122,7 +122,7 @@ def test_github_webhook_duplicate_delivery_is_replay_protected():
     payload = {
         "action": "created",
         "installation": {"id": 5159790, "account": {"login": "Bepoadewale"}},
-        "agentconstruct": {"organization_id": founder().organization_id},
+        "davdeploy": {"organization_id": founder().organization_id},
     }
 
     first = signed_fixture_webhook(service, "installation", "delivery-replay", payload)
@@ -138,7 +138,7 @@ def test_github_webhook_records_revoked_repository_and_branch_states():
     base = {
         "installation": {"id": 5159790, "account": {"login": "Bepoadewale"}},
         "repository": {"full_name": "Bepoadewale/ai-platform-control-plane"},
-        "agentconstruct": {"organization_id": founder().organization_id},
+        "davdeploy": {"organization_id": founder().organization_id},
     }
 
     repo_change = signed_fixture_webhook(
@@ -166,7 +166,7 @@ def test_github_webhook_missing_permission_and_bad_signature_fail_closed():
             "account": {"login": "Bepoadewale"},
             "permissions": {"metadata": "none"},
         },
-        "agentconstruct": {"organization_id": founder().organization_id},
+        "davdeploy": {"organization_id": founder().organization_id},
     }
     processed = signed_fixture_webhook(service, "installation", "delivery-missing-permission", payload)
     assert processed["state"] == "MISSING_PERMISSION"
@@ -202,7 +202,7 @@ def test_github_webhook_endpoint_records_signed_fixture_delivery(tmp_path):
             json={
                 "action": "created",
                 "installation": {"id": 5159790, "account": {"login": "Bepoadewale"}},
-                "agentconstruct": {"organization_id": founder().organization_id},
+                "davdeploy": {"organization_id": founder().organization_id},
             },
         )
     finally:

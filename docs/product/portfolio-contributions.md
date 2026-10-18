@@ -1,6 +1,6 @@
 # What the public reference repositories contribute
 
-AgentConstruct is the private commercial product. The public repositories remain separate evidence and are not merged wholesale.
+davdeploy is the private commercial product. The public repositories remain separate evidence and are not merged wholesale.
 
 | Reference repository | Pattern used here or reserved for later |
 | --- | --- |
@@ -15,4 +15,4 @@ AgentConstruct is the private commercial product. The public repositories remain
 | `gpu-scheduler-lab` | Future accelerator capacity and fairness ideas |
 | `hybrid-ai-edge-platform` | Later edge-placement concepts |
 
-Only the local product code and evidence in this repository count as AgentConstruct implementation. A reference repository does not make a capability executed here.
+Only the local product code and evidence in this repository count as davdeploy implementation. A reference repository does not make a capability executed here.

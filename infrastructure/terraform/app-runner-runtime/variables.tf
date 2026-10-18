@@ -1,6 +1,6 @@
 variable "region" {
   type        = string
-  description = "AWS region for the hosted AgentConstruct runtime."
+  description = "AWS region for the hosted davdeploy runtime."
 }
 
 variable "enable_service" {
@@ -23,7 +23,7 @@ variable "oidc_issuer" {
 
 variable "oidc_audience" {
   type        = string
-  description = "Exact AgentConstruct OIDC audience. Required before the hosted service can be enabled."
+  description = "Exact davdeploy OIDC audience. Required before the hosted service can be enabled."
   default     = ""
 }
 
@@ -58,8 +58,8 @@ variable "nova_model_id" {
 
 variable "image_identifier" {
   type        = string
-  description = "Full ECR image URI with tag for the AgentConstruct runtime. Required when enable_service is true."
-  default     = "placeholder.invalid/agentconstruct:unset"
+  description = "Full ECR image URI with tag for the davdeploy runtime. Required when enable_service is true."
+  default     = "placeholder.invalid/davdeploy:unset"
 }
 
 variable "customer_template_url" {
@@ -70,7 +70,7 @@ variable "customer_template_url" {
 variable "connection_secret_prefix" {
   type        = string
   description = "Secrets Manager prefix for per-connection ExternalIds."
-  default     = "agentconstruct/customer-connections"
+  default     = "davdeploy/customer-connections"
 }
 
 variable "cpu" {
@@ -93,13 +93,13 @@ variable "enable_durable_database" {
 
 variable "database_name" {
   type        = string
-  description = "AgentConstruct control-plane PostgreSQL database name."
-  default     = "agentconstruct"
+  description = "davdeploy control-plane PostgreSQL database name."
+  default     = "davdeploy"
 }
 
 variable "database_instance_class" {
   type        = string
-  description = "RDS instance class for the hosted AgentConstruct control plane."
+  description = "RDS instance class for the hosted davdeploy control plane."
   default     = "db.t4g.micro"
 }
 
@@ -139,7 +139,7 @@ variable "runtime_vpc_cidr" {
 
 variable "monthly_platform_budget_usd" {
   type        = number
-  description = "Monthly AgentConstruct platform cost guardrail. Alerts do not automatically stop resources."
+  description = "Monthly davdeploy platform cost guardrail. Alerts do not automatically stop resources."
   default     = 250
 
   validation {

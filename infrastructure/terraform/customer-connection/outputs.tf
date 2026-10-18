@@ -9,6 +9,6 @@ output "execution_role_arn" {
 }
 
 output "credential_boundary" {
-  value       = "AgentConstruct must use short-lived STS credentials with the external ID; no access key is created."
+  value       = "davdeploy must use short-lived STS credentials with the external ID; no access key is created."
   description = "Human-readable safety boundary."
 }

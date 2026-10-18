@@ -9,7 +9,7 @@ on:
         type: choice
         options: [plan, destroy]
       confirmation:
-        description: Type PLAN_AGENTCONSTRUCT_PILOT or DESTROY_AGENTCONSTRUCT_PILOT
+        description: Type PLAN_DAVDEPLOY_PILOT or DESTROY_DAVDEPLOY_PILOT
         required: true
         type: string
       aws_role_arn:
@@ -32,7 +32,7 @@ on:
       project:
         description: Project tag/name
         required: true
-        default: agentconstruct
+        default: davdeploy
         type: string
       expected_account_id:
         description: Expected AWS account ID; prevents an accidental cross-account action
@@ -46,8 +46,8 @@ permissions:
 jobs:
   pilot:
     if: >-
-      (inputs.operation == 'plan' && inputs.confirmation == 'PLAN_AGENTCONSTRUCT_PILOT') ||
-      (inputs.operation == 'destroy' && inputs.confirmation == 'DESTROY_AGENTCONSTRUCT_PILOT')
+      (inputs.operation == 'plan' && inputs.confirmation == 'PLAN_DAVDEPLOY_PILOT') ||
+      (inputs.operation == 'destroy' && inputs.confirmation == 'DESTROY_DAVDEPLOY_PILOT')
     environment: cloud-pilot
     runs-on: ubuntu-latest
     steps:
@@ -66,7 +66,7 @@ jobs:
           TF_STATE_BUCKET: ${{ inputs.state_bucket }}
           TF_LOCK_TABLE: ${{ inputs.lock_table }}
           PROJECT: ${{ inputs.project }}
-          CONFIRM_DESTROY: ${{ inputs.operation == 'destroy' && 'DESTROY_AGENTCONSTRUCT_PILOT' || '' }}
+          CONFIRM_DESTROY: ${{ inputs.operation == 'destroy' && 'DESTROY_DAVDEPLOY_PILOT' || '' }}
         run: |
           chmod +x scripts/pilot-cloud.sh
           scripts/pilot-cloud.sh "${{ inputs.operation }}"

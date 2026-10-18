@@ -6,7 +6,7 @@ export PYTHONPATH := apps/api/src
 .PHONY: help install lint test bootstrap-local smoke local-load-smoke seed-demo-data demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check api-contract openapi-check openapi-update customer-plan-e2e customer-plan-persistence local-proof verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local validate-environment admin-diagnostics customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy customer-aws-template-host-plan customer-aws-template-host-apply customer-aws-template-host-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
 
 help:
-	@echo "AgentConstruct local commands"
+	@echo "davdeploy local commands"
 	@echo ""
 	@echo "  make install                 Create .venv and install dev dependencies"
 	@echo "  make bootstrap-local         Build/start local API, worker, Postgres, OPA, Prometheus, Grafana, Tempo"
@@ -68,8 +68,8 @@ demo-readiness-failure:
 
 trace-check:
 	curl -fsS http://127.0.0.1:3200/ready >/dev/null
-	curl -fsS 'http://127.0.0.1:3200/api/search?limit=1' | grep -q 'agentconstruct-api'
-	@echo "Tempo received AgentConstruct traces."
+	curl -fsS 'http://127.0.0.1:3200/api/search?limit=1' | grep -q 'davdeploy-api'
+	@echo "Tempo received davdeploy traces."
 
 api-contract:
 	./scripts/api-contract.sh
@@ -117,8 +117,8 @@ kubernetes-render:
 	@echo "Kubernetes contract rendered successfully. It was not applied to a cluster."
 
 mcp-local:
-	@test -n "$$AGENTCONSTRUCT_TOKEN" || { echo "Set AGENTCONSTRUCT_TOKEN first; MCP never obtains cloud credentials."; exit 1; }
-	$(VENV)/bin/agentconstruct-mcp
+	@test -n "$$DAVDEPLOY_TOKEN" || { echo "Set DAVDEPLOY_TOKEN first; MCP never obtains cloud credentials."; exit 1; }
+	$(VENV)/bin/davdeploy-mcp
 
 pilot-guardrails-plan:
 	./scripts/pilot-cloud.sh guardrails-plan

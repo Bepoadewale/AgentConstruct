@@ -1,6 +1,6 @@
 # Flagship evolution plan
 
-> **Historical strategy note.** Superseded on 2026-10-08. This repository now contains the first AgentConstruct implementation. Preserved for history.
+> **Historical strategy note.** Superseded on 2026-10-08. This repository now contains the first davdeploy implementation. Preserved for history.
 
 ## Decision
 
@@ -67,5 +67,5 @@ candidate is service-healthy but violates quality or latency gate
 
 The public flagship documents technical architecture and executed evidence only.
 Commercial positioning, buyer strategy, packaging, pricing and acquisition options
-remain in this private repository. Do not copy those discussions into public READMEs,
+remain in internal planning records. Do not copy those discussions into public READMEs,
 issues, source comments or commit messages.

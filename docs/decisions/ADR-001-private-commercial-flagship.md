@@ -1,4 +1,4 @@
-# ADR-001: AgentConstruct is the private commercial flagship
+# ADR-001: davdeploy is the private commercial flagship
 
 ## Context
 
@@ -6,7 +6,7 @@ The repository was strategy-only while public projects proved individual platfor
 
 ## Decision
 
-Build AgentConstruct here as the integrated private commercial product.
+Build davdeploy here as the integrated private commercial product.
 
 ## Alternatives
 

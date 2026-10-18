@@ -6,8 +6,8 @@ separate placement contracts inside account `654654474502`:
 
 | Placement | Scope tag | VPC CIDR | Terraform state key |
 | --- | --- | --- | --- |
-| AgentConstruct platform | `platform` | `10.42.0.0/16` | `agentconstruct/platform/app-runner-runtime.tfstate` |
-| Customer sandbox | `customer-sandbox` | `10.84.0.0/16` | `agentconstruct/customer-sandbox/workload-app-runner.tfstate` |
+| davdeploy platform | `platform` | `10.42.0.0/16` | `davdeploy/platform/app-runner-runtime.tfstate` |
+| Customer sandbox | `customer-sandbox` | `10.84.0.0/16` | `davdeploy/customer-sandbox/workload-app-runner.tfstate` |
 
 Both placements carry `AccountBoundary=same-account-pilot`. The customer
 sandbox output states `SAME_ACCOUNT_PILOT_NOT_CROSS_ACCOUNT`; UI, audit and test
@@ -40,10 +40,10 @@ customers.
 ```text
 EXPECTED_AWS_ACCOUNT_ID=654654474502
 AWS_REGION=us-east-1
-AGENTCONSTRUCT_PLATFORM_SCOPE=platform
-AGENTCONSTRUCT_PLATFORM_VPC_CIDR=10.42.0.0/16
-AGENTCONSTRUCT_CUSTOMER_DEPLOYMENT_SCOPE=customer-sandbox
-AGENTCONSTRUCT_CUSTOMER_VPC_CIDR=10.84.0.0/16
+DAVDEPLOY_PLATFORM_SCOPE=platform
+DAVDEPLOY_PLATFORM_VPC_CIDR=10.42.0.0/16
+DAVDEPLOY_CUSTOMER_DEPLOYMENT_SCOPE=customer-sandbox
+DAVDEPLOY_CUSTOMER_VPC_CIDR=10.84.0.0/16
 ```
 
 Account creation, Organization invitation and account deletion are outside the

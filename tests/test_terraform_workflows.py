@@ -43,7 +43,7 @@ def test_serverless_terraform_uses_canonical_production_namespace() -> None:
     main = (root / "main.tf").read_text(encoding="utf-8")
 
     assert 'variable "environment"' not in variables
-    assert 'name = "agentconstruct"' in main
+    assert 'name = "davdeploy"' in main
     assert 'Environment = "production"' in main
     assert "var.environment" not in main
 
@@ -77,4 +77,4 @@ def test_legacy_cloud_pilot_cannot_apply() -> None:
     pilot = workflow("cloud-pilot.yml")
 
     assert "options: [plan, destroy]" in pilot
-    assert "APPLY_AGENTCONSTRUCT_PILOT" not in pilot
+    assert "APPLY_DAVDEPLOY_PILOT" not in pilot

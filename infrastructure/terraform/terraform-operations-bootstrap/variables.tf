@@ -1,25 +1,25 @@
 variable "region" {
   type        = string
-  description = "AWS region used by the AgentConstruct control plane."
+  description = "AWS region used by the davdeploy control plane."
   default     = "us-east-1"
 }
 
 variable "github_oidc_repository_subject" {
   type        = string
   description = "Immutable GitHub OIDC repository subject prefix configured for this repository."
-  default     = "repo:Bepoadewale@99020860/AgentConstruct@1391292548"
+  default     = "repo:Bepoadewale@99020860/davdeploy@1391292548"
 }
 
 variable "state_bucket_name" {
   type        = string
   description = "Existing private Terraform state bucket."
-  default     = "agentconstruct-tfstate-654654474502"
+  default     = "davdeploy-tfstate-654654474502"
 }
 
 variable "lock_table_name" {
   type        = string
   description = "Existing Terraform state lock table."
-  default     = "agentconstruct-terraform-locks"
+  default     = "davdeploy-terraform-locks"
 }
 
 variable "plan_retention_days" {

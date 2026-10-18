@@ -1,6 +1,6 @@
 # Amazon Nova 2 Lite
 
-**Implemented, disabled by default.** AgentConstruct can use Amazon Nova 2 Lite
+**Implemented, disabled by default.** davdeploy can use Amazon Nova 2 Lite
 through the Amazon Bedrock Converse API to interpret a customer request into a
 typed workload proposal. Local development and CI continue to use the explicitly
 labelled fixture unless Bedrock is selected.
@@ -13,7 +13,7 @@ shell, or mutate a customer cloud. Pydantic validation, deterministic planning,
 policy, human approval, and the bounded runner remain independent.
 
 The current Nova 2 Lite Bedrock model card marks native structured outputs as
-unsupported. AgentConstruct therefore sends a JSON schema with the request and
+unsupported. davdeploy therefore sends a JSON schema with the request and
 accepts only a plain JSON object or that object inside one exact `json` code
 fence. It rejects surrounding prose and non-object JSON, validates the decoded
 object locally, permits one bounded repair attempt, and fails closed if
@@ -24,14 +24,14 @@ validation still fails. It does not claim provider-enforced schema compliance.
 Set these on the API runtime through its secret/configuration system:
 
 ```text
-AGENTCONSTRUCT_MODEL_PROVIDER=bedrock
-AGENTCONSTRUCT_MODEL_FALLBACK=disabled
-AGENTCONSTRUCT_BEDROCK_REGION=us-east-1
-AGENTCONSTRUCT_BEDROCK_MODEL_ID=us.amazon.nova-2-lite-v1:0
-AGENTCONSTRUCT_MODEL_DATA_POLICY=bedrock-no-training
-AGENTCONSTRUCT_MODEL_MAX_OUTPUT_TOKENS=2000
-AGENTCONSTRUCT_MODEL_TIMEOUT_SECONDS=60
-AGENTCONSTRUCT_MODEL_MAX_ATTEMPTS=2
+DAVDEPLOY_MODEL_PROVIDER=bedrock
+DAVDEPLOY_MODEL_FALLBACK=disabled
+DAVDEPLOY_BEDROCK_REGION=us-east-1
+DAVDEPLOY_BEDROCK_MODEL_ID=us.amazon.nova-2-lite-v1:0
+DAVDEPLOY_MODEL_DATA_POLICY=bedrock-no-training
+DAVDEPLOY_MODEL_MAX_OUTPUT_TOKENS=2000
+DAVDEPLOY_MODEL_TIMEOUT_SECONDS=60
+DAVDEPLOY_MODEL_MAX_ATTEMPTS=2
 ```
 
 The AWS SDK credential chain is the only credential mechanism. App Runner uses
@@ -57,7 +57,7 @@ request as existing product data.
 Transport retries and application repair attempts are bounded. Content filtering,
 timeouts, incomplete output, digest mismatches, and repeated schema failures fail
 closed. Fixture fallback is available only when
-`AGENTCONSTRUCT_MODEL_FALLBACK=fixture` is explicitly set; its response remains
+`DAVDEPLOY_MODEL_FALLBACK=fixture` is explicitly set; its response remains
 labelled `SIMULATED` and never masquerades as Nova evidence.
 
 Pricing estimates remain unset unless both current per-million-token rates and a

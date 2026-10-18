@@ -7,7 +7,7 @@ import argparse
 import json
 from pathlib import Path
 
-from agentconstruct.main import app
+from davdeploy.main import app
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "contracts" / "openapi-v1.json"

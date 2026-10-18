@@ -27,7 +27,7 @@ connection_init() {
   require CUSTOMER_CONNECTION_ID
   terraform -chdir="$root" init -input=false \
     -backend-config="bucket=${TF_STATE_BUCKET}" \
-    -backend-config="key=agentconstruct/customer-connections/${CUSTOMER_CONNECTION_ID}.tfstate" \
+    -backend-config="key=davdeploy/customer-connections/${CUSTOMER_CONNECTION_ID}.tfstate" \
     -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
     -backend-config="region=${AWS_REGION}"
 }
@@ -35,29 +35,29 @@ connection_init() {
 connection_vars=(
   "-var=region=${AWS_REGION:-}"
   "-var=customer_connection_id=${CUSTOMER_CONNECTION_ID:-}"
-  "-var=agentconstruct_control_plane_role_arn=${AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN:-}"
-  "-var=external_id=${AGENTCONSTRUCT_EXTERNAL_ID:-}"
+  "-var=davdeploy_control_plane_role_arn=${DAVDEPLOY_CONTROL_PLANE_ROLE_ARN:-}"
+  "-var=external_id=${DAVDEPLOY_EXTERNAL_ID:-}"
 )
 
 case "$operation" in
   plan)
-    check_identity; require AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN; require AGENTCONSTRUCT_EXTERNAL_ID
+    check_identity; require DAVDEPLOY_CONTROL_PLANE_ROLE_ARN; require DAVDEPLOY_EXTERNAL_ID
     connection_init
     terraform -chdir="$root" plan -input=false "${connection_vars[@]}"
     ;;
   apply)
-    check_identity; require AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN; require AGENTCONSTRUCT_EXTERNAL_ID
-    [[ "${CONFIRM_CUSTOMER_CONNECTION_APPLY:-}" == "APPLY_AGENTCONSTRUCT_CUSTOMER_CONNECTION" ]] || {
-      echo "Set CONFIRM_CUSTOMER_CONNECTION_APPLY=APPLY_AGENTCONSTRUCT_CUSTOMER_CONNECTION after reviewing the plan" >&2
+    check_identity; require DAVDEPLOY_CONTROL_PLANE_ROLE_ARN; require DAVDEPLOY_EXTERNAL_ID
+    [[ "${CONFIRM_CUSTOMER_CONNECTION_APPLY:-}" == "APPLY_DAVDEPLOY_CUSTOMER_CONNECTION" ]] || {
+      echo "Set CONFIRM_CUSTOMER_CONNECTION_APPLY=APPLY_DAVDEPLOY_CUSTOMER_CONNECTION after reviewing the plan" >&2
       exit 2
     }
     connection_init
     terraform -chdir="$root" apply -input=false "${connection_vars[@]}"
     ;;
   destroy)
-    check_identity; require AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN; require AGENTCONSTRUCT_EXTERNAL_ID
-    [[ "${CONFIRM_CUSTOMER_CONNECTION_DESTROY:-}" == "DESTROY_AGENTCONSTRUCT_CUSTOMER_CONNECTION" ]] || {
-      echo "Set CONFIRM_CUSTOMER_CONNECTION_DESTROY=DESTROY_AGENTCONSTRUCT_CUSTOMER_CONNECTION" >&2
+    check_identity; require DAVDEPLOY_CONTROL_PLANE_ROLE_ARN; require DAVDEPLOY_EXTERNAL_ID
+    [[ "${CONFIRM_CUSTOMER_CONNECTION_DESTROY:-}" == "DESTROY_DAVDEPLOY_CUSTOMER_CONNECTION" ]] || {
+      echo "Set CONFIRM_CUSTOMER_CONNECTION_DESTROY=DESTROY_DAVDEPLOY_CUSTOMER_CONNECTION" >&2
       exit 2
     }
     connection_init

@@ -1,6 +1,6 @@
 variable "region" {
   type        = string
-  description = "AWS region for the AgentConstruct control plane."
+  description = "AWS region for the davdeploy control plane."
   default     = "us-east-1"
 }
 
@@ -56,7 +56,7 @@ variable "ses_from_address" {
 variable "database_name" {
   type        = string
   description = "Aurora PostgreSQL database name."
-  default     = "agentconstruct"
+  default     = "davdeploy"
 }
 
 variable "aurora_engine_version" {

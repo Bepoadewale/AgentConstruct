@@ -25,7 +25,7 @@ def test_bootstrap_separates_plan_and_apply_trust() -> None:
 
     assert '${var.github_oidc_repository_subject}:environment:terraform-plan' in source
     assert '${var.github_oidc_repository_subject}:environment:terraform-apply' in source
-    assert 'default     = "repo:Bepoadewale@99020860/AgentConstruct@1391292548"' in source
+    assert 'default     = "repo:Bepoadewale@99020860/davdeploy@1391292548"' in source
     assert "sts:AssumeRoleWithWebIdentity" in source
     assert "AdministratorAccess" not in source
     assert "PowerUserAccess" not in source
@@ -45,8 +45,8 @@ def test_bootstrap_encrypts_and_expires_operational_artifacts() -> None:
 def test_apply_role_is_limited_to_required_control_plane_services() -> None:
     source = bootstrap_source()
 
-    assert 'resources = ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/agentconstruct-*"]' in source
-    assert 'resources = ["arn:${data.aws_partition.current.partition}:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:agentconstruct-*"]' in source
+    assert 'resources = ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/davdeploy-*"]' in source
+    assert 'resources = ["arn:${data.aws_partition.current.partition}:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:davdeploy-*"]' in source
     assert 'actions   = ["iam:CreateServiceLinkedRole"]' in source
     assert 'values   = ["rds.amazonaws.com"]' in source
 

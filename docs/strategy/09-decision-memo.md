@@ -1,8 +1,8 @@
 # Decision memo
 
-## My recommendation for Agent Construct is...
+## My recommendation for davdeploy is...
 
-Pursue the direction, but define AgentConstruct as an **AWS-first, outcome-to-architecture and governed-delivery platform**. Use AI as the interpretation and explanation layer; make the durable product the customer-specific infrastructure system of record, deterministic architecture evaluator, policy/approval boundary, and evidence-backed execution/operations loop.
+Pursue the direction, but define davdeploy as an **AWS-first, outcome-to-architecture and governed-delivery platform**. Use AI as the interpretation and explanation layer; make the durable product the customer-specific infrastructure system of record, deterministic architecture evaluator, policy/approval boundary, and evidence-backed execution/operations loop.
 
 ## Answers to the ten decisions
 

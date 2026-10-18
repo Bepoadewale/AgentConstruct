@@ -1,11 +1,11 @@
 # Current-state audit
 
 **Review date:** 2026-10-14  
-**Scope:** read-only review of the merged AgentConstruct repository at commit `d118210` (PR #49 branch state). No application code or AWS resources were changed by this review.
+**Scope:** read-only review of the merged davdeploy repository at commit `d118210` (PR #49 branch state). No application code or AWS resources were changed by this review.
 
 ## Executive finding
 
-AgentConstruct is no longer a strategy-only repository. It is a modular FastAPI product with a plain browser UI, PostgreSQL persistence, typed workload and architecture schemas, a deterministic AWS planner, OPA policy, plan approval, audit, local execution, GitHub/AWS integration contracts, Terraform renderers, and an explicitly gated App Runner execution adapter.
+davdeploy is no longer a strategy-only repository. It is a modular FastAPI product with a plain browser UI, PostgreSQL persistence, typed workload and architecture schemas, a deterministic AWS planner, OPA policy, plan approval, audit, local execution, GitHub/AWS integration contracts, Terraform renderers, and an explicitly gated App Runner execution adapter.
 
 The strongest existing asset is the governed decision pipeline, not the current natural-language parser. The parser and pricing/inventory catalog are deterministic fixtures; the hosted identity and durable-RDS contracts are implemented but not fully operated as production SaaS. No live customer workload is currently running in the reviewed AWS account.
 
@@ -13,7 +13,7 @@ The strongest existing asset is the governed decision pipeline, not the current 
 
 | Capability | Status | Evidence |
 |---|---|---|
-| Typed intent and provenance | Implemented and tested locally | `apps/api/src/agentconstruct/domain.py:WorkloadSpec`, `intent.py:DeterministicIntentProvider`, `tests/test_product.py` |
+| Typed intent and provenance | Implemented and tested locally | `apps/api/src/davdeploy/domain.py:WorkloadSpec`, `intent.py:DeterministicIntentProvider`, `tests/test_product.py` |
 | AWS candidate planning | Implemented and tested locally | `planner.py:AwsV1Planner`, `tests/test_planner_decisions.py` |
 | Non-EKS-first selection | Implemented and tested locally | `tests/test_planner_decisions.py::test_tiny_stateless_api_is_not_eks`, `test_kubernetes_requested_for_status_is_not_selected_without_need` |
 | Cost estimation | Implemented as fixture estimate | `domain.py:CostRange`, `planner.py`; not live AWS Pricing evidence |

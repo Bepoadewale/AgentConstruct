@@ -69,11 +69,11 @@ jobs:
         run: |
           set -euo pipefail
           scripts/build_lambda_packages.sh dist/lambda
-          artifact_key="releases/serverless-control-plane/${GITHUB_SHA}/agentconstruct-control-plane.zip"
+          artifact_key="releases/serverless-control-plane/${GITHUB_SHA}/davdeploy-control-plane.zip"
           aws s3api put-object \
             --bucket "${TF_RELEASE_BUCKET}" \
             --key "${artifact_key}" \
-            --body dist/lambda/agentconstruct-control-plane.zip \
+            --body dist/lambda/davdeploy-control-plane.zip \
             --server-side-encryption aws:kms \
             --ssekms-key-id "${TF_RELEASE_KMS_KEY_ARN}" >/tmp/release-result.json
           version_id="$(jq -r '.VersionId // empty' /tmp/release-result.json)"

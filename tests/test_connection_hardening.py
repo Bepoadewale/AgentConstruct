@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from agentconstruct.connection_secrets import LocalEncryptedConnectionSecretStore
+from davdeploy.connection_secrets import LocalEncryptedConnectionSecretStore
 
 
 def test_local_connection_secret_reference_does_not_contain_plaintext():
@@ -13,7 +13,7 @@ def test_local_connection_secret_reference_does_not_contain_plaintext():
 def test_runtime_identity_is_separate_from_github_and_scoped():
     root = Path("infrastructure/terraform/control-plane-runtime-identity/main.tf").read_text()
     github = Path("infrastructure/terraform/management-identity/main.tf").read_text()
-    assert "agentconstruct-control-plane-runtime" in root
-    assert "AgentConstructDiscovery-*" in root
+    assert "davdeploy-control-plane-runtime" in root
+    assert "davdeployDiscovery-*" in root
     assert "secretsmanager:GetSecretValue" in root
-    assert "agentconstruct-control-plane-runtime" not in github
+    assert "davdeploy-control-plane-runtime" not in github

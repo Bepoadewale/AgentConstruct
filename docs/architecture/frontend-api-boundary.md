@@ -1,7 +1,7 @@
 # Frontend/API boundary
 
 The browser application is maintained in the private
-[`Bepoadewale/agentconstruct-frontend`](https://github.com/Bepoadewale/agentconstruct-frontend)
+[`Bepoadewale/davdeploy-frontend`](https://github.com/Bepoadewale/davdeploy-frontend)
 repository. This repository owns the AWS-hosted control-plane API, persistence,
 workers, policy, planning, provider integrations, audit and infrastructure.
 
@@ -19,7 +19,7 @@ release.
 
 ## Browser configuration
 
-Set `AGENTCONSTRUCT_ALLOWED_FRONTEND_ORIGINS` to a comma-separated list of
+Set `DAVDEPLOY_ALLOWED_FRONTEND_ORIGINS` to a comma-separated list of
 explicit origins. Hosted origins must use HTTPS and must not include paths,
 queries, credentials or wildcards. Localhost HTTP is accepted for development.
 

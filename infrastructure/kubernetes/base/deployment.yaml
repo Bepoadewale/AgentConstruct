@@ -1,17 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: agentconstruct-api
-  namespace: agentconstruct
+  name: davdeploy-api
+  namespace: davdeploy
 spec:
   replicas: 2
   selector:
-    matchLabels: { app: agentconstruct-api }
+    matchLabels: { app: davdeploy-api }
   template:
     metadata:
-      labels: { app: agentconstruct-api }
+      labels: { app: davdeploy-api }
     spec:
-      serviceAccountName: agentconstruct-api
+      serviceAccountName: davdeploy-api
       securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: api
@@ -19,8 +19,8 @@ spec:
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8080, name: http }]
           env:
-            - { name: AGENTCONSTRUCT_DATABASE_SECRET_ARN, value: REPLACE_WITH_RDS_SECRET_ARN }
-            - { name: AGENTCONSTRUCT_OTEL_ENDPOINT, value: http://otel-collector.agentconstruct.svc:4318 }
+            - { name: DAVDEPLOY_DATABASE_SECRET_ARN, value: REPLACE_WITH_RDS_SECRET_ARN }
+            - { name: DAVDEPLOY_OTEL_ENDPOINT, value: http://otel-collector.davdeploy.svc:4318 }
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

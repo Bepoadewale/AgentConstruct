@@ -2,9 +2,9 @@ import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from agentconstruct.contracts import JobEnvelope, JobKind, ModelPurpose, ModelRequest, TenantScope
-from agentconstruct.db import run_migrations
-from agentconstruct.model_gateway import (
+from davdeploy.contracts import JobEnvelope, JobKind, ModelPurpose, ModelRequest, TenantScope
+from davdeploy.db import run_migrations
+from davdeploy.model_gateway import (
     NOVA_2_LITE_MODEL_ID,
     BedrockNovaGateway,
     DeterministicModelGateway,
@@ -18,8 +18,8 @@ from agentconstruct.model_gateway import (
     guarded_generate_structured,
     model_input_digest,
 )
-from agentconstruct.models import Base
-from agentconstruct.queue import InMemoryJobQueue, PostgresJobQueue
+from davdeploy.models import Base
+from davdeploy.queue import InMemoryJobQueue, PostgresJobQueue
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 

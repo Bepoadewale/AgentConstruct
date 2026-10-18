@@ -6,7 +6,7 @@ The public portfolio demonstrates real, focused engineering work.
 
 ## Decision
 
-Keep them independent. Bring patterns into AgentConstruct through clear interfaces and documentation.
+Keep them independent. Bring patterns into davdeploy through clear interfaces and documentation.
 
 ## Alternatives
 

@@ -1,4 +1,4 @@
-"""Validate AgentConstruct PR ticket and workload evidence conventions."""
+"""Validate davdeploy PR ticket and workload evidence conventions."""
 
 from __future__ import annotations
 

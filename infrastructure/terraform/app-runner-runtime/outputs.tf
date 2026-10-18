@@ -1,26 +1,26 @@
 output "ecr_repository_url" {
   value       = aws_ecr_repository.runtime.repository_url
-  description = "ECR repository for the AgentConstruct runtime image."
+  description = "ECR repository for the davdeploy runtime image."
 }
 
 output "runtime_role_arn" {
   value       = aws_iam_role.runtime.arn
-  description = "Use this ARN as AgentConstructControlPlaneRoleArn in customer CloudFormation templates."
+  description = "Use this ARN as davdeployControlPlaneRoleArn in customer CloudFormation templates."
 }
 
 output "app_runner_service_url" {
   value       = var.enable_service ? "https://${aws_apprunner_service.runtime[0].service_url}" : null
-  description = "Hosted AgentConstruct runtime URL when the service is enabled."
+  description = "Hosted davdeploy runtime URL when the service is enabled."
 }
 
 output "app_runner_service_arn" {
   value       = var.enable_service ? aws_apprunner_service.runtime[0].arn : null
-  description = "Hosted AgentConstruct App Runner service ARN when enabled."
+  description = "Hosted davdeploy App Runner service ARN when enabled."
 }
 
 output "database_endpoint" {
   value       = var.enable_durable_database ? aws_db_instance.control_plane[0].address : null
-  description = "Private RDS PostgreSQL endpoint for the hosted AgentConstruct control plane."
+  description = "Private RDS PostgreSQL endpoint for the hosted davdeploy control plane."
 }
 
 output "database_secret_arn" {
@@ -35,7 +35,7 @@ output "runtime_vpc_connector_arn" {
 
 output "platform_vpc_id" {
   value       = var.enable_durable_database ? aws_vpc.runtime[0].id : null
-  description = "Dedicated same-account AgentConstruct platform VPC."
+  description = "Dedicated same-account davdeploy platform VPC."
 }
 
 output "platform_private_subnet_ids" {

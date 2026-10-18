@@ -1,6 +1,6 @@
 # Planner evaluation and regression benchmark
 
-`agentconstruct.evaluation` provides a deterministic benchmark for architecture decisions.
+`davdeploy.evaluation` provides a deterministic benchmark for architecture decisions.
 It currently includes two deliberately different cases:
 
 - a tiny stateless API, which must not select EKS/Kubernetes;

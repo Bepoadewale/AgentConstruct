@@ -2,9 +2,9 @@
 
 The current owner-controlled pilot uses two explicit placements in the same AWS
 account. The platform runtime uses VPC `10.42.0.0/16` and state key
-`agentconstruct/platform/app-runner-runtime.tfstate`; the customer sandbox uses
+`davdeploy/platform/app-runner-runtime.tfstate`; the customer sandbox uses
 VPC `10.84.0.0/16` and state key
-`agentconstruct/customer-sandbox/workload-app-runner.tfstate`. This is not a
+`davdeploy/customer-sandbox/workload-app-runner.tfstate`. This is not a
 cross-account isolation claim. See the
 [same-account pilot boundary](../../docs/architecture/same-account-pilot.md).
 

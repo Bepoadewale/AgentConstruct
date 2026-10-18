@@ -2,19 +2,19 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: agentconstruct
-      POSTGRES_USER: agentconstruct
-      POSTGRES_PASSWORD: agentconstruct
+      POSTGRES_DB: davdeploy
+      POSTGRES_USER: davdeploy
+      POSTGRES_PASSWORD: davdeploy
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agentconstruct -d agentconstruct"]
+      test: ["CMD-SHELL", "pg_isready -U davdeploy -d davdeploy"]
       interval: 3s
       timeout: 3s
       retries: 30
-    volumes: ["agentconstruct-postgres:/var/lib/postgresql/data"]
+    volumes: ["davdeploy-postgres:/var/lib/postgresql/data"]
 
   opa:
     image: openpolicyagent/opa:1.0.0-static
-    command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies/agentconstruct.rego"]
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies/davdeploy.rego"]
     ports:
       - "8181:8181"
     volumes: ["./platform/opa:/policies:ro"]
@@ -23,27 +23,27 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ["uvicorn", "agentconstruct.fixture_executor:app", "--host", "0.0.0.0", "--port", "8090"]
+    command: ["uvicorn", "davdeploy.fixture_executor:app", "--host", "0.0.0.0", "--port", "8090"]
     ports: ["8090:8090"]
 
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ["uvicorn", "agentconstruct.main:app", "--host", "0.0.0.0", "--port", "8080"]
+    command: ["uvicorn", "davdeploy.main:app", "--host", "0.0.0.0", "--port", "8080"]
     environment:
-      AGENTCONSTRUCT_DATABASE_URL: postgresql+psycopg://agentconstruct:agentconstruct@postgres:5432/agentconstruct
-      AGENTCONSTRUCT_OPA_URL: http://opa:8181/v1/data/agentconstruct/decision
-      AGENTCONSTRUCT_EXECUTOR_URL: http://fixture-executor:8090
-      AGENTCONSTRUCT_LOCAL_SIGNING_KEY: local-compose-fixture-signing-key-at-least-32-bytes
-      AGENTCONSTRUCT_GITHUB_APP_READ_ONLY: ${AGENTCONSTRUCT_GITHUB_APP_READ_ONLY:-false}
-      AGENTCONSTRUCT_GITHUB_APP_ID: ${AGENTCONSTRUCT_GITHUB_APP_ID:-}
-      AGENTCONSTRUCT_GITHUB_APP_INSTALLATION_ID: ${AGENTCONSTRUCT_GITHUB_APP_INSTALLATION_ID:-}
-      AGENTCONSTRUCT_GITHUB_APP_PRIVATE_KEY_PATH: /run/secrets/github-app.pem
-      AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN: ${AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN:-}
-      AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL: ${AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL:-}
-      AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED: ${AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED:-false}
-      AGENTCONSTRUCT_ALLOWED_FRONTEND_ORIGINS: ${AGENTCONSTRUCT_ALLOWED_FRONTEND_ORIGINS:-http://localhost:5173}
+      DAVDEPLOY_DATABASE_URL: postgresql+psycopg://davdeploy:davdeploy@postgres:5432/davdeploy
+      DAVDEPLOY_OPA_URL: http://opa:8181/v1/data/davdeploy/decision
+      DAVDEPLOY_EXECUTOR_URL: http://fixture-executor:8090
+      DAVDEPLOY_LOCAL_SIGNING_KEY: local-compose-fixture-signing-key-at-least-32-bytes
+      DAVDEPLOY_GITHUB_APP_READ_ONLY: ${DAVDEPLOY_GITHUB_APP_READ_ONLY:-false}
+      DAVDEPLOY_GITHUB_APP_ID: ${DAVDEPLOY_GITHUB_APP_ID:-}
+      DAVDEPLOY_GITHUB_APP_INSTALLATION_ID: ${DAVDEPLOY_GITHUB_APP_INSTALLATION_ID:-}
+      DAVDEPLOY_GITHUB_APP_PRIVATE_KEY_PATH: /run/secrets/github-app.pem
+      DAVDEPLOY_CONTROL_PLANE_ROLE_ARN: ${DAVDEPLOY_CONTROL_PLANE_ROLE_ARN:-}
+      DAVDEPLOY_AWS_CONNECTION_TEMPLATE_URL: ${DAVDEPLOY_AWS_CONNECTION_TEMPLATE_URL:-}
+      DAVDEPLOY_AWS_LIVE_DISCOVERY_ENABLED: ${DAVDEPLOY_AWS_LIVE_DISCOVERY_ENABLED:-false}
+      DAVDEPLOY_ALLOWED_FRONTEND_ORIGINS: ${DAVDEPLOY_ALLOWED_FRONTEND_ORIGINS:-http://localhost:5173}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       postgres: {condition: service_healthy}
@@ -51,17 +51,17 @@ services:
       fixture-executor: {condition: service_started}
     ports: ["8080:8080"]
     volumes:
-      - "${AGENTCONSTRUCT_GITHUB_APP_KEY_HOST_PATH:-/dev/null}:/run/secrets/github-app.pem:ro"
+      - "${DAVDEPLOY_GITHUB_APP_KEY_HOST_PATH:-/dev/null}:/run/secrets/github-app.pem:ro"
 
   worker:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ["python", "-m", "agentconstruct.worker"]
+    command: ["python", "-m", "davdeploy.worker"]
     environment:
-      AGENTCONSTRUCT_DATABASE_URL: postgresql+psycopg://agentconstruct:agentconstruct@postgres:5432/agentconstruct
-      AGENTCONSTRUCT_OPA_URL: http://opa:8181/v1/data/agentconstruct/decision
-      AGENTCONSTRUCT_EXECUTOR_URL: http://fixture-executor:8090
+      DAVDEPLOY_DATABASE_URL: postgresql+psycopg://davdeploy:davdeploy@postgres:5432/davdeploy
+      DAVDEPLOY_OPA_URL: http://opa:8181/v1/data/davdeploy/decision
+      DAVDEPLOY_EXECUTOR_URL: http://fixture-executor:8090
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       postgres: {condition: service_healthy}
@@ -98,4 +98,4 @@ services:
     depends_on: [prometheus, tempo]
 
 volumes:
-  agentconstruct-postgres:
+  davdeploy-postgres:

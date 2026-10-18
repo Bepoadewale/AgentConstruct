@@ -1,6 +1,6 @@
 # Career and category-leadership plan
 
-> **Historical strategy note.** Superseded on 2026-10-08 by the AgentConstruct commercial-product decision. Preserved for history.
+> **Historical strategy note.** Superseded on 2026-10-08 by the davdeploy commercial-product decision. Preserved for history.
 
 ## Goal
 
