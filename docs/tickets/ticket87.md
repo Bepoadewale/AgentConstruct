@@ -35,17 +35,24 @@ No serverless control-plane resource has been applied.
 - [x] Trust uses owner and repository IDs observed in CloudTrail.
 - [x] Plan and apply environments remain distinct.
 - [x] No wildcard subject is introduced.
-- [ ] Required local and GitHub checks pass.
+- [x] Required local validation passes.
+- [ ] Required GitHub checks pass.
 - [ ] Post-merge Terraform changes only the two trust policies.
 - [ ] Manual staging plan succeeds without applying the control plane.
 
 ## Acceptance status
 
-Implementation complete. Validation and post-merge operational checks are pending.
+Implementation and local validation are complete. GitHub and post-merge operational checks are
+pending.
 
 ## Tests / validation performed
 
-Pending.
+- One clean-room cycle passed from clean through final clean.
+- Smoke, simple, complex, degraded, Day-2, policy-failure, readiness-failure, and trace checks
+  passed.
+- `make verify`: 224 passed with one dependency deprecation warning.
+- `make terraform-validate`: all 12 roots passed.
+- Authenticated plan: 0 additions, 2 trust-policy updates, 0 destroys.
 
 ## Evidence files produced
 

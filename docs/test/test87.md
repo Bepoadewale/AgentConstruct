@@ -27,7 +27,7 @@ terraform plan -detailed-exitcode
 gh workflow run terraform-plan.yml --ref main -f environment=staging
 ```
 
-Full validation and retry commands are pending.
+The post-merge plan retry is pending.
 
 ## Observed result
 
@@ -36,6 +36,9 @@ Full validation and retry commands are pending.
 - Initial plan run `39140035466` failed before AWS access because its customized immutable OIDC
   subject did not match the name-only trust policy.
 - CloudTrail showed the exact denied subject with owner and repository IDs.
+- One clean-room validation cycle passed with 224 tests and all 12 Terraform roots valid.
+- The corrective Terraform plan contains only two in-place IAM trust updates, with no additions or
+  destroys.
 
 ## Teardown
 
