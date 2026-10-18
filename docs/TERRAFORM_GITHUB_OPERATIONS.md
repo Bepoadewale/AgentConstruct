@@ -34,7 +34,8 @@ Required environment variables:
 - `TF_RELEASE_BUCKET` for `terraform-plan`
 - `TF_RELEASE_KMS_KEY_ARN` for `terraform-plan`
 - `FRONTEND_ORIGIN` for `terraform-plan`
-- `COGNITO_DOMAIN_PREFIX` for `terraform-plan`
+- `COGNITO_DOMAIN_PREFIX` for `terraform-plan`; the workflow appends `-staging` or `-production`
+  so both environments have globally distinct Cognito domains
 
 Optional `terraform-plan` variables:
 
