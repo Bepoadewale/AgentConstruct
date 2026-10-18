@@ -223,7 +223,7 @@ data "aws_iam_policy_document" "plan_assume" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:environment:terraform-plan"]
+      values   = ["${var.github_oidc_repository_subject}:environment:terraform-plan"]
     }
   }
 }
@@ -244,7 +244,7 @@ data "aws_iam_policy_document" "apply_assume" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:environment:terraform-apply"]
+      values   = ["${var.github_oidc_repository_subject}:environment:terraform-apply"]
     }
   }
 }

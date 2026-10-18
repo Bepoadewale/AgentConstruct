@@ -23,8 +23,9 @@ def test_bootstrap_reuses_existing_state_lock_and_oidc_provider() -> None:
 def test_bootstrap_separates_plan_and_apply_trust() -> None:
     source = bootstrap_source()
 
-    assert "repo:${var.github_repository}:environment:terraform-plan" in source
-    assert "repo:${var.github_repository}:environment:terraform-apply" in source
+    assert '${var.github_oidc_repository_subject}:environment:terraform-plan' in source
+    assert '${var.github_oidc_repository_subject}:environment:terraform-apply' in source
+    assert 'default     = "repo:Bepoadewale@99020860/AgentConstruct@1391292548"' in source
     assert "sts:AssumeRoleWithWebIdentity" in source
     assert "AdministratorAccess" not in source
     assert "PowerUserAccess" not in source
