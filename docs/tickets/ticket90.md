@@ -31,21 +31,31 @@ checks the digest, and applies only the saved plan.
 
 ## Acceptance criteria
 
-- [ ] Apply asks only for the explicit confirmation phrase.
-- [ ] Apply automatically selects a successful manual plan for the exact current `main` commit.
-- [ ] A stale plan from an older commit cannot be selected.
-- [ ] Manifest version, production marker, run identity, and digest remain verified.
-- [ ] Operator documentation reflects the simplified form.
-- [ ] One required clean-room validation cycle passes.
-- [ ] Required GitHub checks pass.
+- [x] Apply asks only for the explicit confirmation phrase.
+- [x] Apply automatically selects a successful manual plan for the exact current `main` commit.
+- [x] A stale plan from an older commit cannot be selected.
+- [x] Manifest version, production marker, run identity, and digest remain verified.
+- [x] Operator documentation reflects the simplified form.
+- [x] One required clean-room validation cycle passes.
+- [x] Required GitHub checks pass for implementation commit `83786b6`.
 
 ## Acceptance status
 
-Implementation and validation are pending.
+Complete. Apply now resolves the newest manual Terraform plan for the exact current `main` commit
+and asks the founder only for the explicit confirmation phrase. Any commit change invalidates the
+selection until a new plan succeeds.
 
 ## Tests / validation performed
 
-Pending.
+- One clean-room cycle passed from clean through final clean.
+- Smoke, simple, complex, degraded, Day-2, policy-failure, readiness-failure, and trace checks
+  passed.
+- Ruff, OpenAPI snapshot, Compose configuration, and documentation checks passed.
+- `make verify`: 226 tests passed with one upstream deprecation warning.
+- `make terraform-validate`: all Terraform roots passed.
+- A live read-only workflow-runs query resolved historical plan `39140954204` for its exact commit.
+- The same query returned no plan for the newer current `main` commit, proving stale-plan rejection.
+- All seven required GitHub checks passed for implementation commit `83786b6`.
 
 ## Evidence files produced
 
