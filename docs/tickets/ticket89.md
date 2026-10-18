@@ -34,22 +34,32 @@ but no serverless control-plane apply has ever run and neither state object exis
 
 ## Acceptance criteria
 
-- [ ] The plan workflow has no environment selector.
-- [ ] Plan and apply use one fixed state key.
-- [ ] Terraform has no configurable deployment-environment variable.
-- [ ] Resource names use one canonical production namespace.
-- [ ] Old staging or environment-specific saved plans cannot be applied.
-- [ ] Operator documentation describes one production deployment.
-- [ ] One required clean-room validation cycle passes.
-- [ ] Required GitHub checks pass.
+- [x] The plan workflow has no environment selector.
+- [x] Plan and apply use one fixed state key.
+- [x] Terraform has no configurable deployment-environment variable.
+- [x] Resource names use one canonical production namespace.
+- [x] Old staging or environment-specific saved plans cannot be applied.
+- [x] Operator documentation describes one production deployment.
+- [x] One required clean-room validation cycle passes.
+- [x] Required GitHub checks pass for implementation commit `eb199b4`.
 
 ## Acceptance status
 
-Implementation and validation are pending.
+Complete. The current deployment contract contains one production control plane, one fixed state
+object, one resource namespace, and no environment selection. The old staging saved plan fails the
+new manifest-version and production-deployment checks.
 
 ## Tests / validation performed
 
-Pending.
+- One clean-room cycle passed from clean through final clean.
+- Smoke, simple, complex, degraded, Day-2, policy-failure, readiness-failure, and trace checks
+  passed.
+- Ruff, OpenAPI snapshot, Compose configuration, and documentation checks passed.
+- `make verify`: 226 tests passed with one upstream deprecation warning.
+- `make terraform-validate`: all Terraform roots passed.
+- Authenticated plan against the fixed production state: 39 additions, no changes, no destroys.
+- Post-plan AWS checks confirmed that the state object and control-plane resources remain absent.
+- All seven required GitHub checks passed for implementation commit `eb199b4`.
 
 ## Evidence files produced
 
