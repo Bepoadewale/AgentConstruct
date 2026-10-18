@@ -4,7 +4,9 @@ import os
 from dataclasses import dataclass
 from typing import Protocol
 
+import boto3
 import httpx
+from botocore.exceptions import BotoCoreError, ClientError
 
 from agentconstruct.domain import PolicyResult, WorkloadSpec
 from agentconstruct.security import Principal
@@ -50,6 +52,7 @@ class PolicyClient:
             "AGENTCONSTRUCT_OPA_URL", "http://opa:8181/v1/data/agentconstruct/decision"
         )
         self.fixture = fixture or os.getenv("AGENTCONSTRUCT_POLICY_FIXTURE", "false").lower() == "true"
+        self.function_arn = os.getenv("AGENTCONSTRUCT_POLICY_FUNCTION_ARN")
 
     def evaluate(
         self,
@@ -70,12 +73,40 @@ class PolicyClient:
         }
         if self.fixture:
             return self._fixture(payload)
+        if self.function_arn:
+            return self._invoke_lambda(payload)
         try:
             response = httpx.post(self.url, json={"input": payload}, timeout=3)
             response.raise_for_status()
             result = response.json()["result"]
             return PolicyDecision(PolicyResult(result["result"]), result["reason"])
         except (httpx.HTTPError, KeyError, ValueError) as error:
+            return PolicyDecision(
+                PolicyResult.DENY,
+                f"policy unavailable or invalid; fail closed: {type(error).__name__}",
+            )
+
+    def _invoke_lambda(self, payload: dict) -> PolicyDecision:
+        try:
+            import json
+
+            response = boto3.client("lambda").invoke(
+                FunctionName=self.function_arn,
+                InvocationType="RequestResponse",
+                Payload=json.dumps({"input": payload}).encode(),
+            )
+            if response.get("FunctionError"):
+                raise ValueError("policy Lambda returned a function error")
+            result = json.loads(response["Payload"].read())["result"]
+            return PolicyDecision(PolicyResult(result["result"]), result["reason"])
+        except (
+            BotoCoreError,
+            ClientError,
+            KeyError,
+            ValueError,
+            TypeError,
+            json.JSONDecodeError,
+        ) as error:
             return PolicyDecision(
                 PolicyResult.DENY,
                 f"policy unavailable or invalid; fail closed: {type(error).__name__}",

@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import json
 import os
 from collections.abc import Generator
 from pathlib import Path
-from urllib.parse import quote
 
-import boto3
 from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -14,16 +11,13 @@ from agentconstruct.models import Base
 
 
 def database_url() -> str:
+    cluster_arn = os.getenv("AGENTCONSTRUCT_AURORA_CLUSTER_ARN")
     secret_arn = os.getenv("AGENTCONSTRUCT_DATABASE_SECRET_ARN")
-    if secret_arn:
-        payload = boto3.client("secretsmanager").get_secret_value(SecretId=secret_arn)
-        secret = json.loads(str(payload["SecretString"]))
-        username = quote(str(secret["username"]))
-        password = quote(str(secret["password"]))
-        host = str(secret["host"])
-        port = str(secret.get("port", 5432))
-        database = str(os.getenv("AGENTCONSTRUCT_DATABASE_NAME", secret.get("dbname", "agentconstruct")))
-        return f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
+    if cluster_arn or secret_arn:
+        if not cluster_arn or not secret_arn:
+            raise RuntimeError("Aurora Data API requires both cluster and secret ARNs")
+        database = os.getenv("AGENTCONSTRUCT_DATABASE_NAME", "agentconstruct")
+        return f"postgresql+auroradataapi://:@/{database}"
     resolved = os.getenv("AGENTCONSTRUCT_DATABASE_URL", "sqlite+pysqlite:///./.local/agentconstruct.db")
     if os.getenv("AGENTCONSTRUCT_HOSTED_MODE", "false").lower() == "true" and resolved.startswith(
         "sqlite"
@@ -34,8 +28,21 @@ def database_url() -> str:
 
 def make_engine(url: str | None = None) -> Engine:
     resolved = url or database_url()
-    connect_args = {"check_same_thread": False} if resolved.startswith("sqlite") else {}
-    return create_engine(resolved, future=True, connect_args=connect_args)
+    if resolved.startswith("sqlite"):
+        connect_args = {"check_same_thread": False}
+    elif resolved.startswith("postgresql+auroradataapi"):
+        connect_args = {
+            "aurora_cluster_arn": os.environ["AGENTCONSTRUCT_AURORA_CLUSTER_ARN"],
+            "secret_arn": os.environ["AGENTCONSTRUCT_DATABASE_SECRET_ARN"],
+        }
+    else:
+        connect_args = {}
+    return create_engine(
+        resolved,
+        future=True,
+        connect_args=connect_args,
+        pool_pre_ping=not resolved.startswith("postgresql+auroradataapi"),
+    )
 
 
 engine = make_engine()
@@ -56,7 +63,7 @@ def run_migrations(target: Engine | None = None) -> None:
     with selected.begin() as connection:
         # API and worker can start together in Compose. PostgreSQL needs one
         # transaction-scoped lock before either process creates the migration table.
-        if selected.dialect.name == "postgresql":
+        if selected.dialect.name == "postgresql" and "+auroradataapi" not in str(selected.url):
             connection.execute(text("SELECT pg_advisory_xact_lock(84202601)"))
         connection.execute(
             text("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)")

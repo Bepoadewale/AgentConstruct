@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 
+import pytest
 from agentconstruct.contracts import TenantScope
 from agentconstruct.db import make_engine, run_migrations
 from agentconstruct.domain import (
@@ -17,7 +18,13 @@ from agentconstruct.intent import DeterministicIntentProvider
 from agentconstruct.models import Incident, Recommendation, RepositoryConnection, UsageRecord
 from agentconstruct.planner import AwsV1Planner
 from agentconstruct.policy import PolicyClient
-from agentconstruct.security import LOCAL_USERS, Principal, issue_local_token, verify_token
+from agentconstruct.security import (
+    LOCAL_USERS,
+    IdentityClaims,
+    Principal,
+    issue_local_token,
+    verify_token,
+)
 from agentconstruct.service import ProductService
 from agentconstruct.state import require_transition
 from fastapi import HTTPException
@@ -136,6 +143,41 @@ def make_service(intent_provider=None):
 def founder() -> Principal:
     subject, organization_id, role = LOCAL_USERS["founder"]
     return Principal(subject, organization_id, role)
+
+
+def test_verified_identity_can_create_a_personal_workspace():
+    service, _ = make_service()
+    profile = service.onboard_identity(
+        IdentityClaims("cognito-subject", "person@example.com", True),
+        "Acme",
+    )
+    assert profile["user"]["role"] == "administrator"
+    assert profile["workspace"]["name"].startswith("Acme")
+
+
+def test_unverified_identity_cannot_create_a_workspace():
+    service, _ = make_service()
+    with pytest.raises(PermissionError, match="verified email"):
+        service.onboard_identity(
+            IdentityClaims("cognito-subject", "person@example.com", False),
+            "Acme",
+        )
+
+
+def test_verified_identity_can_accept_only_its_workspace_invitation():
+    service, _ = make_service()
+    invitation = service.invite_workspace_member(
+        Principal("user-administrator", "org-demo", "administrator"),
+        "invitee@example.com",
+        "developer",
+    )
+    profile = service.onboard_identity(
+        IdentityClaims("cognito-invitee", "invitee@example.com", True),
+        "Ignored",
+        invitation["invite_token"],
+    )
+    assert profile["workspace"]["id"] == "org-demo"
+    assert profile["user"]["role"] == "developer"
 
 
 def operator() -> Principal:

@@ -359,6 +359,11 @@ class LocalLoginRequest(BaseModel):
     username: str = Field(min_length=2, max_length=80)
 
 
+class OnboardingRequest(BaseModel):
+    workspace_name: str = Field(min_length=2, max_length=100)
+    invitation_token: str | None = Field(default=None, min_length=16, max_length=160)
+
+
 class InvitationRequest(BaseModel):
     email: str = Field(min_length=3, max_length=240)
     role: str = Field(default="developer", pattern=r"^(developer|operator|administrator)$")

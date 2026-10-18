@@ -31,6 +31,7 @@ from agentconstruct.domain import (
     InvitationRequest,
     LocalLoginRequest,
     MembershipRoleRequest,
+    OnboardingRequest,
     PlanCommentRequest,
     ProjectRequest,
     SubscriptionRequest,
@@ -41,7 +42,13 @@ from agentconstruct.domain import (
 from agentconstruct.model_gateway import ModelGatewayUnavailable
 from agentconstruct.product_readiness import security_headers
 from agentconstruct.rate_limit import SlidingWindowRateLimiter
-from agentconstruct.security import Principal, issue_local_token, verify_token
+from agentconstruct.security import (
+    IdentityClaims,
+    Principal,
+    issue_local_token,
+    verify_identity_token,
+    verify_token,
+)
 from agentconstruct.service import ProductService
 from agentconstruct.telemetry import configure_tracing
 
@@ -54,12 +61,16 @@ EXECUTION_RESULTS = Counter(
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    run_migrations()
-    db = SessionLocal()
-    try:
-        ProductService(db).seed_local_identity()
-    finally:
-        db.close()
+    hosted = os.getenv("AGENTCONSTRUCT_HOSTED_MODE", "false").lower() == "true"
+    auto_migrate = os.getenv("AGENTCONSTRUCT_AUTO_MIGRATE", "false").lower() == "true"
+    if not hosted or auto_migrate:
+        run_migrations()
+    if not hosted:
+        db = SessionLocal()
+        try:
+            ProductService(db).seed_local_identity()
+        finally:
+            db.close()
     yield
 
 
@@ -193,6 +204,23 @@ def current_user(
     try:
         return service.workspace_profile(principal)
     except PermissionError as error:
+        translate(error)
+
+
+@app.post("/api/v1/onboarding")
+def onboard_current_identity(
+    request: OnboardingRequest,
+    identity: IdentityClaims = Depends(verify_identity_token),
+    service: ProductService = Depends(product_service),
+):
+    """Create a personal workspace or accept a tenant-scoped invitation."""
+    try:
+        return service.onboard_identity(
+            identity,
+            request.workspace_name,
+            request.invitation_token,
+        )
+    except (PermissionError, ValueError) as error:
         translate(error)
 
 

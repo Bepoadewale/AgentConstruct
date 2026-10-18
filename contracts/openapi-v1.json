@@ -641,6 +641,34 @@
         "title": "MembershipRoleRequest",
         "type": "object"
       },
+      "OnboardingRequest": {
+        "properties": {
+          "invitation_token": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "minLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invitation Token"
+          },
+          "workspace_name": {
+            "maxLength": 100,
+            "minLength": 2,
+            "title": "Workspace Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_name"
+        ],
+        "title": "OnboardingRequest",
+        "type": "object"
+      },
       "PlanCommentRequest": {
         "properties": {
           "body": {
@@ -3542,6 +3570,54 @@
           }
         },
         "summary": "Current User"
+      }
+    },
+    "/api/v1/onboarding": {
+      "post": {
+        "description": "Create a personal workspace or accept a tenant-scoped invitation.",
+        "operationId": "onboard_current_identity_api_v1_onboarding_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Onboard Current Identity"
       }
     },
     "/api/v1/projects": {
