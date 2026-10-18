@@ -60,5 +60,15 @@ numeric IDs. Role trust must use that exact subject rather than a name-only repo
 
 ## Current boundary
 
-These workflows are implementation only. They have not been dispatched, and no AWS resource was
-created or changed by this PR.
+The prerequisite layer is active. The state bucket, state-lock table, and GitHub OIDC provider were
+adopted from the existing account. Dedicated plan and release buckets, KMS keys, and least-privilege
+GitHub OIDC roles were then created for these workflows.
+
+Staging plan run `39140954204` completed successfully from `main` at commit
+`3f4fe983a1b34a91e42967c1057bb723c20bdad9`. It reported 39 additions, no changes, and no destroys,
+then stored the encrypted saved plan and versioned Lambda release artifact. Terraform apply has not
+been dispatched, so no serverless control-plane or customer workload resource has been created.
+
+Google identity federation remains disabled. SES sender configuration and budget notification email
+are also unset. These optional integrations can be configured before a future plan when their
+provider setup is ready.
