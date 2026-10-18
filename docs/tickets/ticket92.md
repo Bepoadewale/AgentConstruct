@@ -43,11 +43,17 @@ automatically, and the optional notification address is still modeled as a publi
 
 ## Acceptance status
 
-- Pending implementation and validation.
+- Met for the reviewed repository change. The post-merge manual plan remains the final external
+  validation step and will be added to `docs/test/test92.md` through a follow-up PR if its immutable
+  run result must be recorded in-repository.
 
 ## Tests / validation performed
 
-- Pending.
+- `make install`
+- `make verify`: Ruff, 226 Pytest tests, OpenAPI snapshot, and Compose validation passed.
+- `make terraform-validate`: every Terraform root passed.
+- PR #92 documentation conventions passed.
+- Every GitHub workflow parsed as YAML and `git diff --check` passed.
 
 ## Evidence files produced
 
