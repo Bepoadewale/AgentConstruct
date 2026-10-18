@@ -50,12 +50,21 @@ def test_serverless_terraform_uses_canonical_production_namespace() -> None:
 
 def test_apply_verifies_exact_successful_saved_plan() -> None:
     apply = workflow("terraform-apply.yml")
+    dispatch = apply.split("permissions:", maxsplit=1)[0]
 
+    assert "plan_run_id" not in dispatch
+    assert "plan_run_attempt" not in dispatch
     assert '"Terraform plan"' in apply
     assert '".github/workflows/terraform-plan.yml"' in apply
     assert '"workflow_dispatch"' in apply
     assert '"success"' in apply
     assert '"main"' in apply
+    assert "actions/workflows/terraform-plan.yml/runs" in apply
+    assert "select(.head_sha == $sha)" in apply
+    assert "No manual Terraform plan exists for the current main commit" in apply
+    assert 'test "${plan_sha}" = "${GITHUB_SHA}"' in apply
+    assert "steps.plan_run.outputs.run_id" in apply
+    assert "steps.plan_run.outputs.run_attempt" in apply
     assert "plan_run_attempt" in apply
     assert "manifest_version" in apply
     assert "production" in apply

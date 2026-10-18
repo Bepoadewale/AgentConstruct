@@ -7,12 +7,15 @@ production serverless control plane. Merging Terraform code never provisions inf
 
 1. Merge a reviewed PR containing the Terraform change.
 2. Manually run **Terraform plan** from `main` with `PLAN_SERVERLESS_CONTROL_PLANE`.
-3. Review the complete successful plan run and copy its run ID and run attempt.
-4. Manually run **Terraform apply** from `main` with that run ID, run attempt, and
+3. Review the complete successful plan run.
+4. Without changing `main`, manually run **Terraform apply** with
    `APPLY_SAVED_SERVERLESS_PLAN`.
-5. The apply workflow verifies that the selected run was a successful manual plan from `main`,
-   checks its workflow path and attempt, checks out its exact commit, downloads its encrypted saved
-   plan, verifies its SHA-256 digest, and applies only that plan.
+5. The apply workflow automatically selects the newest manual plan for the exact current `main`
+   commit. It verifies that the plan succeeded, checks its workflow path and attempt, downloads its
+   encrypted saved plan, verifies its manifest and SHA-256 digest, and applies only that plan.
+
+If `main` changes after planning, apply fails closed. Run and review a new plan from the new commit
+before applying.
 
 There is no automatic apply trigger. The apply workflow cannot generate a replacement plan.
 
