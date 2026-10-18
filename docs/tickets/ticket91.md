@@ -37,15 +37,15 @@ The backend repository, Python package, infrastructure defaults, API contract, d
 
 ## Acceptance status
 
-- In progress.
+- Met for the repository change. External repository, GitHub environment, Cloudflare, and stateful AWS identifier migration are performed after merge so the reviewed commit remains the source of truth.
 
 ## Tests / validation performed
 
-- Pending implementation.
+- One clean-room cycle passed on 2026-10-18: local bootstrap and readiness, simple, complex, Day-2, degraded, policy-failure, readiness-failure, API contract, customer-plan lifecycle, trace, all Terraform roots, Ruff, 226 Pytest tests, OpenAPI snapshot, Compose validation, and cleanup.
 
 ## Evidence files produced
 
-- `docs/test/test91.md` will record the clean-room validation.
+- `docs/test/test91.md`
 
 ## Boundaries
 
