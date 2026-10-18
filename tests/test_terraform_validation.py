@@ -14,6 +14,7 @@ EXPECTED_ROOTS = {
     "infrastructure/terraform/customer-connection",
     "infrastructure/terraform/connection-template-host",
     "infrastructure/terraform/app-runner-runtime",
+    "infrastructure/terraform/terraform-operations-bootstrap",
     "infrastructure/terraform/serverless-control-plane",
     "infrastructure/terraform/customer-workload-app-runner-pilot",
     "infrastructure/terraform/renderers/app-runner-plan",
@@ -72,7 +73,7 @@ def test_terraform_validation_cleans_temporary_data_after_success(tmp_path: Path
     assert list((tmp_path / "temporary").iterdir()) == []
     assert (tmp_path / "plugin-cache").is_dir()
     invocations = (tmp_path / "terraform.log").read_text(encoding="utf-8").splitlines()
-    assert len(invocations) == 23
+    assert len(invocations) == 1 + (2 * len(EXPECTED_ROOTS))
     assert invocations[0] == "fmt -check -recursive infrastructure/terraform"
     initialized_roots = {
         invocation.split()[0].removeprefix("-chdir=")
