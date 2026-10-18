@@ -45,7 +45,11 @@ Optional `terraform-plan` variables:
 - `GOOGLE_IDENTITY_PROVIDER_ENABLED`, default `false`
 - `SES_IDENTITY_ARN`
 - `SES_FROM_ADDRESS`
-- `BUDGET_NOTIFICATION_EMAIL`
+
+Optional `terraform-plan` environment secret:
+
+- `BUDGET_NOTIFICATION_EMAIL`; keep the notification address encrypted rather than exposing it as
+  a public repository or environment variable
 
 The state, plan, and release buckets must already exist. Enable versioning on the release bucket.
 Keep both plan and state buckets private. The plan bucket holds sensitive saved plans and must use
@@ -63,9 +67,19 @@ numeric IDs. Role trust must use that exact subject rather than a name-only repo
 
 ## Current boundary
 
-The prerequisite layer is active. The state bucket, state-lock table, and GitHub OIDC provider were
-adopted from the existing account. Dedicated plan and release buckets, KMS keys, and least-privilege
-GitHub OIDC roles were then created for these workflows.
+The renamed prerequisite layer is active in account `654654474502`, region `us-east-1`:
+
+- state bucket: `davdeploy-tfstate-654654474502`
+- lock table: `davdeploy-terraform-locks`
+- saved-plan bucket: `davdeploy-tfplans-654654474502`
+- release bucket: `davdeploy-releases-654654474502`
+- OIDC roles: `davdeploy-terraform-plan-github` and `davdeploy-terraform-apply-github`
+- KMS aliases: `alias/davdeploy-terraform-plans` and `alias/davdeploy-lambda-releases`
+
+The corresponding GitHub environments use these resources and the production frontend origin
+`https://davdeploy-frontend.pages.dev`. The prior-name resources remain isolated and recoverable
+during migration. They are not active workflow targets and must not be deleted until their state,
+object versions, and rollback value have been reviewed separately.
 
 Historical staging plan run `39140954204` completed successfully from `main` at commit
 `3f4fe983a1b34a91e42967c1057bb723c20bdad9`, but it predates the single-production manifest
@@ -77,6 +91,6 @@ The production workflow uses one remote state object at
 and one Cognito domain. Future development or staging environments require a separately reviewed
 design change rather than an operator choice in the current workflow.
 
-Google identity federation remains disabled. SES sender configuration and budget notification email
-are also unset. These optional integrations can be configured before a future plan when their
-provider setup is ready.
+Google identity federation and SES sender configuration remain disabled until their provider setup
+exists. The budget notification address is supplied through the encrypted `terraform-plan`
+environment secret when configured.
