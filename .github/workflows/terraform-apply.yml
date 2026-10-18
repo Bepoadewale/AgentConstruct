@@ -1,0 +1,120 @@
+name: Terraform apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      plan_run_id:
+        description: Successful Terraform plan workflow run ID
+        required: true
+        type: string
+      plan_run_attempt:
+        description: Reviewed Terraform plan workflow run attempt
+        required: true
+        type: string
+      confirmation:
+        description: Type APPLY_SAVED_SERVERLESS_PLAN
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-apply-serverless-control-plane
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'APPLY_SAVED_SERVERLESS_PLAN'
+    environment: terraform-apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EXPECTED_AWS_ACCOUNT_ID: ${{ vars.EXPECTED_AWS_ACCOUNT_ID }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_LOCK_TABLE: ${{ vars.TF_STATE_LOCK_TABLE }}
+      TF_PLAN_BUCKET: ${{ vars.TF_PLAN_BUCKET }}
+
+    steps:
+      - name: Verify the selected plan run
+        id: plan_run
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${{ inputs.plan_run_id }}" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid plan run ID" >&2; exit 1; }
+          [[ "${{ inputs.plan_run_attempt }}" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid plan run attempt" >&2; exit 1; }
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${{ inputs.plan_run_id }}" >plan-run.json
+          test "$(jq -r '.name' plan-run.json)" = "Terraform plan" || { echo "Run is not a Terraform plan workflow" >&2; exit 1; }
+          test "$(jq -r '.path' plan-run.json)" = ".github/workflows/terraform-plan.yml" || { echo "Unexpected plan workflow path" >&2; exit 1; }
+          test "$(jq -r '.event' plan-run.json)" = "workflow_dispatch" || { echo "Plan was not manually dispatched" >&2; exit 1; }
+          test "$(jq -r '.conclusion' plan-run.json)" = "success" || { echo "Plan run did not succeed" >&2; exit 1; }
+          test "$(jq -r '.head_branch' plan-run.json)" = "main" || { echo "Plan did not run from main" >&2; exit 1; }
+          test "$(jq -r '.run_attempt' plan-run.json)" = "${{ inputs.plan_run_attempt }}" || { echo "Plan run attempt mismatch" >&2; exit 1; }
+          plan_sha="$(jq -r '.head_sha' plan-run.json)"
+          test -n "${plan_sha}" || { echo "Plan commit is missing" >&2; exit 1; }
+          echo "sha=${plan_sha}" >>"${GITHUB_OUTPUT}"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.plan_run.outputs.sha }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.14.7'
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_TERRAFORM_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Validate required configuration and AWS identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in AWS_REGION EXPECTED_AWS_ACCOUNT_ID TF_STATE_BUCKET TF_STATE_LOCK_TABLE TF_PLAN_BUCKET; do
+            test -n "${!name:-}" || { echo "Missing required GitHub environment variable: ${name}" >&2; exit 1; }
+          done
+          actual_account_id="$(aws sts get-caller-identity --query Account --output text)"
+          test "${actual_account_id}" = "${EXPECTED_AWS_ACCOUNT_ID}" || { echo "AWS account mismatch" >&2; exit 1; }
+
+      - name: Download and verify the saved plan
+        working-directory: infrastructure/terraform/serverless-control-plane
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan_key="plans/serverless-control-plane/${{ steps.plan_run.outputs.sha }}/${{ inputs.plan_run_id }}/${{ inputs.plan_run_attempt }}"
+          aws s3 cp "s3://${TF_PLAN_BUCKET}/${plan_key}/tfplan" tfplan --only-show-errors
+          aws s3 cp "s3://${TF_PLAN_BUCKET}/${plan_key}/manifest.json" tfplan-manifest.json --only-show-errors
+          test "$(jq -r '.commit' tfplan-manifest.json)" = "${{ steps.plan_run.outputs.sha }}" || { echo "Plan commit mismatch" >&2; exit 1; }
+          test "$(jq -r '.run_id' tfplan-manifest.json)" = "${{ inputs.plan_run_id }}" || { echo "Plan run mismatch" >&2; exit 1; }
+          test "$(jq -r '.run_attempt' tfplan-manifest.json)" = "${{ inputs.plan_run_attempt }}" || { echo "Plan run attempt mismatch" >&2; exit 1; }
+          echo "$(jq -r '.sha256' tfplan-manifest.json)  tfplan" | sha256sum --check --strict
+
+      - name: Initialize the recorded state and apply only the saved plan
+        working-directory: infrastructure/terraform/serverless-control-plane
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployment_environment="$(jq -r '.environment' tfplan-manifest.json)"
+          terraform init -input=false -reconfigure \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=serverless-control-plane/${deployment_environment}.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${TF_STATE_LOCK_TABLE}" \
+            -backend-config="encrypt=true"
+          terraform apply -input=false tfplan
+
+      - name: Record result
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Terraform apply'
+            echo
+            echo "Saved plan run ID: \`${{ inputs.plan_run_id }}\`"
+            echo "Saved plan run attempt: \`${{ inputs.plan_run_attempt }}\`"
+            echo "Commit: \`${{ steps.plan_run.outputs.sha }}\`"
+            echo "Job result: \`${{ job.status }}\`"
+          } >>"${GITHUB_STEP_SUMMARY}"

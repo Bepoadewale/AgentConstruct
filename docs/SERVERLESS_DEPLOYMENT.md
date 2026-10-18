@@ -1,0 +1,50 @@
+# Serverless control-plane deployment
+
+## Target architecture
+
+The early hosted control plane uses API Gateway HTTP API, Python Lambda, Aurora PostgreSQL Serverless v2 through RDS Data API, Cognito, SES, SQS, an isolated policy Lambda, and Amazon Nova 2 Lite. Lambda is not attached to the database VPC. The database subnets have no Internet Gateway or NAT Gateway.
+
+This is an implementation contract, not evidence of a live deployment. `terraform apply` is deliberately outside routine tests and this migration PR.
+
+## Release sequence
+
+1. Build `dist/lambda/agentconstruct-control-plane.zip` with `bash scripts/build_lambda_packages.sh` on Amazon Linux or the CI packaging image. Native dependencies must target Lambda Python 3.12, not macOS.
+2. Upload the immutable zip to an existing versioned private S3 artifact bucket.
+3. Configure remote Terraform state and create a reviewed variable file for `infrastructure/terraform/serverless-control-plane`.
+4. Run `terraform plan` and review exact cost, IAM, deletion-protection, origin, region, and artifact inputs.
+5. Apply only through the guarded operator workflow after explicit approval.
+6. Invoke the emitted migration Lambda once and require `migrations-complete` before routing customer traffic.
+7. Configure Google federation using the operator's local secret source. Do not pass the Google client secret through Terraform because it would be retained in Terraform state.
+8. Set `google_identity_provider_enabled = true`, plan, and apply the Cognito app-client update.
+9. Set the frontend's public Cognito and API variables in Cloudflare Pages and redeploy static assets.
+10. Run live Google, email OTP, tenant onboarding, authorization denial, API, worker retry, policy failure, backup, restore, and teardown smoke tests.
+
+## Google identity provider
+
+Create a Google OAuth web client with Cognito's generated `/oauth2/idpresponse` URL as an exact authorized redirect URI. Store the secret in macOS Keychain under `agentconstruct-google-oauth-client-secret`, set `COGNITO_USER_POOL_ID` and `GOOGLE_CLIENT_ID`, then run `bash scripts/configure_cognito_google.sh`. The script requests only `openid email profile`, uses a mode-600 temporary payload, and removes it on exit. The secret must never be committed, logged, placed in a `VITE_*` variable, or written to Terraform state.
+
+The pre-sign-up Lambda links Google to an existing native Cognito account only when Google supplies a verified email. AgentConstruct still resolves organization and role from its own database.
+
+## Email OTP
+
+Cognito choice-based `USER_AUTH` and `EMAIL_OTP` require an eligible Cognito feature plan. Production delivery should use a verified SES identity and a non-sandbox SES account. Cognito default email delivery is suitable only for bounded setup testing and has low service limits.
+
+## Required frontend values
+
+- `VITE_API_BASE_URL`: API Gateway output `api_base_url`
+- `VITE_AUTH_MODE=oidc`
+- `VITE_OIDC_AUTHORITY`: output `cognito_issuer`
+- `VITE_OIDC_CLIENT_ID`: output `cognito_client_id`
+- `VITE_COGNITO_REGION`: Terraform region
+- `VITE_COGNITO_USER_POOL_CLIENT_ID`: output `cognito_client_id`
+- exact Pages callback and logout URLs
+
+All are public identifiers. None is a credential.
+
+## Cost and safety boundaries
+
+- Aurora Serverless v2 is configured to auto-pause at zero capacity after 15 idle minutes. Storage, requests, snapshots and active capacity still incur charges, and the first request after pause has resume latency.
+- API Gateway, Lambda, SES, SQS, CloudWatch logs, Cognito beyond its allowance, Bedrock, Secrets Manager and data transfer can incur charges.
+- AWS Budget is alerting, not a hard spending cap.
+- Database deletion protection and final snapshots are enabled by default.
+- The stack does not create customer workload resources.

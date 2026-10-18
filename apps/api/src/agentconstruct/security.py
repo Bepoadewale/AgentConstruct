@@ -31,10 +31,21 @@ class Principal:
     role: str
 
 
+@dataclass(frozen=True)
+class IdentityClaims:
+    """Provider-verified identity before AgentConstruct membership resolution."""
+
+    subject: str
+    email: str | None = None
+    email_verified: bool = False
+
+
 class IdentityVerifier(Protocol):
     """Converts a trusted bearer token into a tenant-bound principal."""
 
     def verify(self, token: str) -> Principal: ...
+
+    def verify_claims(self, token: str) -> IdentityClaims: ...
 
 
 LOCAL_USERS = {
@@ -84,9 +95,17 @@ def principal_from_claims(payload: dict, *, server_membership: bool = False) -> 
 
 
 class LocalIdentityVerifier:
+    def verify_claims(self, token: str) -> IdentityClaims:
+        payload = self._decode(token)
+        return IdentityClaims(subject=payload["sub"])
+
     def verify(self, token: str) -> Principal:
+        return principal_from_claims(self._decode(token))
+
+    @staticmethod
+    def _decode(token: str) -> dict:
         try:
-            payload = jwt.decode(
+            return jwt.decode(
                 token,
                 local_signing_key(),
                 algorithms=["HS256"],
@@ -96,7 +115,6 @@ class LocalIdentityVerifier:
             )
         except jwt.PyJWTError as error:
             raise HTTPException(401, "invalid signed identity") from error
-        return principal_from_claims(payload)
 
 
 class JwksIdentityVerifier:
@@ -108,6 +126,18 @@ class JwksIdentityVerifier:
         self.audience = audience
 
     def verify(self, token: str) -> Principal:
+        return principal_from_claims(self._decode(token), server_membership=True)
+
+    def verify_claims(self, token: str) -> IdentityClaims:
+        payload = self._decode(token)
+        verified = payload.get("email_verified") is True or payload.get("email_verified") == "true"
+        return IdentityClaims(
+            subject=payload["sub"],
+            email=payload.get("email"),
+            email_verified=verified,
+        )
+
+    def _decode(self, token: str) -> dict:
         try:
             key = self.client.get_signing_key_from_jwt(token)
             payload = jwt.decode(
@@ -115,12 +145,17 @@ class JwksIdentityVerifier:
                 key.key,
                 algorithms=["RS256", "ES256"],
                 issuer=self.issuer,
-                audience=self.audience,
-                options={"require": ["sub", "org", "role", "exp"]},
+                options={"require": ["sub", "exp"], "verify_aud": False},
             )
+            token_audience = payload.get("aud", payload.get("client_id"))
+            audiences = token_audience if isinstance(token_audience, list) else [token_audience]
+            if self.audience not in audiences:
+                raise jwt.InvalidAudienceError("token audience does not match")
+            if "cognito-idp." in self.issuer and payload.get("token_use") != "id":
+                raise jwt.InvalidTokenError("Cognito identity token is required")
         except jwt.PyJWTError as error:
             raise HTTPException(401, "invalid trusted identity") from error
-        return principal_from_claims(payload, server_membership=True)
+        return payload
 
 
 def configured_verifier() -> IdentityVerifier:
@@ -138,6 +173,13 @@ def verify_token(authorization: str = Header(...)) -> Principal:
     if not authorization.startswith("Bearer "):
         raise HTTPException(401, "bearer token required")
     return configured_verifier().verify(authorization.removeprefix("Bearer "))
+
+
+def verify_identity_token(authorization: str = Header(...)) -> IdentityClaims:
+    """Verify provider identity without granting tenant or role authority."""
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(401, "bearer token required")
+    return configured_verifier().verify_claims(authorization.removeprefix("Bearer "))
 
 
 def verify_local_token_for_test(authorization: str) -> Principal:

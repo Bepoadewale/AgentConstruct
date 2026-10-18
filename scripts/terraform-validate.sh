@@ -34,6 +34,7 @@ roots=(
   infrastructure/terraform/customer-connection
   infrastructure/terraform/connection-template-host
   infrastructure/terraform/app-runner-runtime
+  infrastructure/terraform/serverless-control-plane
   infrastructure/terraform/customer-workload-app-runner-pilot
   infrastructure/terraform/renderers/app-runner-plan
   infrastructure/terraform/pilot

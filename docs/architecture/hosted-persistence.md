@@ -1,51 +1,44 @@
 # Hosted control-plane persistence
 
-Status: implemented and statically validated; not yet applied in AWS.
+Status: serverless contract implemented and statically validated; not yet applied in AWS.
 
-The hosted App Runner runtime originally proved the customer-AWS connection flow with ephemeral SQLite. That was acceptable for validation, but not for a commercial control plane. Production hosted mode now requires durable PostgreSQL.
+The historical App Runner runtime proved customer-AWS discovery with ephemeral SQLite. A commercial control plane requires durable PostgreSQL. The selected early hosted design is Aurora PostgreSQL Serverless v2 through RDS Data API.
 
 ## Runtime rule
 
-When `AGENTCONSTRUCT_HOSTED_MODE=true`, AgentConstruct refuses any SQLite database URL. Hosted runtime must use one of:
+Hosted mode requires both:
 
-- `AGENTCONSTRUCT_DATABASE_SECRET_ARN` plus `AGENTCONSTRUCT_DATABASE_NAME`; or
-- a non-SQLite `AGENTCONSTRUCT_DATABASE_URL`.
+- `AGENTCONSTRUCT_AURORA_CLUSTER_ARN`
+- `AGENTCONSTRUCT_DATABASE_SECRET_ARN`
 
-The Secrets Manager path is preferred. The API reads the AWS-managed RDS master-user secret at startup and builds the SQLAlchemy PostgreSQL URL in memory. The secret value is not stored in product records, plans, audit events or Git.
+`AGENTCONSTRUCT_DATABASE_NAME` selects the database. AgentConstruct uses the pinned `sqlalchemy-aurora-data-api` dialect, IAM-signed Data API calls, and the AWS-managed Aurora credential secret. It does not retrieve a raw password or open a PostgreSQL socket from Lambda.
+
+Local development retains SQLite and ordinary PostgreSQL. Hosted mode rejects SQLite.
 
 ## Terraform contract
 
-`infrastructure/terraform/app-runner-runtime` now has an optional `enable_durable_database` mode.
+`infrastructure/terraform/serverless-control-plane` creates:
 
-When enabled, it creates:
+- isolated database subnets across two availability zones;
+- Aurora PostgreSQL Serverless v2 with Data API enabled;
+- AWS-managed master credentials in Secrets Manager;
+- encrypted storage, backups, log export, final snapshot and deletion protection;
+- Lambda IAM access scoped to the cluster and its credential secret.
 
-- private VPC networking for the hosted runtime;
-- private subnets across two availability zones;
-- NAT egress for App Runner runtime calls to AWS APIs and approved external integrations;
-- App Runner VPC connector;
-- private encrypted RDS PostgreSQL;
-- AWS-managed RDS master credential secret;
-- database security group allowing PostgreSQL only from the App Runner connector security group;
-- automated backups;
-- deletion protection by default;
-- App Runner environment variables that reference the database secret ARN and database name.
+The application Lambdas have no VPC attachment. The database VPC has no NAT Gateway or Internet Gateway. The database security group has no application ingress because Data API is the only application path.
 
-The App Runner runtime role receives `secretsmanager:GetSecretValue` only for the runtime signing key, per-connection ExternalId prefix and the RDS credential secret when RDS is enabled.
+## Migration behavior
+
+API cold starts do not run schema migrations. An explicit migration Lambda runs the versioned migration sequence during a release. Traffic should not move to a new release until this function succeeds.
 
 ## Boundaries
 
 - This is control-plane persistence, not customer workload persistence.
-- Applying the RDS contract creates billable AWS resources.
-- This PR does not apply RDS in AWS.
-- The currently hosted App Runner runtime may continue using the older ephemeral database until the new contract is deliberately planned and applied.
-- Fixture sign-in and fixture policy remain separate production-readiness gaps.
+- Applying the contract creates billable AWS resources.
+- Aurora Serverless v2 auto-pauses at zero capacity after an idle interval; resume latency and active/storage costs remain explicit tradeoffs.
+- Data API response, row-size, transaction-duration and statement limits must be included in live load tests.
+- The third-party SQLAlchemy dialect is pinned and covered by adapter tests, but a deployed compatibility test remains required.
 
 ## Validation
 
-Local unit tests prove:
-
-- hosted mode rejects SQLite;
-- local mode still permits SQLite;
-- database URLs can be built from a Secrets Manager RDS secret reference.
-
-Terraform validation proves the App Runner runtime contract is syntactically valid with the optional durable database resources.
+Unit tests verify Data API configuration and engine arguments. Terraform init and validate verify the serverless infrastructure shape. These checks do not prove live Aurora connectivity, schema migration, backup restore, concurrency or production latency.

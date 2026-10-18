@@ -82,7 +82,7 @@ from agentconstruct.models import (
 )
 from agentconstruct.planner import AwsV1Planner
 from agentconstruct.policy import PolicyClient
-from agentconstruct.security import Principal
+from agentconstruct.security import IdentityClaims, Principal
 from agentconstruct.state import require_transition
 
 
@@ -133,6 +133,67 @@ class ProductService:
                     ProductUser(id=subject, organization_id=org_id, subject=subject, role=role)
                 )
         self.db.commit()
+
+    def onboard_identity(
+        self,
+        identity: IdentityClaims,
+        workspace_name: str,
+        invitation_token: str | None = None,
+    ) -> dict[str, Any]:
+        """Create or join a tenant using only a provider-verified identity."""
+        existing = self.db.scalar(select(ProductUser).where(ProductUser.subject == identity.subject))
+        if existing:
+            return self.workspace_profile(
+                Principal(existing.subject, existing.organization_id, existing.role)
+            )
+        if not identity.email or not identity.email_verified:
+            raise PermissionError("a verified email is required to create or join a workspace")
+
+        invitation = None
+        if invitation_token:
+            digest = hashlib.sha256(invitation_token.encode()).hexdigest()
+            invitation = self.db.scalar(
+                select(WorkspaceInvitation).where(
+                    WorkspaceInvitation.token_digest == digest,
+                    WorkspaceInvitation.state == "PENDING",
+                )
+            )
+            expires_at = invitation.expires_at if invitation else None
+            if expires_at and expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=UTC)
+            if not invitation or not expires_at or expires_at < datetime.now(UTC):
+                raise PermissionError("invitation is invalid or expired")
+            if invitation.email.lower() != identity.email.lower():
+                raise PermissionError("invitation email does not match the verified identity")
+            organization_id = invitation.organization_id
+            role = invitation.role
+            invitation.state = "ACCEPTED"
+        else:
+            organization = Organization(
+                name=f"{workspace_name.strip()} {identity.subject[-8:]}"
+            )
+            self.db.add(organization)
+            self.db.flush()
+            organization_id = organization.id
+            role = "administrator"
+
+        user = ProductUser(
+            organization_id=organization_id,
+            subject=identity.subject,
+            role=role,
+        )
+        self.db.add(user)
+        self.db.flush()
+        principal = Principal(user.subject, user.organization_id, user.role)
+        self.audit(
+            principal,
+            "workspace.identity_onboarded",
+            "user",
+            user.id,
+            {"via_invitation": bool(invitation)},
+        )
+        self.db.commit()
+        return self.workspace_profile(principal)
 
     def audit(
         self, principal: Principal, action: str, entity_type: str, entity_id: str, detail: dict
@@ -3472,7 +3533,7 @@ class ProductService:
             "summary": {
                 "selected_profile": architecture["profile"],
                 "why": architecture["recommendation_reason"],
-                "status": "DRAFT — review only; not submitted, approved, or deployed",
+                "status": "DRAFT: review only; not submitted, approved, or deployed",
             },
             "application_analysis": {
                 "project": project.name,

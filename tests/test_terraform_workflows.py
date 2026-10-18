@@ -1,0 +1,44 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def workflow(name: str) -> str:
+    return (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+
+
+def test_serverless_plan_and_apply_are_manual_and_separate() -> None:
+    plan = workflow("terraform-plan.yml")
+    apply = workflow("terraform-apply.yml")
+
+    assert "workflow_dispatch:" in plan
+    assert "workflow_dispatch:" in apply
+    assert "github.ref == 'refs/heads/main'" in plan
+    assert "github.ref == 'refs/heads/main'" in apply
+    assert "terraform plan -input=false -out=tfplan" in plan
+    assert "terraform apply -input=false tfplan" in apply
+    assert "terraform plan " not in apply
+    assert "APPLY_SAVED_SERVERLESS_PLAN" in apply
+
+
+def test_apply_verifies_exact_successful_saved_plan() -> None:
+    apply = workflow("terraform-apply.yml")
+
+    assert '"Terraform plan"' in apply
+    assert '".github/workflows/terraform-plan.yml"' in apply
+    assert '"workflow_dispatch"' in apply
+    assert '"success"' in apply
+    assert '"main"' in apply
+    assert "plan_run_attempt" in apply
+    assert "sha256sum --check --strict" in apply
+    assert "actions: read" in apply
+    assert "environment: terraform-apply" in apply
+
+
+def test_legacy_cloud_pilot_cannot_apply() -> None:
+    pilot = workflow("cloud-pilot.yml")
+
+    assert "options: [plan, destroy]" in pilot
+    assert "APPLY_AGENTCONSTRUCT_PILOT" not in pilot
