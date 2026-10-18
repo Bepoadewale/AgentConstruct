@@ -12,7 +12,8 @@ This is an implementation contract, not evidence of a live deployment. `terrafor
 2. Upload the immutable zip to an existing versioned private S3 artifact bucket.
 3. Configure the single production remote Terraform state and reviewed inputs for `infrastructure/terraform/serverless-control-plane`.
 4. Run `terraform plan` and review exact cost, IAM, deletion-protection, origin, region, and artifact inputs.
-5. Apply only through the guarded operator workflow after explicit approval.
+5. Without changing `main`, apply only through the guarded operator workflow after explicit
+   approval. The workflow resolves the newest successful plan for that exact commit automatically.
 6. Invoke the emitted migration Lambda once and require `migrations-complete` before routing customer traffic.
 7. Configure Google federation using the operator's local secret source. Do not pass the Google client secret through Terraform because it would be retained in Terraform state.
 8. Set `google_identity_provider_enabled = true`, plan, and apply the Cognito app-client update.
