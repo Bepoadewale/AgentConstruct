@@ -1,6 +1,6 @@
 # Provider-neutral architecture, single-cloud default
 
-AgentConstruct separates workload capabilities from provider resources. The first implemented planner catalogue is AWS-only, but its provider boundary makes future adapters possible.
+davdeploy separates workload capabilities from provider resources. The first implemented planner catalogue is AWS-only, but its provider boundary makes future adapters possible.
 
 One provider is the normal recommendation. Multi-cloud adds network paths, identity rules, data-transfer cost, duplicate recovery work and harder observation. The planner should recommend it only when a real requirement—such as residency, resilience policy or an unavailable capability—outweighs that cost and complexity.
 

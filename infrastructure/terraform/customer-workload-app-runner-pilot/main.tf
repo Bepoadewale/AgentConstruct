@@ -9,16 +9,16 @@ data "aws_availability_zones" "available" {
 locals {
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
   tags = {
-    Project                    = "agentconstruct"
-    ManagedBy                  = "terraform"
-    Scope                      = var.deployment_scope
-    Placement                  = "customer-sandbox"
-    AccountBoundary            = "same-account-pilot"
-    Cell                       = "customer-sandbox-1"
-    Purpose                    = "real-app-runner-create-validate-destroy"
-    AgentConstructPlanDigest   = var.plan_digest
-    AgentConstructSourceRepo   = "Bepoadewale/ai-platform-control-plane"
-    AgentConstructSourceCommit = substr(var.source_commit, 0, 12)
+    Project               = "davdeploy"
+    ManagedBy             = "terraform"
+    Scope                 = var.deployment_scope
+    Placement             = "customer-sandbox"
+    AccountBoundary       = "same-account-pilot"
+    Cell                  = "customer-sandbox-1"
+    Purpose               = "real-app-runner-create-validate-destroy"
+    davdeployPlanDigest   = var.plan_digest
+    davdeploySourceRepo   = "Bepoadewale/ai-platform-control-plane"
+    davdeploySourceCommit = substr(var.source_commit, 0, 12)
   }
 }
 
@@ -42,7 +42,7 @@ resource "terraform_data" "account_guard" {
     }
 
     precondition {
-      condition     = !var.enable_service || var.image_identifier != "placeholder.invalid/agentconstruct-customer-workload:unset"
+      condition     = !var.enable_service || var.image_identifier != "placeholder.invalid/davdeploy-customer-workload:unset"
       error_message = "image_identifier must be set before enabling the App Runner service."
     }
   }
@@ -53,7 +53,7 @@ resource "aws_vpc" "customer_sandbox" {
   enable_dns_hostnames = true
   enable_dns_support   = true
 
-  tags = merge(local.tags, { Name = "agentconstruct-customer-sandbox-vpc" })
+  tags = merge(local.tags, { Name = "davdeploy-customer-sandbox-vpc" })
 
   depends_on = [terraform_data.account_guard]
 }
@@ -64,19 +64,19 @@ resource "aws_subnet" "customer_private" {
   cidr_block        = cidrsubnet(var.customer_vpc_cidr, 8, count.index + 10)
   availability_zone = local.azs[count.index]
 
-  tags = merge(local.tags, { Name = "agentconstruct-customer-sandbox-private-${count.index + 1}" })
+  tags = merge(local.tags, { Name = "davdeploy-customer-sandbox-private-${count.index + 1}" })
 }
 
 resource "aws_security_group" "customer_runtime" {
-  name        = "agentconstruct-customer-sandbox-runtime"
+  name        = "davdeploy-customer-sandbox-runtime"
   description = "No-default-egress boundary for the customer sandbox App Runner workload."
   vpc_id      = aws_vpc.customer_sandbox.id
 
-  tags = merge(local.tags, { Name = "agentconstruct-customer-sandbox-runtime" })
+  tags = merge(local.tags, { Name = "davdeploy-customer-sandbox-runtime" })
 }
 
 resource "aws_apprunner_vpc_connector" "customer_sandbox" {
-  vpc_connector_name = "agentconstruct-customer-sandbox"
+  vpc_connector_name = "davdeploy-customer-sandbox"
   subnets            = aws_subnet.customer_private[*].id
   security_groups    = [aws_security_group.customer_runtime.id]
   tags               = local.tags
@@ -110,8 +110,8 @@ data "aws_iam_policy_document" "apprunner_ecr_trust" {
 }
 
 resource "aws_iam_role" "apprunner_ecr_access" {
-  name                 = "agentconstruct-customer-sandbox-apprunner-ecr"
-  description          = "Allows App Runner to pull the AgentConstruct customer workload pilot image from ECR."
+  name                 = "davdeploy-customer-sandbox-apprunner-ecr"
+  description          = "Allows App Runner to pull the davdeploy customer workload pilot image from ECR."
   assume_role_policy   = data.aws_iam_policy_document.apprunner_ecr_trust.json
   max_session_duration = 3600
   tags                 = local.tags
@@ -136,8 +136,8 @@ data "aws_iam_policy_document" "runtime_trust" {
 }
 
 resource "aws_iam_role" "runtime" {
-  name                 = "agentconstruct-customer-sandbox-apprunner-runtime"
-  description          = "Minimal App Runner runtime role for the AgentConstruct customer workload pilot."
+  name                 = "davdeploy-customer-sandbox-apprunner-runtime"
+  description          = "Minimal App Runner runtime role for the davdeploy customer workload pilot."
   assume_role_policy   = data.aws_iam_policy_document.runtime_trust.json
   max_session_duration = 3600
   tags                 = local.tags
@@ -174,9 +174,9 @@ resource "aws_apprunner_service" "customer_workload" {
           PLATFORM_ALLOW_INSECURE_HEADERS = "true"
           PLATFORM_OPA_DECISION_URL       = "fixture-disabled-for-healthz-only"
           PLATFORM_CONTROL_PLANE_DB       = "/app/state/control-plane.db"
-          AGENTCONSTRUCT_PLAN_DIGEST      = var.plan_digest
-          AGENTCONSTRUCT_SOURCE_REPO      = var.source_repository
-          AGENTCONSTRUCT_SOURCE_COMMIT    = var.source_commit
+          DAVDEPLOY_PLAN_DIGEST           = var.plan_digest
+          DAVDEPLOY_SOURCE_REPO           = var.source_repository
+          DAVDEPLOY_SOURCE_COMMIT         = var.source_commit
         }
       }
     }

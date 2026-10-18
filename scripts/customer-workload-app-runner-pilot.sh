@@ -14,16 +14,16 @@ require TF_STATE_BUCKET
 require TF_LOCK_TABLE
 require AWS_REGION
 
-service_name="${AGENTCONSTRUCT_CUSTOMER_SERVICE_NAME:-agentconstruct-customer-sandbox-workload}"
-repository_name="${AGENTCONSTRUCT_CUSTOMER_ECR_REPOSITORY_NAME:-agentconstruct-customer-sandbox-workload}"
-deployment_scope="${AGENTCONSTRUCT_CUSTOMER_DEPLOYMENT_SCOPE:-customer-sandbox}"
-customer_vpc_cidr="${AGENTCONSTRUCT_CUSTOMER_VPC_CIDR:-10.84.0.0/16}"
-platform_vpc_cidr="${AGENTCONSTRUCT_PLATFORM_VPC_CIDR:-10.42.0.0/16}"
-source_repository="${AGENTCONSTRUCT_CUSTOMER_SOURCE_REPOSITORY:-https://github.com/Bepoadewale/ai-platform-control-plane}"
-source_commit="${AGENTCONSTRUCT_CUSTOMER_SOURCE_COMMIT:-unknown}"
-plan_digest="${AGENTCONSTRUCT_CUSTOMER_PLAN_DIGEST:-customer-workload-pilot-local-approval}"
-image_identifier="${AGENTCONSTRUCT_CUSTOMER_IMAGE_IDENTIFIER:-placeholder.invalid/agentconstruct-customer-workload:unset}"
-enable_service="${AGENTCONSTRUCT_ENABLE_CUSTOMER_SERVICE:-false}"
+service_name="${DAVDEPLOY_CUSTOMER_SERVICE_NAME:-davdeploy-customer-sandbox-workload}"
+repository_name="${DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_NAME:-davdeploy-customer-sandbox-workload}"
+deployment_scope="${DAVDEPLOY_CUSTOMER_DEPLOYMENT_SCOPE:-customer-sandbox}"
+customer_vpc_cidr="${DAVDEPLOY_CUSTOMER_VPC_CIDR:-10.84.0.0/16}"
+platform_vpc_cidr="${DAVDEPLOY_PLATFORM_VPC_CIDR:-10.42.0.0/16}"
+source_repository="${DAVDEPLOY_CUSTOMER_SOURCE_REPOSITORY:-https://github.com/Bepoadewale/ai-platform-control-plane}"
+source_commit="${DAVDEPLOY_CUSTOMER_SOURCE_COMMIT:-unknown}"
+plan_digest="${DAVDEPLOY_CUSTOMER_PLAN_DIGEST:-customer-workload-pilot-local-approval}"
+image_identifier="${DAVDEPLOY_CUSTOMER_IMAGE_IDENTIFIER:-placeholder.invalid/davdeploy-customer-workload:unset}"
+enable_service="${DAVDEPLOY_ENABLE_CUSTOMER_SERVICE:-false}"
 
 aws_args=()
 if [[ -n "${AWS_PROFILE:-}" ]]; then
@@ -53,7 +53,7 @@ tf_vars=(
 tf_init() {
   terraform -chdir="$root" init -input=false -reconfigure \
     -backend-config="bucket=${TF_STATE_BUCKET}" \
-    -backend-config="key=agentconstruct/customer-sandbox/workload-app-runner.tfstate" \
+    -backend-config="key=davdeploy/customer-sandbox/workload-app-runner.tfstate" \
     -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
     -backend-config="region=${AWS_REGION}"
 }
@@ -83,10 +83,10 @@ case "$operation" in
     terraform -chdir="$root" apply -input=false -auto-approve "${tf_vars[@]}"
     ;;
   build-push-image)
-    require AGENTCONSTRUCT_CUSTOMER_ECR_REPOSITORY_URL
-    require AGENTCONSTRUCT_CUSTOMER_SOURCE_DIR
-    tag="${AGENTCONSTRUCT_CUSTOMER_IMAGE_TAG:-$(date -u +%Y%m%d%H%M%S)}"
-    repo="${AGENTCONSTRUCT_CUSTOMER_ECR_REPOSITORY_URL}"
+    require DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_URL
+    require DAVDEPLOY_CUSTOMER_SOURCE_DIR
+    tag="${DAVDEPLOY_CUSTOMER_IMAGE_TAG:-$(date -u +%Y%m%d%H%M%S)}"
+    repo="${DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_URL}"
     registry="${repo%%/*}"
     aws ecr get-login-password "${aws_args[@]}" --region "$AWS_REGION" | docker login --username AWS --password-stdin "$registry"
     docker buildx build \
@@ -95,13 +95,13 @@ case "$operation" in
       --sbom=false \
       --push \
       -t "${repo}:${tag}" \
-      -f "${AGENTCONSTRUCT_CUSTOMER_SOURCE_DIR}/control-plane/Dockerfile" \
-      "${AGENTCONSTRUCT_CUSTOMER_SOURCE_DIR}"
+      -f "${DAVDEPLOY_CUSTOMER_SOURCE_DIR}/control-plane/Dockerfile" \
+      "${DAVDEPLOY_CUSTOMER_SOURCE_DIR}"
     printf '%s:%s\n' "$repo" "$tag"
     ;;
   apply-service)
-    [[ "${enable_service}" == "true" ]] || { echo "Set AGENTCONSTRUCT_ENABLE_CUSTOMER_SERVICE=true" >&2; exit 2; }
-    [[ "${image_identifier}" != "placeholder.invalid/agentconstruct-customer-workload:unset" ]] || { echo "Set AGENTCONSTRUCT_CUSTOMER_IMAGE_IDENTIFIER" >&2; exit 2; }
+    [[ "${enable_service}" == "true" ]] || { echo "Set DAVDEPLOY_ENABLE_CUSTOMER_SERVICE=true" >&2; exit 2; }
+    [[ "${image_identifier}" != "placeholder.invalid/davdeploy-customer-workload:unset" ]] || { echo "Set DAVDEPLOY_CUSTOMER_IMAGE_IDENTIFIER" >&2; exit 2; }
     [[ "${CONFIRM_CUSTOMER_WORKLOAD_SERVICE_APPLY:-}" == "APPLY_CUSTOMER_WORKLOAD_SERVICE" ]] || {
       echo "Set CONFIRM_CUSTOMER_WORKLOAD_SERVICE_APPLY=APPLY_CUSTOMER_WORKLOAD_SERVICE after reviewing the plan" >&2; exit 2;
     }
@@ -152,7 +152,7 @@ case "$operation" in
       echo "Customer sandbox VPC still exists" >&2
       exit 1
     fi
-    for role_name in agentconstruct-customer-sandbox-apprunner-ecr agentconstruct-customer-sandbox-apprunner-runtime; do
+    for role_name in davdeploy-customer-sandbox-apprunner-ecr davdeploy-customer-sandbox-apprunner-runtime; do
       if aws iam get-role "${aws_args[@]}" --role-name "$role_name" >/dev/null 2>&1; then
         echo "Customer sandbox IAM role still exists: ${role_name}" >&2
         exit 1

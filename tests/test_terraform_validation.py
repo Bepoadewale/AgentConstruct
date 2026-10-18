@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "terraform-validate.sh"
 EXPECTED_ROOTS = {
-    "infrastructure/terraform/agentconstruct-bootstrap",
+    "infrastructure/terraform/davdeploy-bootstrap",
     "infrastructure/terraform/bootstrap",
     "infrastructure/terraform/management-identity",
     "infrastructure/terraform/control-plane-runtime-identity",
@@ -48,7 +48,7 @@ def run_validation(tmp_path: Path, *, fail_match: str | None = None) -> subproce
     environment = os.environ.copy()
     environment.update(
         {
-            "AGENTCONSTRUCT_TERRAFORM_BIN": str(fake_terraform(tmp_path)),
+            "DAVDEPLOY_TERRAFORM_BIN": str(fake_terraform(tmp_path)),
             "TMPDIR": str(temp_root),
             "TF_PLUGIN_CACHE_DIR": str(tmp_path / "plugin-cache"),
             "LOG_FILE": str(tmp_path / "terraform.log"),

@@ -7,57 +7,57 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  name = "agentconstruct-runtime"
+  name = "davdeploy-runtime"
   tags = {
-    Project         = "agentconstruct"
+    Project         = "davdeploy"
     ManagedBy       = "terraform"
     Scope           = "platform"
     Placement       = "platform"
     AccountBoundary = "same-account-pilot"
     Cell            = "platform-1"
-    Purpose         = "agentconstruct-control-plane"
+    Purpose         = "davdeploy-control-plane"
   }
   secret_prefix       = trim(var.connection_secret_prefix, "/")
   database_secret_arn = var.enable_durable_database ? aws_db_instance.control_plane[0].master_user_secret[0].secret_arn : ""
   runtime_env_common = {
-    AGENTCONSTRUCT_POLICY_FIXTURE              = "false"
-    AGENTCONSTRUCT_AWS_LIVE_DISCOVERY_ENABLED  = "true"
-    AGENTCONSTRUCT_AWS_VERIFY_INLINE           = "true"
-    AGENTCONSTRUCT_CONNECTION_SECRET_BACKEND   = "aws_secrets_manager"
-    AGENTCONSTRUCT_CONNECTION_SECRET_PREFIX    = local.secret_prefix
-    AGENTCONSTRUCT_AWS_CONNECTION_TEMPLATE_URL = var.customer_template_url
-    AWS_DEFAULT_REGION                         = var.region
-    AWS_REGION                                 = var.region
+    DAVDEPLOY_POLICY_FIXTURE              = "false"
+    DAVDEPLOY_AWS_LIVE_DISCOVERY_ENABLED  = "true"
+    DAVDEPLOY_AWS_VERIFY_INLINE           = "true"
+    DAVDEPLOY_CONNECTION_SECRET_BACKEND   = "aws_secrets_manager"
+    DAVDEPLOY_CONNECTION_SECRET_PREFIX    = local.secret_prefix
+    DAVDEPLOY_AWS_CONNECTION_TEMPLATE_URL = var.customer_template_url
+    AWS_DEFAULT_REGION                    = var.region
+    AWS_REGION                            = var.region
   }
   runtime_env_database = var.enable_durable_database ? {
-    AGENTCONSTRUCT_HOSTED_MODE         = "true"
-    AGENTCONSTRUCT_DATABASE_SECRET_ARN = local.database_secret_arn
-    AGENTCONSTRUCT_DATABASE_NAME       = var.database_name
+    DAVDEPLOY_HOSTED_MODE         = "true"
+    DAVDEPLOY_DATABASE_SECRET_ARN = local.database_secret_arn
+    DAVDEPLOY_DATABASE_NAME       = var.database_name
     } : {
-    AGENTCONSTRUCT_HOSTED_MODE  = "false"
-    AGENTCONSTRUCT_DATABASE_URL = "sqlite+pysqlite:////tmp/agentconstruct.db"
+    DAVDEPLOY_HOSTED_MODE  = "false"
+    DAVDEPLOY_DATABASE_URL = "sqlite+pysqlite:////tmp/davdeploy.db"
   }
   runtime_env_model = var.enable_nova_model ? {
-    AGENTCONSTRUCT_MODEL_PROVIDER          = "bedrock"
-    AGENTCONSTRUCT_MODEL_FALLBACK          = "disabled"
-    AGENTCONSTRUCT_BEDROCK_REGION          = var.region
-    AGENTCONSTRUCT_BEDROCK_MODEL_ID        = var.nova_model_id
-    AGENTCONSTRUCT_MODEL_DATA_POLICY       = "bedrock-no-training"
-    AGENTCONSTRUCT_MODEL_MAX_OUTPUT_TOKENS = "2000"
-    AGENTCONSTRUCT_MODEL_TIMEOUT_SECONDS   = "60"
-    AGENTCONSTRUCT_MODEL_MAX_ATTEMPTS      = "2"
+    DAVDEPLOY_MODEL_PROVIDER          = "bedrock"
+    DAVDEPLOY_MODEL_FALLBACK          = "disabled"
+    DAVDEPLOY_BEDROCK_REGION          = var.region
+    DAVDEPLOY_BEDROCK_MODEL_ID        = var.nova_model_id
+    DAVDEPLOY_MODEL_DATA_POLICY       = "bedrock-no-training"
+    DAVDEPLOY_MODEL_MAX_OUTPUT_TOKENS = "2000"
+    DAVDEPLOY_MODEL_TIMEOUT_SECONDS   = "60"
+    DAVDEPLOY_MODEL_MAX_ATTEMPTS      = "2"
     } : {
-    AGENTCONSTRUCT_MODEL_PROVIDER = "fixture"
+    DAVDEPLOY_MODEL_PROVIDER = "fixture"
   }
   runtime_env_identity = var.enable_service ? {
-    AGENTCONSTRUCT_JWKS_URL                 = var.oidc_jwks_url
-    AGENTCONSTRUCT_OIDC_ISSUER              = var.oidc_issuer
-    AGENTCONSTRUCT_OIDC_AUDIENCE            = var.oidc_audience
-    AGENTCONSTRUCT_OPA_URL                  = var.policy_url
-    AGENTCONSTRUCT_ALLOWED_FRONTEND_ORIGINS = var.frontend_origin
+    DAVDEPLOY_JWKS_URL                 = var.oidc_jwks_url
+    DAVDEPLOY_OIDC_ISSUER              = var.oidc_issuer
+    DAVDEPLOY_OIDC_AUDIENCE            = var.oidc_audience
+    DAVDEPLOY_OPA_URL                  = var.policy_url
+    DAVDEPLOY_ALLOWED_FRONTEND_ORIGINS = var.frontend_origin
   } : {}
   runtime_env_local_signing = var.enable_durable_database ? {} : {
-    AGENTCONSTRUCT_LOCAL_SIGNING_KEY_SECRET_ARN = aws_secretsmanager_secret.runtime_signing_key[0].arn
+    DAVDEPLOY_LOCAL_SIGNING_KEY_SECRET_ARN = aws_secretsmanager_secret.runtime_signing_key[0].arn
   }
   runtime_env = merge(
     local.runtime_env_common,
@@ -93,7 +93,7 @@ resource "terraform_data" "runtime_guard" {
       error_message = "Hosted service activation requires one exact HTTPS frontend origin without a path or wildcard."
     }
     precondition {
-      condition     = !var.enable_service || var.image_identifier != "placeholder.invalid/agentconstruct:unset"
+      condition     = !var.enable_service || var.image_identifier != "placeholder.invalid/davdeploy:unset"
       error_message = "Hosted service activation requires an immutable ECR image identifier."
     }
   }
@@ -107,8 +107,8 @@ resource "random_password" "runtime_signing_key" {
 
 resource "aws_secretsmanager_secret" "runtime_signing_key" {
   count                   = var.enable_durable_database ? 0 : 1
-  name                    = "agentconstruct/runtime/local-signing-key"
-  description             = "Temporary fixture signing key for the hosted AgentConstruct verification runtime."
+  name                    = "davdeploy/runtime/local-signing-key"
+  description             = "Temporary fixture signing key for the hosted davdeploy verification runtime."
   recovery_window_in_days = 0
   tags                    = local.tags
 }
@@ -147,8 +147,8 @@ data "aws_iam_policy_document" "apprunner_ecr_trust" {
 }
 
 resource "aws_iam_role" "apprunner_ecr_access" {
-  name                 = "agentconstruct-apprunner-ecr-access"
-  description          = "Allows App Runner to pull the AgentConstruct runtime image from ECR."
+  name                 = "davdeploy-apprunner-ecr-access"
+  description          = "Allows App Runner to pull the davdeploy runtime image from ECR."
   assume_role_policy   = data.aws_iam_policy_document.apprunner_ecr_trust.json
   max_session_duration = 3600
   tags                 = local.tags
@@ -171,8 +171,8 @@ data "aws_iam_policy_document" "runtime_trust" {
 }
 
 resource "aws_iam_role" "runtime" {
-  name                 = "agentconstruct-control-plane-runtime"
-  description          = "AWS-hosted AgentConstruct runtime identity for read-only customer AWS verification."
+  name                 = "davdeploy-control-plane-runtime"
+  description          = "AWS-hosted davdeploy runtime identity for read-only customer AWS verification."
   assume_role_policy   = data.aws_iam_policy_document.runtime_trust.json
   max_session_duration = 3600
   tags                 = local.tags
@@ -183,7 +183,7 @@ data "aws_iam_policy_document" "runtime_permissions" {
     sid       = "AssumeOnlyCustomerReadOnlyDiscoveryRoles"
     effect    = "Allow"
     actions   = ["sts:AssumeRole"]
-    resources = ["arn:aws:iam::*:role/AgentConstructDiscovery-*"]
+    resources = ["arn:aws:iam::*:role/davdeployDiscovery-*"]
   }
 
   statement {
@@ -248,7 +248,7 @@ data "aws_iam_policy_document" "runtime_permissions" {
 }
 
 resource "aws_iam_role_policy" "runtime_permissions" {
-  name   = "agentconstruct-runtime-customer-discovery"
+  name   = "davdeploy-runtime-customer-discovery"
   role   = aws_iam_role.runtime.id
   policy = data.aws_iam_policy_document.runtime_permissions.json
 }
@@ -260,7 +260,7 @@ resource "aws_cloudwatch_log_group" "runtime" {
 }
 
 resource "aws_sns_topic" "platform_alerts" {
-  name              = "agentconstruct-platform-alerts"
+  name              = "davdeploy-platform-alerts"
   kms_master_key_id = "alias/aws/sns"
   tags              = local.tags
 }
@@ -273,7 +273,7 @@ resource "aws_sns_topic_subscription" "platform_alert_email" {
 }
 
 resource "aws_budgets_budget" "platform" {
-  name         = "agentconstruct-platform-monthly"
+  name         = "davdeploy-platform-monthly"
   budget_type  = "COST"
   limit_amount = tostring(var.monthly_platform_budget_usd)
   limit_unit   = "USD"
@@ -281,7 +281,7 @@ resource "aws_budgets_budget" "platform" {
 
   cost_filter {
     name   = "TagKeyValue"
-    values = ["user:Project$agentconstruct"]
+    values = ["user:Project$davdeploy"]
   }
 
   dynamic "notification" {
@@ -389,7 +389,7 @@ resource "aws_route_table_association" "private" {
 resource "aws_security_group" "runtime" {
   count       = var.enable_durable_database ? 1 : 0
   name        = "${local.name}-app-runner"
-  description = "App Runner VPC connector egress for AgentConstruct hosted runtime."
+  description = "App Runner VPC connector egress for davdeploy hosted runtime."
   vpc_id      = aws_vpc.runtime[0].id
 
   egress {
@@ -406,11 +406,11 @@ resource "aws_security_group" "runtime" {
 resource "aws_security_group" "database" {
   count       = var.enable_durable_database ? 1 : 0
   name        = "${local.name}-database"
-  description = "Private PostgreSQL access from AgentConstruct App Runner only."
+  description = "Private PostgreSQL access from davdeploy App Runner only."
   vpc_id      = aws_vpc.runtime[0].id
 
   ingress {
-    description     = "PostgreSQL from AgentConstruct runtime."
+    description     = "PostgreSQL from davdeploy runtime."
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
@@ -435,7 +435,7 @@ resource "aws_db_instance" "control_plane" {
   instance_class              = var.database_instance_class
   allocated_storage           = var.database_allocated_storage
   db_name                     = var.database_name
-  username                    = "agentconstruct"
+  username                    = "davdeploy"
   manage_master_user_password = true
   publicly_accessible         = false
   skip_final_snapshot         = false
@@ -464,8 +464,8 @@ resource "aws_apprunner_vpc_connector" "runtime" {
 
 resource "aws_cloudwatch_metric_alarm" "database_cpu_high" {
   count               = var.enable_durable_database ? 1 : 0
-  alarm_name          = "agentconstruct-platform-rds-cpu-high"
-  alarm_description   = "AgentConstruct platform PostgreSQL CPU exceeded 80 percent for 15 minutes."
+  alarm_name          = "davdeploy-platform-rds-cpu-high"
+  alarm_description   = "davdeploy platform PostgreSQL CPU exceeded 80 percent for 15 minutes."
   namespace           = "AWS/RDS"
   metric_name         = "CPUUtilization"
   statistic           = "Average"
@@ -484,8 +484,8 @@ resource "aws_cloudwatch_metric_alarm" "database_cpu_high" {
 
 resource "aws_cloudwatch_metric_alarm" "database_storage_low" {
   count               = var.enable_durable_database ? 1 : 0
-  alarm_name          = "agentconstruct-platform-rds-storage-low"
-  alarm_description   = "AgentConstruct platform PostgreSQL has less than 2 GiB free storage."
+  alarm_name          = "davdeploy-platform-rds-storage-low"
+  alarm_description   = "davdeploy platform PostgreSQL has less than 2 GiB free storage."
   namespace           = "AWS/RDS"
   metric_name         = "FreeStorageSpace"
   statistic           = "Minimum"
@@ -504,8 +504,8 @@ resource "aws_cloudwatch_metric_alarm" "database_storage_low" {
 
 resource "aws_cloudwatch_metric_alarm" "database_connections_high" {
   count               = var.enable_durable_database ? 1 : 0
-  alarm_name          = "agentconstruct-platform-rds-connections-high"
-  alarm_description   = "AgentConstruct platform PostgreSQL connection count exceeded the pilot threshold."
+  alarm_name          = "davdeploy-platform-rds-connections-high"
+  alarm_description   = "davdeploy platform PostgreSQL connection count exceeded the pilot threshold."
   namespace           = "AWS/RDS"
   metric_name         = "DatabaseConnections"
   statistic           = "Maximum"
@@ -541,7 +541,7 @@ resource "aws_apprunner_service" "runtime" {
       image_configuration {
         port = "8080"
         runtime_environment_variables = merge(local.runtime_env, {
-          AGENTCONSTRUCT_CONTROL_PLANE_ROLE_ARN = aws_iam_role.runtime.arn
+          DAVDEPLOY_CONTROL_PLANE_ROLE_ARN = aws_iam_role.runtime.arn
         })
       }
     }
@@ -584,8 +584,8 @@ resource "aws_apprunner_service" "runtime" {
 
 resource "aws_cloudwatch_metric_alarm" "service_5xx" {
   count               = var.enable_service ? 1 : 0
-  alarm_name          = "agentconstruct-platform-apprunner-5xx"
-  alarm_description   = "AgentConstruct App Runner returned five or more 5xx responses in five minutes."
+  alarm_name          = "davdeploy-platform-apprunner-5xx"
+  alarm_description   = "davdeploy App Runner returned five or more 5xx responses in five minutes."
   namespace           = "AWS/AppRunner"
   metric_name         = "5xxStatusResponses"
   statistic           = "Sum"
@@ -605,8 +605,8 @@ resource "aws_cloudwatch_metric_alarm" "service_5xx" {
 
 resource "aws_cloudwatch_metric_alarm" "service_latency" {
   count               = var.enable_service ? 1 : 0
-  alarm_name          = "agentconstruct-platform-apprunner-latency"
-  alarm_description   = "AgentConstruct App Runner p95 latency exceeded two seconds for ten minutes."
+  alarm_name          = "davdeploy-platform-apprunner-latency"
+  alarm_description   = "davdeploy App Runner p95 latency exceeded two seconds for ten minutes."
   namespace           = "AWS/AppRunner"
   metric_name         = "RequestLatency"
   extended_statistic  = "p95"

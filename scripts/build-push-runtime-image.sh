@@ -7,10 +7,10 @@ require() {
 }
 
 require AWS_REGION
-require AGENTCONSTRUCT_RUNTIME_ECR_REPOSITORY_URL
+require DAVDEPLOY_RUNTIME_ECR_REPOSITORY_URL
 
-tag="${AGENTCONSTRUCT_RUNTIME_IMAGE_TAG:-$(git rev-parse --short=12 HEAD)}"
-repo="${AGENTCONSTRUCT_RUNTIME_ECR_REPOSITORY_URL}"
+tag="${DAVDEPLOY_RUNTIME_IMAGE_TAG:-$(git rev-parse --short=12 HEAD)}"
+repo="${DAVDEPLOY_RUNTIME_ECR_REPOSITORY_URL}"
 registry="${repo%%/*}"
 aws_args=()
 if [[ -n "${AWS_PROFILE:-}" ]]; then

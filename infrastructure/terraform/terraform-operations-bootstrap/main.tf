@@ -14,36 +14,36 @@ data "aws_iam_openid_connect_provider" "github" {
 }
 
 locals {
-  plan_bucket_name    = "agentconstruct-tfplans-${data.aws_caller_identity.current.account_id}"
-  release_bucket_name = "agentconstruct-releases-${data.aws_caller_identity.current.account_id}"
+  plan_bucket_name    = "davdeploy-tfplans-${data.aws_caller_identity.current.account_id}"
+  release_bucket_name = "davdeploy-releases-${data.aws_caller_identity.current.account_id}"
   common_tags = {
-    Product   = "AgentConstruct"
+    Product   = "davdeploy"
     ManagedBy = "Terraform"
     Scope     = "terraform-operations"
   }
 }
 
 resource "aws_kms_key" "plans" {
-  description             = "Encrypt AgentConstruct saved Terraform plans"
+  description             = "Encrypt davdeploy saved Terraform plans"
   deletion_window_in_days = 30
   enable_key_rotation     = true
   tags                    = merge(local.common_tags, { Purpose = "saved-plans" })
 }
 
 resource "aws_kms_alias" "plans" {
-  name          = "alias/agentconstruct-terraform-plans"
+  name          = "alias/davdeploy-terraform-plans"
   target_key_id = aws_kms_key.plans.key_id
 }
 
 resource "aws_kms_key" "releases" {
-  description             = "Encrypt immutable AgentConstruct Lambda releases"
+  description             = "Encrypt immutable davdeploy Lambda releases"
   deletion_window_in_days = 30
   enable_key_rotation     = true
   tags                    = merge(local.common_tags, { Purpose = "lambda-releases" })
 }
 
 resource "aws_kms_alias" "releases" {
-  name          = "alias/agentconstruct-lambda-releases"
+  name          = "alias/davdeploy-lambda-releases"
   target_key_id = aws_kms_key.releases.key_id
 }
 
@@ -250,7 +250,7 @@ data "aws_iam_policy_document" "apply_assume" {
 }
 
 resource "aws_iam_role" "plan" {
-  name                 = "agentconstruct-terraform-plan-github"
+  name                 = "davdeploy-terraform-plan-github"
   description          = "GitHub OIDC role for read-only planning and encrypted plan publication"
   assume_role_policy   = data.aws_iam_policy_document.plan_assume.json
   max_session_duration = 3600
@@ -263,7 +263,7 @@ resource "aws_iam_role_policy_attachment" "plan_read_only" {
 }
 
 resource "aws_iam_role_policy" "plan_operations" {
-  name   = "agentconstruct-terraform-plan-operations"
+  name   = "davdeploy-terraform-plan-operations"
   role   = aws_iam_role.plan.id
   policy = data.aws_iam_policy_document.plan_operations.json
 }
@@ -320,8 +320,8 @@ data "aws_iam_policy_document" "plan_operations" {
 }
 
 resource "aws_iam_role" "apply" {
-  name                 = "agentconstruct-terraform-apply-github"
-  description          = "GitHub OIDC role for applying only reviewed AgentConstruct saved plans"
+  name                 = "davdeploy-terraform-apply-github"
+  description          = "GitHub OIDC role for applying only reviewed davdeploy saved plans"
   assume_role_policy   = data.aws_iam_policy_document.apply_assume.json
   max_session_duration = 3600
   tags                 = merge(local.common_tags, { Purpose = "terraform-apply" })
@@ -333,7 +333,7 @@ resource "aws_iam_role_policy_attachment" "apply_read_only" {
 }
 
 resource "aws_iam_role_policy" "apply_backend" {
-  name   = "agentconstruct-terraform-apply-backend"
+  name   = "davdeploy-terraform-apply-backend"
   role   = aws_iam_role.apply.id
   policy = data.aws_iam_policy_document.apply_backend.json
 }
@@ -384,7 +384,7 @@ data "aws_iam_policy_document" "apply_backend" {
 }
 
 resource "aws_iam_role_policy" "apply_control_plane" {
-  name   = "agentconstruct-serverless-control-plane"
+  name   = "davdeploy-serverless-control-plane"
   role   = aws_iam_role.apply.id
   policy = data.aws_iam_policy_document.apply_control_plane.json
 }
@@ -422,7 +422,7 @@ data "aws_iam_policy_document" "apply_control_plane" {
       "lambda:DeleteFunction", "lambda:AddPermission", "lambda:RemovePermission", "lambda:TagResource", "lambda:UntagResource",
       "lambda:CreateEventSourceMapping", "lambda:UpdateEventSourceMapping", "lambda:DeleteEventSourceMapping"
     ]
-    resources = ["arn:${data.aws_partition.current.partition}:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:agentconstruct-*"]
+    resources = ["arn:${data.aws_partition.current.partition}:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:davdeploy-*"]
   }
   statement {
     sid       = "RuntimeEventSources"
@@ -455,7 +455,7 @@ data "aws_iam_policy_document" "apply_control_plane" {
     actions = [
       "sqs:CreateQueue", "sqs:DeleteQueue", "sqs:SetQueueAttributes", "sqs:TagQueue", "sqs:UntagQueue"
     ]
-    resources = ["arn:${data.aws_partition.current.partition}:sqs:${var.region}:${data.aws_caller_identity.current.account_id}:agentconstruct-*"]
+    resources = ["arn:${data.aws_partition.current.partition}:sqs:${var.region}:${data.aws_caller_identity.current.account_id}:davdeploy-*"]
   }
   statement {
     sid    = "Schedules"
@@ -463,13 +463,13 @@ data "aws_iam_policy_document" "apply_control_plane" {
     actions = [
       "events:PutRule", "events:DeleteRule", "events:PutTargets", "events:RemoveTargets", "events:TagResource", "events:UntagResource"
     ]
-    resources = ["arn:${data.aws_partition.current.partition}:events:${var.region}:${data.aws_caller_identity.current.account_id}:rule/agentconstruct-*"]
+    resources = ["arn:${data.aws_partition.current.partition}:events:${var.region}:${data.aws_caller_identity.current.account_id}:rule/davdeploy-*"]
   }
   statement {
     sid       = "Budgets"
     effect    = "Allow"
     actions   = ["budgets:CreateBudget", "budgets:ModifyBudget", "budgets:DeleteBudget"]
-    resources = ["arn:${data.aws_partition.current.partition}:budgets::${data.aws_caller_identity.current.account_id}:budget/agentconstruct-*"]
+    resources = ["arn:${data.aws_partition.current.partition}:budgets::${data.aws_caller_identity.current.account_id}:budget/davdeploy-*"]
   }
   statement {
     sid    = "RuntimeRoles"
@@ -478,7 +478,7 @@ data "aws_iam_policy_document" "apply_control_plane" {
       "iam:CreateRole", "iam:DeleteRole", "iam:UpdateAssumeRolePolicy", "iam:TagRole", "iam:UntagRole",
       "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:AttachRolePolicy", "iam:DetachRolePolicy", "iam:PassRole"
     ]
-    resources = ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/agentconstruct-*"]
+    resources = ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/davdeploy-*"]
   }
   statement {
     sid       = "RdsServiceRole"

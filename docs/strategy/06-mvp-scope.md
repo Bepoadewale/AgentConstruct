@@ -2,7 +2,7 @@
 
 ## Recommended MVP
 
-AgentConstruct should first serve one narrow job: **choose and explain a safe, low-complexity AWS architecture for a small GitHub-hosted web/API workload, before anyone deploys it.**
+davdeploy should first serve one narrow job: **choose and explain a safe, low-complexity AWS architecture for a small GitHub-hosted web/API workload, before anyone deploys it.**
 
 ### Supported workload envelope
 

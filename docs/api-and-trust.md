@@ -2,7 +2,7 @@
 
 The versioned HTTP API is documented interactively at `/docs` and as OpenAPI at
 `/openapi.json`. All authenticated product APIs use `/api/v1` and emit
-`X-AgentConstruct-API-Version: v1`.
+`X-davdeploy-API-Version: v1`.
 
 ## Local developer workflow
 

@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from agentconstruct.domain import CloudInventorySnapshot, EnvironmentName, WorkloadSpec
-from agentconstruct.planner import AwsV1Planner
+from davdeploy.domain import CloudInventorySnapshot, EnvironmentName, WorkloadSpec
+from davdeploy.planner import AwsV1Planner
 
 
 def spec(**overrides) -> WorkloadSpec:

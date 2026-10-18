@@ -20,8 +20,8 @@ resource "aws_db_instance" "this" {
   engine_version              = "16"
   instance_class              = "db.t4g.micro"
   allocated_storage           = 20
-  db_name                     = "agentconstruct"
-  username                    = "agentconstruct"
+  db_name                     = "davdeploy"
+  username                    = "davdeploy"
   manage_master_user_password = true
   publicly_accessible         = false
   skip_final_snapshot         = false

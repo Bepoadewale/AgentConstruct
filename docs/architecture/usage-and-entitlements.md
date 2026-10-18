@@ -1,6 +1,6 @@
 # Usage and entitlement boundaries
 
-AgentConstruct records typed `UsageEvent` values with tenant and correlation metadata.
+davdeploy records typed `UsageEvent` values with tenant and correlation metadata.
 `Entitlement` defines a tenant-scoped limit, unit, event type and time window. The local
 ledger deterministically returns a `UsageDecision` before work is admitted.
 

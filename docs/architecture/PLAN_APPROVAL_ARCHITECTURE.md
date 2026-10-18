@@ -5,7 +5,7 @@ The customer planning path is deliberately separate from the existing local exec
 ```mermaid
 sequenceDiagram
   participant Dev as Developer
-  participant API as AgentConstruct API
+  participant API as davdeploy API
   participant DB as PostgreSQL
   participant Admin as Workspace administrator
   Dev->>API: create draft revision

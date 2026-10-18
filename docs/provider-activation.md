@@ -11,12 +11,12 @@ in `.env.example` intentionally keep all external adapters disabled.
    not use an email address as the primary identity key.
 2. **Amazon Cognito — customer sign-in later.** Create a User Pool in the
    chosen control-plane region, then set its issuer, JWKS URL and app-client
-   audience through the generic OIDC variables. AgentConstruct will still map
+   audience through the generic OIDC variables. davdeploy will still map
    verified subjects to server-side workspace membership.
 3. **Gmail API — small private beta notifications.** Use a dedicated verified
    Workspace sender. Move transactional notifications to SES when delivery
    volume, reputation, or tenant segregation needs justify it.
-4. **Manual beta entitlements — no cards.** Keep `AGENTCONSTRUCT_BILLING_PROVIDER=manual`
+4. **Manual beta entitlements — no cards.** Keep `DAVDEPLOY_BILLING_PROVIDER=manual`
    until paid plans exist. Stripe is the intended later webhook source; its
    events must update the local entitlement records, never bypass them.
 5. **Local analytics first.** Activate PostHog only after its data region,

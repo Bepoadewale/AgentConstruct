@@ -4,7 +4,7 @@
 
 Date: 2026-10-08. Environment: macOS, Docker Desktop and Python 3.12.
 
-Two clean project-runtime cycles were completed, followed by a third confirmation that rebuilt the Docker images. Before each cycle, `make clean-local` removed only AgentConstruct containers, network, PostgreSQL volume, virtual environment and `.local` data. The first two cycles retained Docker images; the third used `docker compose up -d --build`. No prior runtime state, database data or local files were needed.
+Two clean project-runtime cycles were completed, followed by a third confirmation that rebuilt the Docker images. Before each cycle, `make clean-local` removed only davdeploy containers, network, PostgreSQL volume, virtual environment and `.local` data. The first two cycles retained Docker images; the third used `docker compose up -d --build`. No prior runtime state, database data or local files were needed.
 
 Each cycle ran:
 
@@ -26,7 +26,7 @@ Results from every cycle:
 - The success demo created staging and production environments, observed two `READY` results, required a different operator to approve production, destroyed production through the governed path and wrote audit events.
 - The budget failure demo was denied by live OPA before execution.
 - The readiness failure demo made the bounded executor report failure. The observer recorded `FAILED`; it did not assume `READY` because a command returned.
-- Tempo returned traces for `agentconstruct-api` after the demo.
+- Tempo returned traces for `davdeploy-api` after the demo.
 - `ruff` passed; `pytest` passed **12 tests**; `opa test` passed **3/3**; `docker compose config --quiet` passed.
 - Each cleanup confirmed that project containers and `.local` data were absent. No broad Docker cleanup command was used.
 
@@ -42,7 +42,7 @@ PR 3 adds strict CI validation for those contracts and a manual GitHub OIDC oper
 
 Date: 2026-10-08. Environment: macOS, Docker Desktop and Python 3.12.
 
-The first hardening cycle ran from a removed AgentConstruct Compose stack and PostgreSQL volume. It rebuilt the API and new worker image, then ran:
+The first hardening cycle ran from a removed davdeploy Compose stack and PostgreSQL volume. It rebuilt the API and new worker image, then ran:
 
 ```bash
 make bootstrap-local
@@ -115,7 +115,7 @@ Date: 2026-10-09. The CLI and stdio MCP server were tested as thin API clients, 
 - CLI request construction preserved the caller's project, repository, cloud-connection reference and idempotency key.
 - Unit validation passed with **33 tests**.
 
-Two clean Compose cycles then passed with the installed `agentconstruct-mcp` entry point included in each cycle. Each cycle passed smoke, browser contract, canonical demo, policy failure, readiness failure, Tempo trace check, Ruff, all then-current 32 tests, OPA 3/3, Terraform `fmt`/offline-backend `init`/`validate`, Kubernetes render, MCP `tools/list`, and scoped cleanup. The final 33-test run added a tenant-scoped agent-read test. The MCP contract confirmed the tools were available without an approval tool.
+Two clean Compose cycles then passed with the installed `davdeploy-mcp` entry point included in each cycle. Each cycle passed smoke, browser contract, canonical demo, policy failure, readiness failure, Tempo trace check, Ruff, all then-current 32 tests, OPA 3/3, Terraform `fmt`/offline-backend `init`/`validate`, Kubernetes render, MCP `tools/list`, and scoped cleanup. The final 33-test run added a tenant-scoped agent-read test. The MCP contract confirmed the tools were available without an approval tool.
 
 ## Governed Day-2 loop clean-room evidence
 
@@ -136,7 +136,7 @@ make verify
 make opa-test
 make terraform-validate
 make kubernetes-render
-printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | AGENTCONSTRUCT_TOKEN=fixture-token .venv/bin/agentconstruct-mcp
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | DAVDEPLOY_TOKEN=fixture-token .venv/bin/davdeploy-mcp
 make clean-local
 ```
 
@@ -224,7 +224,7 @@ make verify
 make opa-test
 make terraform-validate
 make kubernetes-render
-printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | AGENTCONSTRUCT_TOKEN=fixture-token .venv/bin/agentconstruct-mcp
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | DAVDEPLOY_TOKEN=fixture-token .venv/bin/davdeploy-mcp
 make clean-local
 ```
 
@@ -244,27 +244,27 @@ Date: 2026-10-09. Environment: macOS, Terraform, AWS CLI and the authenticated c
 
 The following identity-only Terraform roots were planned against the authenticated account and then applied after review:
 
-- `agentconstruct-bootstrap`: encrypted/versioned AgentConstruct state bucket, public-access block and DynamoDB lock table (**5 added**).
-- `management-identity`: GitHub OIDC provider, `agentconstruct-control-plane-github`, and its narrowly scoped `sts:AssumeRole` policy (**3 added**).
-- `customer-connection`: `agentconstruct-adewale-primary-aws-discovery`, its read-only inventory/cost policy, and `agentconstruct-adewale-primary-aws-execution` with **no permissions** (**3 added**).
+- `davdeploy-bootstrap`: encrypted/versioned davdeploy state bucket, public-access block and DynamoDB lock table (**5 added**).
+- `management-identity`: GitHub OIDC provider, `davdeploy-control-plane-github`, and its narrowly scoped `sts:AssumeRole` policy (**3 added**).
+- `customer-connection`: `davdeploy-adewale-primary-aws-discovery`, its read-only inventory/cost policy, and `davdeploy-adewale-primary-aws-execution` with **no permissions** (**3 added**).
 
-The state for all three roots was migrated to the new encrypted bucket and DynamoDB lock table. Follow-up authenticated plans reported **No changes**. A temporary customer-owner trust path was used only to prove the two-hop STS chain, then removed by Terraform. The final control-plane trust policy permits only GitHub OIDC for `Bepoadewale/AgentConstruct` on `main`.
+The state for all three roots was migrated to the new encrypted bucket and DynamoDB lock table. Follow-up authenticated plans reported **No changes**. A temporary customer-owner trust path was used only to prove the two-hop STS chain, then removed by Terraform. The final control-plane trust policy permits only GitHub OIDC for `Bepoadewale/davdeploy` on `main`.
 
-The verified STS path was: temporary owner verification identity → AgentConstruct control-plane role → customer read-only discovery role with an external ID. The discovery session returned one VPC, one ECR repository, six S3 buckets, and no EKS, ECS, RDS or App Runner workload. Cost Explorer returned daily unblended values for 2026-10-01 through 2026-10-08. Those values are recorded as delayed billing data, not settled billing.
+The verified STS path was: temporary owner verification identity → davdeploy control-plane role → customer read-only discovery role with an external ID. The discovery session returned one VPC, one ECR repository, six S3 buckets, and no EKS, ECS, RDS or App Runner workload. Cost Explorer returned daily unblended values for 2026-10-01 through 2026-10-08. Those values are recorded as delayed billing data, not settled billing.
 
-The live result was stored through the running AgentConstruct API as a tenant-scoped, credential-free inventory snapshot with `live-read-only-sts-discovery` provenance and an audit event. No access key was created or stored. No application, VPC, compute, database, EKS, ECS, App Runner, GitOps, or other customer workload resource was deployed.
+The live result was stored through the running davdeploy API as a tenant-scoped, credential-free inventory snapshot with `live-read-only-sts-discovery` provenance and an audit event. No access key was created or stored. No application, VPC, compute, database, EKS, ECS, App Runner, GitOps, or other customer workload resource was deployed.
 
 ## Executed GitHub App read-only discovery
 
-Date: 2026-10-09. The existing GitHub App `ai-platform-control-plane-pilot` was installed on the selected customer repository `Bepoadewale/ai-platform-control-plane`. AgentConstruct used the App private key only from the owner-protected local file, minted a short-lived installation token for installation `167128937`, and read the repository metadata: `main` is its default branch.
+Date: 2026-10-09. The existing GitHub App `ai-platform-control-plane-pilot` was installed on the selected customer repository `Bepoadewale/ai-platform-control-plane`. davdeploy used the App private key only from the owner-protected local file, minted a short-lived installation token for installation `167128937`, and read the repository metadata: `main` is its default branch.
 
-The local AgentConstruct API then created a tenant-scoped project connection, ran repository discovery through the live App adapter, and recorded an audit event. The adapter explicitly rejected a desired-state write. No token, private key, webhook secret, pull request, commit, repository setting, or customer code was written or stored. Webhooks and reviewed desired-state PR publication remain unexecuted.
+The local davdeploy API then created a tenant-scoped project connection, ran repository discovery through the live App adapter, and recorded an audit event. The adapter explicitly rejected a desired-state write. No token, private key, webhook secret, pull request, commit, repository setting, or customer code was written or stored. Webhooks and reviewed desired-state PR publication remain unexecuted.
 
 ## AWS Quick Create onboarding contract
 
-Date: 2026-10-09. `aws cloudformation validate-template` authenticated successfully against the AWS account for `infrastructure/cloudformation/customer-discovery-role.yaml`. Validation created no stack, role, workload, or other AWS resource. The template defines one customer-side discovery role with an AgentConstruct control-plane trust principal, per-connection external ID, short sessions, and metadata-only policy. Unit tests also verify that it has no secret-value, S3-object, IAM pass-role, or create permission.
+Date: 2026-10-09. `aws cloudformation validate-template` authenticated successfully against the AWS account for `infrastructure/cloudformation/customer-discovery-role.yaml`. Validation created no stack, role, workload, or other AWS resource. The template defines one customer-side discovery role with an davdeploy control-plane trust principal, per-connection external ID, short sessions, and metadata-only policy. Unit tests also verify that it has no secret-value, S3-object, IAM pass-role, or create permission.
 
-No authenticated plan was run. An eventual plan requires a real AgentConstruct control-plane IAM role ARN, unique external ID, dedicated encrypted state backend, and explicit customer approval. No IAM role, credential, workload, network or other AWS resource was created.
+No authenticated plan was run. An eventual plan requires a real davdeploy control-plane IAM role ARN, unique external ID, dedicated encrypted state backend, and explicit customer approval. No IAM role, credential, workload, network or other AWS resource was created.
 
 ## AWS connection wizard contract
 
@@ -274,14 +274,14 @@ The public-template Terraform root uses a versioned S3 object key and permits pu
 
 Date: 2026-10-13. An authenticated plan against AWS account `654654474502` completed with **7 to add, 0 to change, 0 to destroy**: the dedicated template bucket, ownership controls, versioning, encryption, narrowly scoped public-read policy, public-access configuration, and one hash-versioned YAML object.
 
-The first non-interactive apply attempt failed safely because Terraform still requested interactive approval after the script-level confirmation. The script was fixed to pass `-auto-approve` only after the explicit `CONFIRM_TEMPLATE_HOST_APPLY=APPLY_AGENTCONSTRUCT_TEMPLATE_HOST` guard is present. A second apply completed with **7 added, 0 changed, 0 destroyed**.
+The first non-interactive apply attempt failed safely because Terraform still requested interactive approval after the script-level confirmation. The script was fixed to pass `-auto-approve` only after the explicit `CONFIRM_TEMPLATE_HOST_APPLY=APPLY_DAVDEPLOY_TEMPLATE_HOST` guard is present. A second apply completed with **7 added, 0 changed, 0 destroyed**.
 
 Verification found that the first object upload had `x-amz-version-id: null` because S3 versioning completed after the object upload. The Terraform root was tightened so the object depends on bucket ownership controls, encryption and versioning. The object was tainted and re-applied, completing with **1 added, 0 changed, 1 destroyed** for the template object only.
 
 Final evidence:
 
 ```text
-customer_discovery_template_url = "https://agentconstruct-customer-templates-654654474502.s3.us-east-1.amazonaws.com/cloudformation/customer-discovery-role-0e3209bff02286acf582ec3ed73858266261b294ae0c7e0d30ae37550a8926b2.yaml"
+customer_discovery_template_url = "https://davdeploy-customer-templates-654654474502.s3.us-east-1.amazonaws.com/cloudformation/customer-discovery-role-0e3209bff02286acf582ec3ed73858266261b294ae0c7e0d30ae37550a8926b2.yaml"
 bucket versioning = Enabled
 bucket encryption = AES256
 template object HTTP status = 200
@@ -289,7 +289,7 @@ template object x-amz-version-id = sRcSIAyRmBYcnqUEvImdK7MhtqQJ60xM
 bucket root HTTP status = 403 AccessDenied
 ```
 
-No customer workload, VPC, compute, database, Kubernetes, GitOps, secret, or application resource was created by this template-host apply. This was AgentConstruct control-plane foundation evidence only. Later on 2026-10-13, the App Runner-hosted runtime was applied and verified for read-only customer discovery; see the AWS-hosted runtime evidence below.
+No customer workload, VPC, compute, database, Kubernetes, GitOps, secret, or application resource was created by this template-host apply. This was davdeploy control-plane foundation evidence only. Later on 2026-10-13, the App Runner-hosted runtime was applied and verified for read-only customer discovery; see the AWS-hosted runtime evidence below.
 
 ## Customer-plan approval workflow clean-room evidence
 
@@ -309,7 +309,7 @@ make demo-simple && make demo-complex && make demo-degraded && make demo-day2
 make demo && make demo-failure && make demo-readiness-failure
 make trace-check && make verify && make opa-test
 make terraform-validate && make kubernetes-render
-printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | AGENTCONSTRUCT_TOKEN=fixture-token .venv/bin/agentconstruct-mcp
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | DAVDEPLOY_TOKEN=fixture-token .venv/bin/davdeploy-mcp
 make clean-local
 ```
 
@@ -411,7 +411,7 @@ Results:
 - Full pytest suite passed: **90 passed**.
 - Browser contract passed against the rebuilt local UI.
 - The desired-state publication path requires an approved customer-plan revision, exact digest, connected repository branch, and publishable GitHub App state.
-- The generated fixture package includes App Runner/ECS/EKS-aware delivery contracts, required checks, the approved digest and the rule that AgentConstruct never merges customer code or desired state.
+- The generated fixture package includes App Runner/ECS/EKS-aware delivery contracts, required checks, the approved digest and the rule that davdeploy never merges customer code or desired state.
 - Failure fixtures passed for stale digest, changed branch and revoked GitHub App installation.
 
 This is local fixture evidence only. It did not create a GitHub branch, pull request, check run, merge, GitOps sync, Terraform plan/apply, AWS resource, or production deployment.
@@ -427,8 +427,8 @@ This validation added an approved-plan to Terraform-contract renderer for the fi
 terraform fmt -recursive infrastructure/terraform
 node --check apps/web/app.js
 .venv/bin/python -m ruff check apps/api/src tests scripts
-TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-apprunner-renderer terraform -chdir=infrastructure/terraform/renderers/app-runner-plan init -backend=false -input=false
-TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-apprunner-renderer terraform -chdir=infrastructure/terraform/renderers/app-runner-plan validate
+TF_DATA_DIR=/tmp/davdeploy-tfvalidate-apprunner-renderer terraform -chdir=infrastructure/terraform/renderers/app-runner-plan init -backend=false -input=false
+TF_DATA_DIR=/tmp/davdeploy-tfvalidate-apprunner-renderer terraform -chdir=infrastructure/terraform/renderers/app-runner-plan validate
 .venv/bin/python -m pytest -q
 make terraform-validate
 docker compose up -d --build
@@ -563,7 +563,7 @@ This is local product stability evidence only. It did not write GitHub, run auth
 
 ## Demo data readiness seed
 
-Date: 2026-10-13. Environment: macOS, Docker Desktop, Python 3.12 virtualenv, running local AgentConstruct stack.
+Date: 2026-10-13. Environment: macOS, Docker Desktop, Python 3.12 virtualenv, running local davdeploy stack.
 
 ```bash
 .venv/bin/python -m py_compile scripts/seed_demo_data.py
@@ -578,7 +578,7 @@ Results:
 
 ## Administrator-gated readiness actions
 
-Date: 2026-10-13. Environment: macOS, Docker Desktop, Python 3.12 virtualenv, running local AgentConstruct stack.
+Date: 2026-10-13. Environment: macOS, Docker Desktop, Python 3.12 virtualenv, running local davdeploy stack.
 
 This validation made future cloud-readiness controls workspace-administrator-only. A developer can still create, submit and view plans, but cannot run the operator preflight or see the operator-only UI controls.
 
@@ -675,7 +675,7 @@ This is local product proof only. It did not write GitHub, run authenticated Ter
 
 ## Agent client customer-plan review parity
 
-Date: 2026-10-13. Environment: macOS, Docker Desktop, Python 3.12, running local AgentConstruct stack.
+Date: 2026-10-13. Environment: macOS, Docker Desktop, Python 3.12, running local davdeploy stack.
 
 This validation added safe customer-plan review operations to the CLI and MCP surfaces while preserving the rule that MCP has no approval tool and neither interface obtains cloud credentials.
 
@@ -697,11 +697,11 @@ Results:
 
 This is local agent-interface evidence only. It did not write GitHub, run authenticated Terraform, run `terraform apply`, create AWS resources, run Kubernetes, sync GitOps or deploy a workload.
 
-## AWS-hosted AgentConstruct runtime and live customer discovery verification
+## AWS-hosted davdeploy runtime and live customer discovery verification
 
 Date: 2026-10-13. Environment: macOS, AWS CLI, Terraform, Docker Desktop, AWS account `654654474502`, region `us-east-1`.
 
-Purpose: deploy the AgentConstruct control-plane runtime into AWS and verify the customer AWS connection journey against the hosted runtime. This is control-plane/discovery validation only, not customer workload deployment.
+Purpose: deploy the davdeploy control-plane runtime into AWS and verify the customer AWS connection journey against the hosted runtime. This is control-plane/discovery validation only, not customer workload deployment.
 
 Commands and evidence:
 
@@ -709,7 +709,7 @@ Commands and evidence:
 AWS_PROFILE=ai-platform-pilot-key AWS_REGION=us-east-1 \
   ./scripts/build-push-runtime-image.sh
 
-CONFIRM_RUNTIME_SERVICE_APPLY=APPLY_AGENTCONSTRUCT_RUNTIME_SERVICE \
+CONFIRM_RUNTIME_SERVICE_APPLY=APPLY_DAVDEPLOY_RUNTIME_SERVICE \
   ./scripts/app-runner-runtime.sh apply-service
 
 curl -fsS https://x75qgwappp.us-east-1.awsapprunner.com/healthz
@@ -724,38 +724,38 @@ curl -fsS -X POST \
   https://x75qgwappp.us-east-1.awsapprunner.com/api/v1/cloud-connections/{connection_id}/aws-quick-create
 
 aws cloudformation create-stack \
-  --stack-name AgentConstruct-Discovery-72eed5c4 \
+  --stack-name davdeploy-Discovery-72eed5c4 \
   --template-url "$TEMPLATE_URL" \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters \
-    ParameterKey=AgentConstructControlPlaneRoleArn,ParameterValue="$CONTROL_PLANE_ROLE_ARN" \
+    ParameterKey=davdeployControlPlaneRoleArn,ParameterValue="$CONTROL_PLANE_ROLE_ARN" \
     ParameterKey=ExternalId,ParameterValue="$EXTERNAL_ID" \
     ParameterKey=ConnectionId,ParameterValue="$CONNECTION_ID"
 
 aws cloudformation wait stack-create-complete \
-  --stack-name AgentConstruct-Discovery-72eed5c4
+  --stack-name davdeploy-Discovery-72eed5c4
 
 curl -fsS -X POST \
   https://x75qgwappp.us-east-1.awsapprunner.com/api/v1/cloud-connections/{connection_id}/aws-verify \
   -d '{"region":"us-east-1"}'
 
 aws cloudformation delete-stack \
-  --stack-name AgentConstruct-Discovery-72eed5c4
+  --stack-name davdeploy-Discovery-72eed5c4
 
 aws cloudformation wait stack-delete-complete \
-  --stack-name AgentConstruct-Discovery-72eed5c4
+  --stack-name davdeploy-Discovery-72eed5c4
 ```
 
 Results:
 
 - Terraform applied the AWS-hosted App Runner service:
-  - service ARN: `arn:aws:apprunner:us-east-1:654654474502:service/agentconstruct-runtime/7a82ea2eb2c349749424bf419eac3f92`
+  - service ARN: `arn:aws:apprunner:us-east-1:654654474502:service/davdeploy-runtime/7a82ea2eb2c349749424bf419eac3f92`
   - URL: `https://x75qgwappp.us-east-1.awsapprunner.com`
-  - runtime role: `arn:aws:iam::654654474502:role/agentconstruct-control-plane-runtime`
-  - ECR image: `654654474502.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-runtime:3febfef36577-policy-fixture`
-- Health check returned `{"status":"ok","product":"AgentConstruct"}`.
+  - runtime role: `arn:aws:iam::654654474502:role/davdeploy-control-plane-runtime`
+  - ECR image: `654654474502.dkr.ecr.us-east-1.amazonaws.com/davdeploy-runtime:3febfef36577-policy-fixture`
+- Health check returned `{"status":"ok","product":"davdeploy"}`.
 - Hosted local fixture login returned a valid developer token for `user-founder`.
-- Hosted Quick Create generated a customer stack name `AgentConstruct-Discovery-72eed5c4` and a CloudFormation review URL using the public versioned template.
+- Hosted Quick Create generated a customer stack name `davdeploy-Discovery-72eed5c4` and a CloudFormation review URL using the public versioned template.
 - The customer-side CloudFormation stack reached `CREATE_COMPLETE` and created only the read-only discovery role.
 - Hosted verification returned `SUCCEEDED`, `credentials_stored=false`, and stored a snapshot with `live-read-only-sts-discovery` provenance.
 - Snapshot contents included:
@@ -771,9 +771,9 @@ Results:
 - Hosted developer plan flow succeeded after explicit material requirements were supplied: intent parsing, one AWS plan, customer review draft, immutable submission and administrator approval.
 - Hosted administrator self-approval also succeeded and recorded `is_self_approval=true`.
 - Cleanup verified:
-  - CloudFormation stack `AgentConstruct-Discovery-72eed5c4` was deleted.
-  - IAM role `AgentConstructDiscovery-72eed5c4-3e5f-4828-b1e1-d4b79b31d8f9` no longer existed.
-  - Per-connection ExternalId secret `agentconstruct/customer-connections/org-demo/72eed5c4-3e5f-4828-b1e1-d4b79b31d8f9/external-id` was force-deleted.
+  - CloudFormation stack `davdeploy-Discovery-72eed5c4` was deleted.
+  - IAM role `davdeployDiscovery-72eed5c4-3e5f-4828-b1e1-d4b79b31d8f9` no longer existed.
+  - Per-connection ExternalId secret `davdeploy/customer-connections/org-demo/72eed5c4-3e5f-4828-b1e1-d4b79b31d8f9/external-id` was force-deleted.
 
 Validation commands after code/config changes:
 
@@ -823,7 +823,7 @@ Execution boundary:
 - Terraform created App Runner, ECR, IAM and CloudWatch resources for the workload.
 - The workload was observed through App Runner status and an HTTP `/healthz` request.
 - Both workload cycles were destroyed after validation.
-- Foundation/support resources were intentionally retained: Terraform state bucket, DynamoDB lock table, GitHub OIDC provider, and AgentConstruct IAM connection/support roles.
+- Foundation/support resources were intentionally retained: Terraform state bucket, DynamoDB lock table, GitHub OIDC provider, and davdeploy IAM connection/support roles.
 
 Added reusable pilot automation:
 
@@ -836,9 +836,9 @@ Validation commands executed:
 
 ```bash
 terraform fmt -recursive infrastructure/terraform/customer-workload-app-runner-pilot
-TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-customer-apprunner \
+TF_DATA_DIR=/tmp/davdeploy-tfvalidate-customer-apprunner \
   terraform -chdir=infrastructure/terraform/customer-workload-app-runner-pilot init -backend=false -input=false
-TF_DATA_DIR=/tmp/agentconstruct-tfvalidate-customer-apprunner \
+TF_DATA_DIR=/tmp/davdeploy-tfvalidate-customer-apprunner \
   terraform -chdir=infrastructure/terraform/customer-workload-app-runner-pilot validate
 ```
 
@@ -849,35 +849,35 @@ Cycle 1 commands and evidence:
 ```bash
 AWS_PROFILE=ai-platform-pilot-key AWS_REGION=us-east-1 \
 EXPECTED_AWS_ACCOUNT_ID=654654474502 \
-TF_STATE_BUCKET=agentconstruct-tfstate-654654474502 \
-TF_LOCK_TABLE=agentconstruct-terraform-locks \
-AGENTCONSTRUCT_CUSTOMER_SOURCE_COMMIT=de60dfe2e24930d76e6be8a5fb2c428e35f483c6 \
-AGENTCONSTRUCT_CUSTOMER_PLAN_DIGEST=pilot-cycle-1 \
+TF_STATE_BUCKET=davdeploy-tfstate-654654474502 \
+TF_LOCK_TABLE=davdeploy-terraform-locks \
+DAVDEPLOY_CUSTOMER_SOURCE_COMMIT=de60dfe2e24930d76e6be8a5fb2c428e35f483c6 \
+DAVDEPLOY_CUSTOMER_PLAN_DIGEST=pilot-cycle-1 \
 ./scripts/customer-workload-app-runner-pilot.sh plan
 
 CONFIRM_CUSTOMER_WORKLOAD_FOUNDATION_APPLY=APPLY_CUSTOMER_WORKLOAD_FOUNDATION \
   ./scripts/customer-workload-app-runner-pilot.sh apply-foundation
 
-AGENTCONSTRUCT_CUSTOMER_SOURCE_DIR=/tmp/.../ai-platform-control-plane \
-AGENTCONSTRUCT_CUSTOMER_ECR_REPOSITORY_URL=654654474502.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-customer-ai-platform-control-plane \
-AGENTCONSTRUCT_CUSTOMER_IMAGE_TAG=cycle1-de60dfe2e249 \
+DAVDEPLOY_CUSTOMER_SOURCE_DIR=/tmp/.../ai-platform-control-plane \
+DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_URL=654654474502.dkr.ecr.us-east-1.amazonaws.com/davdeploy-customer-ai-platform-control-plane \
+DAVDEPLOY_CUSTOMER_IMAGE_TAG=cycle1-de60dfe2e249 \
   ./scripts/customer-workload-app-runner-pilot.sh build-push-image
 
-AGENTCONSTRUCT_ENABLE_CUSTOMER_SERVICE=true \
-AGENTCONSTRUCT_CUSTOMER_IMAGE_IDENTIFIER=654654474502.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-customer-ai-platform-control-plane:cycle1-de60dfe2e249 \
+DAVDEPLOY_ENABLE_CUSTOMER_SERVICE=true \
+DAVDEPLOY_CUSTOMER_IMAGE_IDENTIFIER=654654474502.dkr.ecr.us-east-1.amazonaws.com/davdeploy-customer-ai-platform-control-plane:cycle1-de60dfe2e249 \
 CONFIRM_CUSTOMER_WORKLOAD_SERVICE_APPLY=APPLY_CUSTOMER_WORKLOAD_SERVICE \
   ./scripts/customer-workload-app-runner-pilot.sh apply-service
 
-AGENTCONSTRUCT_ENABLE_CUSTOMER_SERVICE=true \
-AGENTCONSTRUCT_CUSTOMER_IMAGE_IDENTIFIER=654654474502.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-customer-ai-platform-control-plane:cycle1-de60dfe2e249 \
+DAVDEPLOY_ENABLE_CUSTOMER_SERVICE=true \
+DAVDEPLOY_CUSTOMER_IMAGE_IDENTIFIER=654654474502.dkr.ecr.us-east-1.amazonaws.com/davdeploy-customer-ai-platform-control-plane:cycle1-de60dfe2e249 \
   ./scripts/customer-workload-app-runner-pilot.sh wait-ready
 
-AGENTCONSTRUCT_ENABLE_CUSTOMER_SERVICE=true \
-AGENTCONSTRUCT_CUSTOMER_IMAGE_IDENTIFIER=654654474502.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-customer-ai-platform-control-plane:cycle1-de60dfe2e249 \
+DAVDEPLOY_ENABLE_CUSTOMER_SERVICE=true \
+DAVDEPLOY_CUSTOMER_IMAGE_IDENTIFIER=654654474502.dkr.ecr.us-east-1.amazonaws.com/davdeploy-customer-ai-platform-control-plane:cycle1-de60dfe2e249 \
   ./scripts/customer-workload-app-runner-pilot.sh smoke
 
-AGENTCONSTRUCT_ENABLE_CUSTOMER_SERVICE=true \
-AGENTCONSTRUCT_CUSTOMER_IMAGE_IDENTIFIER=654654474502.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-customer-ai-platform-control-plane:cycle1-de60dfe2e249 \
+DAVDEPLOY_ENABLE_CUSTOMER_SERVICE=true \
+DAVDEPLOY_CUSTOMER_IMAGE_IDENTIFIER=654654474502.dkr.ecr.us-east-1.amazonaws.com/davdeploy-customer-ai-platform-control-plane:cycle1-de60dfe2e249 \
 CONFIRM_CUSTOMER_WORKLOAD_DESTROY=DESTROY_CUSTOMER_WORKLOAD \
   ./scripts/customer-workload-app-runner-pilot.sh destroy
 
@@ -890,7 +890,7 @@ Cycle 1 results:
 - Terraform applied foundation: **6 created**.
 - Docker built the customer repo image from `control-plane/Dockerfile` and pushed tag `cycle1-de60dfe2e249`.
 - Terraform applied App Runner service: **1 created**.
-- App Runner service ARN: `arn:aws:apprunner:us-east-1:654654474502:service/agentconstruct-customer-control-plane/5d378e5d076f4f8f977d0483fafc0c51`.
+- App Runner service ARN: `arn:aws:apprunner:us-east-1:654654474502:service/davdeploy-customer-control-plane/5d378e5d076f4f8f977d0483fafc0c51`.
 - App Runner URL: `https://ksp93iumxq.us-east-1.awsapprunner.com`.
 - Observed status: `RUNNING`.
 - Smoke result: `https://ksp93iumxq.us-east-1.awsapprunner.com/healthz` returned `{"status":"ok"}`.
@@ -902,7 +902,7 @@ Cycle 2 results:
 - Terraform re-created the pilot foundation: **6 created**.
 - Docker rebuilt/pushed the same customer commit with tag `cycle2-de60dfe2e249`.
 - Terraform applied App Runner service: **1 created**.
-- App Runner service ARN: `arn:aws:apprunner:us-east-1:654654474502:service/agentconstruct-customer-control-plane/99b6286c6e37463c91921b6ca0282c13`.
+- App Runner service ARN: `arn:aws:apprunner:us-east-1:654654474502:service/davdeploy-customer-control-plane/99b6286c6e37463c91921b6ca0282c13`.
 - App Runner URL: `https://tpayu7abh2.us-east-1.awsapprunner.com`.
 - Observed status: `RUNNING`.
 - Smoke result: `https://tpayu7abh2.us-east-1.awsapprunner.com/healthz` returned `{"status":"ok"}`.
@@ -915,25 +915,25 @@ Final cleanup and retained resources:
 aws apprunner list-services --profile ai-platform-pilot-key --region us-east-1
 aws ecr describe-repositories --profile ai-platform-pilot-key --region us-east-1
 aws logs describe-log-groups --profile ai-platform-pilot-key --region us-east-1 \
-  --log-group-name-prefix /aws/apprunner/agentconstruct
+  --log-group-name-prefix /aws/apprunner/davdeploy
 aws resourcegroupstaggingapi get-resources --profile ai-platform-pilot-key --region us-east-1 \
-  --tag-filters Key=Project,Values=agentconstruct
+  --tag-filters Key=Project,Values=davdeploy
 ```
 
 Final results:
 
-- No AgentConstruct App Runner services remained.
-- No AgentConstruct ECR repositories remained.
-- App Runner-created CloudWatch log groups for both customer workload cycles and old AgentConstruct runtime checks were deleted.
+- No davdeploy App Runner services remained.
+- No davdeploy ECR repositories remained.
+- App Runner-created CloudWatch log groups for both customer workload cycles and old davdeploy runtime checks were deleted.
 - Customer workload Terraform output was `{}`, confirming empty state outputs after destroy.
-- Remaining tagged AgentConstruct support resources:
-  - `arn:aws:s3:::agentconstruct-tfstate-654654474502`
-  - `arn:aws:dynamodb:us-east-1:654654474502:table/agentconstruct-terraform-locks`
+- Remaining tagged davdeploy support resources:
+  - `arn:aws:s3:::davdeploy-tfstate-654654474502`
+  - `arn:aws:dynamodb:us-east-1:654654474502:table/davdeploy-terraform-locks`
   - `arn:aws:iam::654654474502:oidc-provider/token.actions.githubusercontent.com`
-- Remaining AgentConstruct IAM roles:
-  - `agentconstruct-control-plane-github`
-  - `agentconstruct-adewale-primary-aws-discovery`
-  - `agentconstruct-adewale-primary-aws-execution`
+- Remaining davdeploy IAM roles:
+  - `davdeploy-control-plane-github`
+  - `davdeploy-adewale-primary-aws-discovery`
+  - `davdeploy-adewale-primary-aws-execution`
 
 Limitations:
 

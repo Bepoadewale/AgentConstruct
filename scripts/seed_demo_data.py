@@ -1,4 +1,4 @@
-"""Seed realistic local demo records through the public AgentConstruct API.
+"""Seed realistic local demo records through the public davdeploy API.
 
 This script is local-fixture only. It creates no AWS resources, stores no secrets,
 and performs no GitHub writes. It is intended to make a fresh local UI feel useful
@@ -185,7 +185,7 @@ def record_readiness_artifacts(
                 "content_digest": approved["content_digest"],
                 "expected_account_id": None,
                 "allowed_regions": ["us-east-1"],
-                "required_tags": {"ManagedBy": "AgentConstruct"},
+                "required_tags": {"ManagedBy": "davdeploy"},
                 "budget_ceiling_usd": 1000,
                 "execution_mode": "PLAN_ONLY",
                 "require_reviewed_pr": True,

@@ -1,4 +1,4 @@
-module "agentconstruct_app_runner_plan_contract" {
+module "davdeploy_app_runner_plan_contract" {
   source = "../../modules/app-runner-plan-contract"
 
   project_id                = "fixture-project"
@@ -6,22 +6,22 @@ module "agentconstruct_app_runner_plan_contract" {
   source_deployment_plan_id = "fixture-deployment-plan"
   plan_digest               = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   profile                   = "aws-app-runner"
-  service_name              = "agentconstruct-fastapi"
+  service_name              = "davdeploy-fastapi"
   repository_url            = "https://github.com/example/fastapi-ai-api"
   repository_branch         = "main"
   aws_account_id            = "customer-account-selected-at-apply-time"
   aws_region                = "us-east-1"
   source_boundary           = "Plan-only contract. A later reviewed build must publish an immutable image before any execution."
-  image_repository          = "customer-account-selected-at-apply-time.dkr.ecr.us-east-1.amazonaws.com/agentconstruct-fastapi"
+  image_repository          = "customer-account-selected-at-apply-time.dkr.ecr.us-east-1.amazonaws.com/davdeploy-fastapi"
 
   environment_variables = {
-    AGENTCONSTRUCT_PLAN_DIGEST = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-    AGENTCONSTRUCT_PROFILE     = "aws-app-runner"
-    APP_ENVIRONMENTS           = "staging,production"
+    DAVDEPLOY_PLAN_DIGEST = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    DAVDEPLOY_PROFILE     = "aws-app-runner"
+    APP_ENVIRONMENTS      = "staging,production"
   }
 
   secret_references = {
-    application = "aws-secretsmanager://agentconstruct/app-runner/application"
+    application = "aws-secretsmanager://davdeploy/app-runner/application"
   }
 
   https_access = {
@@ -43,7 +43,7 @@ module "agentconstruct_app_runner_plan_contract" {
       "application-/metrics",
     ]
     baseline_dashboard = {
-      title  = "AgentConstruct App Runner baseline"
+      title  = "davdeploy App Runner baseline"
       panels = ["request rate", "latency", "error rate", "service health"]
     }
     access_boundary = "private authenticated Grafana access; no public unauthenticated dashboards"
@@ -52,18 +52,18 @@ module "agentconstruct_app_runner_plan_contract" {
   }
 
   tags = {
-    ManagedBy                = "AgentConstruct"
-    AgentConstructPlanDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-    AgentConstructProjectId  = "fixture-project"
-    AgentConstructRevisionId = "fixture-revision"
-    AgentConstructProfile    = "aws-app-runner"
+    ManagedBy           = "davdeploy"
+    davdeployPlanDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    davdeployProjectId  = "fixture-project"
+    davdeployRevisionId = "fixture-revision"
+    davdeployProfile    = "aws-app-runner"
   }
 }
 
 output "contract" {
-  value = module.agentconstruct_app_runner_plan_contract.contract
+  value = module.davdeploy_app_runner_plan_contract.contract
 }
 
 output "execution_boundary" {
-  value = module.agentconstruct_app_runner_plan_contract.execution_boundary
+  value = module.davdeploy_app_runner_plan_contract.execution_boundary
 }

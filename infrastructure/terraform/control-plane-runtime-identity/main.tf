@@ -2,7 +2,7 @@ data "aws_caller_identity" "current" {}
 
 locals {
   tags = {
-    Project   = "agentconstruct"
+    Project   = "davdeploy"
     ManagedBy = "terraform"
     Scope     = "control-plane-runtime"
     Purpose   = "read-only-customer-discovery"
@@ -31,7 +31,7 @@ data "aws_iam_policy_document" "runtime_trust" {
 }
 
 resource "aws_iam_role" "runtime" {
-  name                 = "agentconstruct-control-plane-runtime"
+  name                 = "davdeploy-control-plane-runtime"
   description          = "Runtime-only identity. It may assume customer discovery roles and read per-connection secrets."
   assume_role_policy   = data.aws_iam_policy_document.runtime_trust.json
   max_session_duration = 3600
@@ -43,7 +43,7 @@ data "aws_iam_policy_document" "runtime_permissions" {
     sid       = "AssumeOnlyCustomerReadOnlyDiscoveryRoles"
     effect    = "Allow"
     actions   = ["sts:AssumeRole"]
-    resources = ["arn:aws:iam::*:role/AgentConstructDiscovery-*"]
+    resources = ["arn:aws:iam::*:role/davdeployDiscovery-*"]
   }
   statement {
     sid       = "ReadOnlyConnectionExternalIds"
@@ -54,7 +54,7 @@ data "aws_iam_policy_document" "runtime_permissions" {
 }
 
 resource "aws_iam_role_policy" "runtime_permissions" {
-  name   = "agentconstruct-runtime-customer-discovery"
+  name   = "davdeploy-runtime-customer-discovery"
   role   = aws_iam_role.runtime.id
   policy = data.aws_iam_policy_document.runtime_permissions.json
 }

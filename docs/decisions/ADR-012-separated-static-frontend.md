@@ -13,7 +13,7 @@ Serving it from the API couples releases and prevents zero-cost static hosting.
 ## Decision
 
 Maintain the React/TypeScript/Vite client in the private
-`Bepoadewale/agentconstruct-frontend` repository and host its static output on
+`Bepoadewale/davdeploy-frontend` repository and host its static output on
 Cloudflare Pages Free. This repository owns the AWS-hosted API and all
 authoritative logic. The boundary is authenticated HTTPS using the committed
 OpenAPI v1 contract and explicit exact-origin CORS.

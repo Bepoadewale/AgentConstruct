@@ -1,7 +1,7 @@
 # Frontend separation migration audit
 
 Date: 2026-10-16. Source baseline: `7dc5c33`. Backend PR: #83. Frontend PR:
-[`Bepoadewale/agentconstruct-frontend#1`](https://github.com/Bepoadewale/agentconstruct-frontend/pull/1).
+[`Bepoadewale/davdeploy-frontend#1`](https://github.com/Bepoadewale/davdeploy-frontend/pull/1).
 
 ## Inspected system
 

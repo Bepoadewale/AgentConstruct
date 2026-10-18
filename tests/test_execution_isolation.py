@@ -1,10 +1,10 @@
-from agentconstruct.contracts import (
+from davdeploy.contracts import (
     ExecutionContext,
     ExecutionOperation,
     ExecutionPlacement,
     TenantScope,
 )
-from agentconstruct.execution_runner import (
+from davdeploy.execution_runner import (
     DisabledExecutionRunner,
     FixtureExecutionRunner,
     RunnerPreparation,

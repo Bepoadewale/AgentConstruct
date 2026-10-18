@@ -4,7 +4,7 @@ The millions-customer goal is implemented as stable boundaries before it is impl
 
 ## Contracts
 
-`apps/api/src/agentconstruct/contracts.py` defines versioned, transport-neutral contracts for:
+`apps/api/src/davdeploy/contracts.py` defines versioned, transport-neutral contracts for:
 
 - `TenantScope`: organization, workspace, project, environment and actor context;
 - `EvidenceRef`: source, provenance, timestamp, digest and limitations;

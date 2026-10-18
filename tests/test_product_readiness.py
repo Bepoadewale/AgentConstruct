@@ -1,7 +1,7 @@
 import pytest
-from agentconstruct.boundaries import TenantBoundaryError, TenantContext
-from agentconstruct.contracts import ArchitecturePlanV1
-from agentconstruct.product_readiness import (
+from davdeploy.boundaries import TenantBoundaryError, TenantContext
+from davdeploy.contracts import ArchitecturePlanV1
+from davdeploy.product_readiness import (
     BillingControls,
     InMemoryMemberships,
     LocalAnalytics,

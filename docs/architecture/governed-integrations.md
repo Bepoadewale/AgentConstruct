@@ -1,6 +1,6 @@
 # Governed GitHub and customer-cloud integrations
 
-GitHub and AWS are external systems. AgentConstruct keeps them behind narrow contracts so a web user, CLI, or AI agent never receives broad infrastructure authority.
+GitHub and AWS are external systems. davdeploy keeps them behind narrow contracts so a web user, CLI, or AI agent never receives broad infrastructure authority.
 
 ## GitHub
 
@@ -8,11 +8,11 @@ The production design uses a GitHub App installation, not a personal access toke
 
 The local fixture returns repository metadata, validates only a fixture signature, and creates a `fixture-pr://` reference. It cannot contact or write to GitHub.
 
-The local webhook receiver is now implemented as a product contract. It accepts signed fixture events, persists the installation state, records deduplicated delivery IDs, rejects invalid signatures, and exposes revoked, missing-permission, repository-access-change and branch-update states in the UI. This proves the state machine locally. It is not evidence that GitHub has delivered a public webhook to AgentConstruct.
+The local webhook receiver is now implemented as a product contract. It accepts signed fixture events, persists the installation state, records deduplicated delivery IDs, rejects invalid signatures, and exposes revoked, missing-permission, repository-access-change and branch-update states in the UI. This proves the state machine locally. It is not evidence that GitHub has delivered a public webhook to davdeploy.
 
-Approved customer-plan revisions can also create a desired-state PR publication. The package records the approved digest, repository, branch, selected AWS profile, required checks, profile-specific delivery contract and the explicit rule that AgentConstruct never merges customer code or desired state.
+Approved customer-plan revisions can also create a desired-state PR publication. The package records the approved digest, repository, branch, selected AWS profile, required checks, profile-specific delivery contract and the explicit rule that davdeploy never merges customer code or desired state.
 
-By default this remains a local fixture record. When a GitHub App installation is configured and `AGENTCONSTRUCT_GITHUB_APP_WRITES_ENABLED=true` is explicitly set, the live publisher creates a dedicated `agentconstruct/desired-state-<digest>` branch, commits the desired-state package files, opens a pull request to the selected branch and posts an `agentconstruct/desired-state-review` status. It does not merge the pull request and does not deploy infrastructure.
+By default this remains a local fixture record. When a GitHub App installation is configured and `DAVDEPLOY_GITHUB_APP_WRITES_ENABLED=true` is explicitly set, the live publisher creates a dedicated `davdeploy/desired-state-<digest>` branch, commits the desired-state package files, opens a pull request to the selected branch and posts an `davdeploy/desired-state-review` status. It does not merge the pull request and does not deploy infrastructure.
 
 ## Bring your own AWS account
 

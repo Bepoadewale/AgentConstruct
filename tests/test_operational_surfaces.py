@@ -1,5 +1,5 @@
-from agentconstruct.product_readiness import security_headers
-from agentconstruct.rate_limit import SlidingWindowRateLimiter
+from davdeploy.product_readiness import security_headers
+from davdeploy.rate_limit import SlidingWindowRateLimiter
 
 
 def test_optional_rate_limit_and_security_headers_are_explicit():

@@ -2,7 +2,7 @@
 
 ## Recommendation
 
-Pursue the direction, but position AgentConstruct as a **governed AWS infrastructure decision and operations system with an AI interface**, not as a general-purpose “DevOps agent.” The AI should make infrastructure understandable and propose plans; the product’s durable value is customer context, deterministic architecture decisions, policy, approvals, evidence, execution boundaries, and observed outcomes.
+Pursue the direction, but position davdeploy as a **governed AWS infrastructure decision and operations system with an AI interface**, not as a general-purpose “DevOps agent.” The AI should make infrastructure understandable and propose plans; the product’s durable value is customer context, deterministic architecture decisions, policy, approvals, evidence, execution boundaries, and observed outcomes.
 
 The proposed “least complicated architecture that satisfies requirements” principle is strong and should remain the product’s central decision rule. It is more credible than selling Kubernetes, Terraform generation, or autonomous cloud changes.
 

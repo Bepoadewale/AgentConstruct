@@ -7,11 +7,11 @@ case "${output_dir}" in
   /*) ;;
   *) output_dir="${repo_root}/${output_dir}" ;;
 esac
-build_root="$(mktemp -d "${TMPDIR:-/tmp}/agentconstruct-lambda.XXXXXX")"
+build_root="$(mktemp -d "${TMPDIR:-/tmp}/davdeploy-lambda.XXXXXX")"
 
 cleanup() {
   case "${build_root}" in
-    "${TMPDIR:-/tmp}"/agentconstruct-lambda.*) rm -rf -- "${build_root}" ;;
+    "${TMPDIR:-/tmp}"/davdeploy-lambda.*) rm -rf -- "${build_root}" ;;
     *) printf 'Refusing to clean unexpected path: %s\n' "${build_root}" >&2 ;;
   esac
 }
@@ -22,6 +22,6 @@ python3.12 -m pip install --quiet --disable-pip-version-check --target "${build_
 find "${build_root}/package" -type d -name '__pycache__' -prune -exec rm -rf -- {} +
 (
   cd "${build_root}/package"
-  zip -qr "${output_dir}/agentconstruct-control-plane.zip" .
+  zip -qr "${output_dir}/davdeploy-control-plane.zip" .
 )
-printf 'Built %s\n' "${output_dir}/agentconstruct-control-plane.zip"
+printf 'Built %s\n' "${output_dir}/davdeploy-control-plane.zip"

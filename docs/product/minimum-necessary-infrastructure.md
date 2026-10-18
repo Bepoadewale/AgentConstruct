@@ -1,6 +1,6 @@
 # Minimum Necessary Infrastructure
 
-AgentConstruct starts with the smallest, simplest AWS design that can safely meet the request. It does not start with Kubernetes, GPUs, or a large cloud bill.
+davdeploy starts with the smallest, simplest AWS design that can safely meet the request. It does not start with Kubernetes, GPUs, or a large cloud bill.
 
 The planner first reads hard requirements: region, data sensitivity, traffic, budget, availability, workload shape, runtime needs, and whether GPU or Kubernetes-specific features are truly required. It then checks the approved-resource inventory fixture for reusable services.
 
@@ -16,7 +16,7 @@ It evaluates these AWS families in a fixed, reviewable catalogue:
 8. CPU self-hosted inference.
 9. GPU inference.
 
-A candidate is rejected when it breaks a hard requirement. The planner estimates a cost range and an operational-complexity score for the candidates that remain. Candidates in the configurable cheapest-cost band are treated as cost-equivalent; AgentConstruct then chooses the least complex one.
+A candidate is rejected when it breaks a hard requirement. The planner estimates a cost range and an operational-complexity score for the candidates that remain. Candidates in the configurable cheapest-cost band are treated as cost-equivalent; davdeploy then chooses the least complex one.
 
 The recommendation tells the user what it selected, what it will create or reuse, why simpler choices failed, and what would justify an upgrade.
 

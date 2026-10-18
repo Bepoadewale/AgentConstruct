@@ -13,7 +13,7 @@ require EXPECTED_AWS_ACCOUNT_ID
 require TF_STATE_BUCKET
 require TF_LOCK_TABLE
 require AWS_REGION
-require AGENTCONSTRUCT_TEMPLATE_BUCKET
+require DAVDEPLOY_TEMPLATE_BUCKET
 
 aws_args=()
 if [[ -n "${AWS_PROFILE:-}" ]]; then
@@ -24,22 +24,22 @@ account="$(aws sts get-caller-identity "${aws_args[@]}" --query Account --output
 
 terraform -chdir="$root" init -input=false \
   -backend-config="bucket=${TF_STATE_BUCKET}" \
-  -backend-config="key=agentconstruct/connection-template-host.tfstate" \
+  -backend-config="key=davdeploy/connection-template-host.tfstate" \
   -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
   -backend-config="region=${AWS_REGION}"
 
-vars=("-var=region=${AWS_REGION}" "-var=bucket_name=${AGENTCONSTRUCT_TEMPLATE_BUCKET}")
+vars=("-var=region=${AWS_REGION}" "-var=bucket_name=${DAVDEPLOY_TEMPLATE_BUCKET}")
 case "$operation" in
   plan) terraform -chdir="$root" plan -input=false "${vars[@]}" ;;
   apply)
-    [[ "${CONFIRM_TEMPLATE_HOST_APPLY:-}" == "APPLY_AGENTCONSTRUCT_TEMPLATE_HOST" ]] || {
-      echo "Set CONFIRM_TEMPLATE_HOST_APPLY=APPLY_AGENTCONSTRUCT_TEMPLATE_HOST after reviewing the plan" >&2; exit 2;
+    [[ "${CONFIRM_TEMPLATE_HOST_APPLY:-}" == "APPLY_DAVDEPLOY_TEMPLATE_HOST" ]] || {
+      echo "Set CONFIRM_TEMPLATE_HOST_APPLY=APPLY_DAVDEPLOY_TEMPLATE_HOST after reviewing the plan" >&2; exit 2;
     }
     terraform -chdir="$root" apply -input=false -auto-approve "${vars[@]}"
     ;;
   destroy)
-    [[ "${CONFIRM_TEMPLATE_HOST_DESTROY:-}" == "DESTROY_AGENTCONSTRUCT_TEMPLATE_HOST" ]] || {
-      echo "Set CONFIRM_TEMPLATE_HOST_DESTROY=DESTROY_AGENTCONSTRUCT_TEMPLATE_HOST" >&2; exit 2;
+    [[ "${CONFIRM_TEMPLATE_HOST_DESTROY:-}" == "DESTROY_DAVDEPLOY_TEMPLATE_HOST" ]] || {
+      echo "Set CONFIRM_TEMPLATE_HOST_DESTROY=DESTROY_DAVDEPLOY_TEMPLATE_HOST" >&2; exit 2;
     }
     terraform -chdir="$root" destroy -input=false -auto-approve "${vars[@]}"
     ;;

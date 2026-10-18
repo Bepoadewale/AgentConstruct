@@ -1,14 +1,14 @@
 groups:
-  - name: agentconstruct-planned-pilot
+  - name: davdeploy-planned-pilot
     rules:
-      - alert: AgentConstructApiUnavailable
-        expr: up{job="agentconstruct-api"} == 0
+      - alert: davdeployApiUnavailable
+        expr: up{job="davdeploy-api"} == 0
         for: 2m
         labels: { severity: page }
         annotations:
-          summary: AgentConstruct API is unavailable
-      - alert: AgentConstructExecutionFailure
-        expr: increase(agentconstruct_execution_results_total{state="FAILED"}[10m]) > 0
+          summary: davdeploy API is unavailable
+      - alert: davdeployExecutionFailure
+        expr: increase(davdeploy_execution_results_total{state="FAILED"}[10m]) > 0
         for: 1m
         labels: { severity: ticket }
         annotations:

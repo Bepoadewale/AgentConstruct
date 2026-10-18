@@ -27,15 +27,15 @@ operator notification variables. Never commit their values.
 ```bash
 export EXPECTED_AWS_ACCOUNT_ID=654654474502
 export AWS_REGION=us-east-1
-export AGENTCONSTRUCT_PLATFORM_SCOPE=platform
-export AGENTCONSTRUCT_PLATFORM_VPC_CIDR=10.42.0.0/16
-export AGENTCONSTRUCT_ENABLE_DURABLE_DATABASE=true
-export AGENTCONSTRUCT_ENABLE_NOVA_MODEL=true
-export AGENTCONSTRUCT_ENABLE_RUNTIME_SERVICE=false
-export AGENTCONSTRUCT_PLATFORM_MONTHLY_BUDGET_USD=250
-export AGENTCONSTRUCT_ALERT_EMAIL='<operator email>'
+export DAVDEPLOY_PLATFORM_SCOPE=platform
+export DAVDEPLOY_PLATFORM_VPC_CIDR=10.42.0.0/16
+export DAVDEPLOY_ENABLE_DURABLE_DATABASE=true
+export DAVDEPLOY_ENABLE_NOVA_MODEL=true
+export DAVDEPLOY_ENABLE_RUNTIME_SERVICE=false
+export DAVDEPLOY_PLATFORM_MONTHLY_BUDGET_USD=250
+export DAVDEPLOY_ALERT_EMAIL='<operator email>'
 ./scripts/app-runner-runtime.sh plan
-export CONFIRM_RUNTIME_FOUNDATION_APPLY=APPLY_AGENTCONSTRUCT_RUNTIME_FOUNDATION
+export CONFIRM_RUNTIME_FOUNDATION_APPLY=APPLY_DAVDEPLOY_RUNTIME_FOUNDATION
 ./scripts/app-runner-runtime.sh apply-foundation
 ./scripts/platform-runtime-operations.sh verify-foundation
 ```
@@ -58,11 +58,11 @@ EXPECTED_AWS_ACCOUNT_ID=654654474502 AWS_REGION=us-east-1 \
 ## Backup and recovery drill
 
 ```bash
-export AGENTCONSTRUCT_PLATFORM_SNAPSHOT_ID="agentconstruct-runtime-manual-$(date -u +%Y%m%d%H%M%S)"
-export CONFIRM_PLATFORM_SNAPSHOT=SNAPSHOT_AGENTCONSTRUCT_PLATFORM
+export DAVDEPLOY_PLATFORM_SNAPSHOT_ID="davdeploy-runtime-manual-$(date -u +%Y%m%d%H%M%S)"
+export CONFIRM_PLATFORM_SNAPSHOT=SNAPSHOT_DAVDEPLOY_PLATFORM
 ./scripts/platform-runtime-operations.sh snapshot
 
-export CONFIRM_PLATFORM_RESTORE_DRILL=RESTORE_AND_DELETE_AGENTCONSTRUCT_PLATFORM_DRILL
+export CONFIRM_PLATFORM_RESTORE_DRILL=RESTORE_AND_DELETE_DAVDEPLOY_PLATFORM_DRILL
 ./scripts/platform-runtime-operations.sh restore-drill
 ```
 
@@ -76,15 +76,15 @@ evidence—not a complete data-integrity or RTO claim.
 Service activation additionally requires:
 
 ```text
-AGENTCONSTRUCT_RUNTIME_IMAGE_IDENTIFIER=<immutable ECR image URI:tag>
-AGENTCONSTRUCT_JWKS_URL=https://...
-AGENTCONSTRUCT_OIDC_ISSUER=https://...
-AGENTCONSTRUCT_OIDC_AUDIENCE=<exact audience>
-AGENTCONSTRUCT_OPA_URL=https://...
+DAVDEPLOY_RUNTIME_IMAGE_IDENTIFIER=<immutable ECR image URI:tag>
+DAVDEPLOY_JWKS_URL=https://...
+DAVDEPLOY_OIDC_ISSUER=https://...
+DAVDEPLOY_OIDC_AUDIENCE=<exact audience>
+DAVDEPLOY_OPA_URL=https://...
 ```
 
 After a reviewed plan, set
-`CONFIRM_RUNTIME_SERVICE_APPLY=APPLY_AGENTCONSTRUCT_RUNTIME_SERVICE`, apply, then
+`CONFIRM_RUNTIME_SERVICE_APPLY=APPLY_DAVDEPLOY_RUNTIME_SERVICE`, apply, then
 run `./scripts/platform-runtime-operations.sh verify-service`.
 
 ## Cost and security notes

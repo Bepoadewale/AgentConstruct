@@ -1,5 +1,5 @@
 import pytest
-from agentconstruct.main import app, configure_frontend_cors, parse_frontend_origins
+from davdeploy.main import app, configure_frontend_cors, parse_frontend_origins
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -9,7 +9,7 @@ def test_control_plane_root_is_json_and_has_no_static_mount():
 
     assert response.status_code == 200
     assert response.json() == {
-        "product": "AgentConstruct",
+        "product": "davdeploy",
         "surface": "control-plane-api",
         "api_version": "v1",
         "openapi": "/openapi.json",

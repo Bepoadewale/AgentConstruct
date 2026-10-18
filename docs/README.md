@@ -1,7 +1,7 @@
 # Documentation map
 
 The [frontend separation audit](MIGRATION_AUDIT.md) records the ownership and
-security boundary with the private `agentconstruct-frontend` repository. The
+security boundary with the private `davdeploy-frontend` repository. The
 strategic review and scale goal are in
 [`docs/strategy/10-scale-and-multi-tenancy.md`](strategy/10-scale-and-multi-tenancy.md).
 It describes the long-term millions-customer target without claiming that

@@ -37,10 +37,10 @@
 
 ### Completed foundation
 
-- [x] Rename product internally to AgentConstruct.
+- [x] Rename product internally to davdeploy.
 - [x] Build typed intent, architecture, cost, policy, plan, approval, audit and bounded execution paths.
-- [x] Build the product UI, then extract it into the private static React
-  `agentconstruct-frontend` repository with a versioned API boundary.
+- [x] Build the product UI, then extract it into the public static React
+  `davdeploy-frontend` repository with a versioned API boundary.
 - [x] Record two local validation cycles; repeat fully cold bootstrap in PR 1.
 - [x] Expose the governed product API through a thin CLI and a stdio MCP server without granting agents approval, cloud, shell, Terraform, Kubernetes or secret authority.
 - [x] Demonstrate a bounded Day-2 loop: evidence, recommendation, exact change plan, independent approval, observed local change and audit.
@@ -49,7 +49,7 @@
 
 ## P1 — Customer-cloud execution
 
-- [x] Create the AgentConstruct control-plane GitHub OIDC identity and a real customer discovery connection. Terraform applied only state/lock and IAM resources; STS, inventory and Cost Explorer were verified without a workload.
+- [x] Create the davdeploy control-plane GitHub OIDC identity and a real customer discovery connection. Terraform applied only state/lock and IAM resources; STS, inventory and Cost Explorer were verified without a workload.
 - [ ] Dispatch the hosted GitHub OIDC workflow to prove the production trust route, then keep all deployment permissions profile-specific and separately approved.
 - [ ] Implement the live AWS STS role-assumption adapter with least privilege after the discovery-role pilot.
 - [x] GitHub App installation/repository/branch discovery and safe manifest intelligence.

@@ -9,15 +9,15 @@ locals {
   }
 }
 
-data "aws_iam_policy_document" "assume_agentconstruct" {
+data "aws_iam_policy_document" "assume_davdeploy" {
   statement {
-    sid     = "AllowOnlyAgentConstructControlPlaneWithExternalId"
+    sid     = "AllowOnlydavdeployControlPlaneWithExternalId"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
       type        = "AWS"
-      identifiers = [var.agentconstruct_control_plane_role_arn]
+      identifiers = [var.davdeploy_control_plane_role_arn]
     }
 
     condition {
@@ -30,8 +30,8 @@ data "aws_iam_policy_document" "assume_agentconstruct" {
 
 resource "aws_iam_role" "discovery" {
   name                 = "${local.prefix}-discovery"
-  description          = "AgentConstruct customer inventory and cost discovery only; no mutation permissions."
-  assume_role_policy   = data.aws_iam_policy_document.assume_agentconstruct.json
+  description          = "davdeploy customer inventory and cost discovery only; no mutation permissions."
+  assume_role_policy   = data.aws_iam_policy_document.assume_davdeploy.json
   max_session_duration = 3600
   tags                 = merge(local.tags, { Access = "discovery-read-only" })
 }
@@ -77,8 +77,8 @@ resource "aws_iam_role_policy" "discovery" {
 
 resource "aws_iam_role" "execution_contract" {
   name                 = "${local.prefix}-execution"
-  description          = "Reserved AgentConstruct execution role. It has no permissions until a separately approved profile-specific policy is attached."
-  assume_role_policy   = data.aws_iam_policy_document.assume_agentconstruct.json
+  description          = "Reserved davdeploy execution role. It has no permissions until a separately approved profile-specific policy is attached."
+  assume_role_policy   = data.aws_iam_policy_document.assume_davdeploy.json
   max_session_duration = 3600
   tags                 = merge(local.tags, { Access = "no-permissions-contract" })
 }

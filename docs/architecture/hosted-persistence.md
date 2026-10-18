@@ -8,10 +8,10 @@ The historical App Runner runtime proved customer-AWS discovery with ephemeral S
 
 Hosted mode requires both:
 
-- `AGENTCONSTRUCT_AURORA_CLUSTER_ARN`
-- `AGENTCONSTRUCT_DATABASE_SECRET_ARN`
+- `DAVDEPLOY_AURORA_CLUSTER_ARN`
+- `DAVDEPLOY_DATABASE_SECRET_ARN`
 
-`AGENTCONSTRUCT_DATABASE_NAME` selects the database. AgentConstruct uses the pinned `sqlalchemy-aurora-data-api` dialect, IAM-signed Data API calls, and the AWS-managed Aurora credential secret. It does not retrieve a raw password or open a PostgreSQL socket from Lambda.
+`DAVDEPLOY_DATABASE_NAME` selects the database. davdeploy uses the pinned `sqlalchemy-aurora-data-api` dialect, IAM-signed Data API calls, and the AWS-managed Aurora credential secret. It does not retrieve a raw password or open a PostgreSQL socket from Lambda.
 
 Local development retains SQLite and ordinary PostgreSQL. Hosted mode rejects SQLite.
 

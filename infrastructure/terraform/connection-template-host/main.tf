@@ -3,7 +3,7 @@ locals {
   template_hash   = filesha256(local.template_source)
   template_key    = "cloudformation/customer-discovery-role-${local.template_hash}.yaml"
   tags = {
-    Project   = "agentconstruct"
+    Project   = "davdeploy"
     ManagedBy = "terraform"
     Purpose   = "public-cloudformation-template-only"
   }

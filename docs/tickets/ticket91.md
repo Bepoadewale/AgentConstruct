@@ -4,11 +4,11 @@ Branch: feat/davdeploy-rebrand
 
 ## Problem / goal
 
-Rename the product and backend repository-facing configuration from AgentConstruct to davdeploy, prepare the external repository rename safely, and configure every currently knowable GitHub environment value without inventing unavailable credentials.
+Rename the product and backend repository-facing configuration from davdeploy to davdeploy, prepare the external repository rename safely, and configure every currently knowable GitHub environment value without inventing unavailable credentials.
 
 ## Current repo state
 
-The backend repository, Python package, infrastructure defaults, API contract, documentation, and deployment configuration use the former AgentConstruct name. Existing AWS prerequisite resources and GitHub environment variables also use former-name physical identifiers. The repository is on a focused branch with draft PR #91.
+The backend repository, Python package, infrastructure defaults, API contract, documentation, and deployment configuration use the former davdeploy name. Existing AWS prerequisite resources and GitHub environment variables also use former-name physical identifiers. The repository is on a focused branch with draft PR #91.
 
 ## Research / references used
 

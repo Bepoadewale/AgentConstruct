@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import pytest
-from agentconstruct.domain import (
+from davdeploy.domain import (
     InfrastructurePlanDecision,
     InfrastructurePlanState,
     LifecycleState,
 )
-from agentconstruct.integrations import DesiredStatePullRequest
-from agentconstruct.models import (
+from davdeploy.integrations import DesiredStatePullRequest
+from davdeploy.models import (
     DesiredStatePublication,
     GitHubAppInstallationState,
     RepositoryConnection,
@@ -23,12 +23,12 @@ class LivePublishingGitHubFixture:
     def publish_reviewed_desired_state(self, installation_id, repository, path, content):
         assert installation_id == "live-installation"
         assert repository == "https://github.com/example/review-dry-run"
-        assert path.startswith("agentconstruct/")
+        assert path.startswith("davdeploy/")
         assert "approved_digest" in content
         return DesiredStatePullRequest(
             pull_request_url="https://github.com/example/review-dry-run/pull/42",
-            branch="agentconstruct/desired-state-live",
-            required_checks=("agentconstruct/desired-state-review",),
+            branch="davdeploy/desired-state-live",
+            required_checks=("davdeploy/desired-state-review",),
             status="EXECUTED_GITHUB_PR_CREATED",
         )
 
@@ -257,13 +257,13 @@ def test_approved_customer_review_publishes_fixture_desired_state_pr_contract():
 
     assert publication["state"] == "PUBLISHED"
     assert publication["publication_url"].startswith("fixture-pr://")
-    assert publication["required_checks"] == ["agentconstruct-plan", "agentconstruct-policy"]
-    assert publication["package"]["kind"] == "agentconstruct.desired-state-package.v1"
+    assert publication["required_checks"] == ["davdeploy-plan", "davdeploy-policy"]
+    assert publication["package"]["kind"] == "davdeploy.desired-state-package.v1"
     assert publication["package"]["profile"] == "aws-ecs-fargate"
     assert "infrastructure/aws-ecs-fargate/contract.json" in [
         file["path"] for file in publication["package"]["files"]
     ]
-    assert publication["merge_boundary"] == "AgentConstruct never merges the desired-state PR itself."
+    assert publication["merge_boundary"] == "davdeploy never merges the desired-state PR itself."
     assert detail["desired_state_publications"][0]["id"] == publication["id"]
     assert any(
         event.action == "desired_state.fixture_pr_published"
@@ -283,9 +283,9 @@ def test_approved_customer_review_can_publish_live_github_pr_record():
     assert publication["state"] == "PUBLISHED"
     assert publication["publication_url"] == "https://github.com/example/review-dry-run/pull/42"
     assert publication["branch"] == "main"
-    assert publication["required_checks"] == ["agentconstruct/desired-state-review"]
+    assert publication["required_checks"] == ["davdeploy/desired-state-review"]
     assert publication["execution"] == "EXECUTED_GITHUB_PR_CREATED"
-    assert publication["merge_boundary"] == "AgentConstruct never merges the desired-state PR itself."
+    assert publication["merge_boundary"] == "davdeploy never merges the desired-state PR itself."
     assert service.create_desired_state_publication_for_revision(
         founder(), approved.id, approved.content_digest
     )["id"] == publication["id"]
@@ -321,7 +321,7 @@ def test_administrator_can_record_fixture_pr_checks_passed_for_approved_revision
     )
 
     assert updated["state"] == "CHECKS_PASSED"
-    assert updated["merge_boundary"] == "AgentConstruct never merges the desired-state PR itself."
+    assert updated["merge_boundary"] == "davdeploy never merges the desired-state PR itself."
     assert any(
         event.action == "desired_state.fixture_pr_state_recorded"
         for event in service.audits(operator())
@@ -454,8 +454,8 @@ def test_app_runner_terraform_contract_embeds_exact_approved_hash_and_tags():
     files = render["render"]["files"]
 
     assert inputs["plan_digest"] == approved.content_digest
-    assert inputs["environment_variables"]["AGENTCONSTRUCT_PLAN_DIGEST"] == approved.content_digest
-    assert inputs["tags"]["AgentConstructPlanDigest"] == approved.content_digest
+    assert inputs["environment_variables"]["DAVDEPLOY_PLAN_DIGEST"] == approved.content_digest
+    assert inputs["tags"]["davdeployPlanDigest"] == approved.content_digest
     assert approved.content_digest in str(files)
 
 
@@ -515,7 +515,7 @@ def test_cloud_readiness_preflight_blocks_until_runtime_identity_is_configured()
             content_digest=approved.content_digest,
             expected_account_id=None,
             allowed_regions=["us-east-1"],
-            required_tags={"ManagedBy": "AgentConstruct"},
+            required_tags={"ManagedBy": "davdeploy"},
             budget_ceiling_usd=1000,
             execution_mode="DRY_RUN_ONLY",
             require_reviewed_pr=True,
@@ -528,7 +528,7 @@ def test_cloud_readiness_preflight_blocks_until_runtime_identity_is_configured()
         content_digest=approved.content_digest,
         expected_account_id=None,
         allowed_regions=["us-east-1"],
-        required_tags={"ManagedBy": "AgentConstruct"},
+        required_tags={"ManagedBy": "davdeploy"},
         budget_ceiling_usd=1000,
         execution_mode="DRY_RUN_ONLY",
         require_reviewed_pr=True,
@@ -559,7 +559,7 @@ def test_cloud_readiness_preflight_can_be_ready_for_future_authorized_plan():
         content_digest=approved.content_digest,
         expected_account_id=None,
         allowed_regions=["us-east-1"],
-        required_tags={"ManagedBy": "AgentConstruct"},
+        required_tags={"ManagedBy": "davdeploy"},
         budget_ceiling_usd=1000,
         execution_mode="DRY_RUN_ONLY",
         require_reviewed_pr=True,
@@ -640,7 +640,7 @@ def ready_app_runner_preflight(service, db, approved):
         content_digest=approved.content_digest,
         expected_account_id=None,
         allowed_regions=["us-east-1"],
-        required_tags={"ManagedBy": "AgentConstruct"},
+        required_tags={"ManagedBy": "davdeploy"},
         budget_ceiling_usd=1000,
         execution_mode="PLAN_ONLY",
         require_reviewed_pr=True,
@@ -697,7 +697,7 @@ def test_terraform_plan_review_blocks_failed_cloud_preflight():
         content_digest=approved.content_digest,
         expected_account_id="123456789012",
         allowed_regions=["eu-west-1"],
-        required_tags={"ManagedBy": "AgentConstruct"},
+        required_tags={"ManagedBy": "davdeploy"},
         budget_ceiling_usd=1,
         execution_mode="PLAN_ONLY",
         require_reviewed_pr=True,
@@ -806,7 +806,7 @@ def test_cloud_execution_run_is_admin_only_and_blocked_by_default():
     history = service.cloud_execution_runs(operator())
     assert history[0]["id"] == run["id"]
     evidence = service.cloud_execution_run_evidence(operator(), run["id"])
-    assert evidence["kind"] == "agentconstruct.cloud_execution_evidence.v1"
+    assert evidence["kind"] == "davdeploy.cloud_execution_evidence.v1"
     assert evidence["run"]["attempt"] == 1
     assert evidence["approved_plan"]["digest"] == approved.content_digest
     assert evidence["source"]["repository"] == "https://github.com/example/review-dry-run"

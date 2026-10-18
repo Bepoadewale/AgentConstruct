@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from agentconstruct.domain import InfrastructurePlanDecision, InfrastructurePlanState
-from agentconstruct.security import LOCAL_USERS, Principal, issue_local_token, verify_token
+from davdeploy.domain import InfrastructurePlanDecision, InfrastructurePlanState
+from davdeploy.security import LOCAL_USERS, Principal, issue_local_token, verify_token
 from test_infrastructure_plan_lifecycle import plan_content
 from test_product import founder, make_service
 

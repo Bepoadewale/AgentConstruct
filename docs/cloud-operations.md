@@ -2,7 +2,7 @@
 
 **State: future pilot runbook. Do not treat these contracts as an AWS deployment.**
 
-Terraform is the only planned authority for creating and destroying AgentConstruct AWS foundation resources. A future pilot must use a dedicated state bucket, lock table, project tags and an account/region guardrail.
+Terraform is the only planned authority for creating and destroying davdeploy AWS foundation resources. A future pilot must use a dedicated state bucket, lock table, project tags and an account/region guardrail.
 
 ## Future operator commands
 
@@ -17,12 +17,12 @@ export TF_LOCK_TABLE=<dedicated-lock-table>
 
 make pilot-guardrails-plan
 make pilot-cloud-plan
-make pilot-cloud-apply        # also requires CONFIRM_APPLY=APPLY_AGENTCONSTRUCT_PILOT
+make pilot-cloud-apply        # also requires CONFIRM_APPLY=APPLY_DAVDEPLOY_PILOT
 make pilot-cloud-push-image
 make pilot-cloud-bootstrap-runtime
 make pilot-cloud-smoke
 make pilot-cloud-validate
-make pilot-cloud-destroy      # also requires CONFIRM_DESTROY=DESTROY_AGENTCONSTRUCT_PILOT
+make pilot-cloud-destroy      # also requires CONFIRM_DESTROY=DESTROY_DAVDEPLOY_PILOT
 ```
 
 The manual **Cloud pilot operator** GitHub Actions workflow uses GitHub OIDC and a supplied scoped role ARN. It has exact-text confirmation, a protected `cloud-pilot` environment and account-ID check. It never needs an AWS access key stored in GitHub.

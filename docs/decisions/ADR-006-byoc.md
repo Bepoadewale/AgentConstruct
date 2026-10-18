@@ -6,11 +6,11 @@ Customers want their workload data, cloud account and bill under their own contr
 
 ## Decision
 
-AgentConstruct will orchestrate through a scoped customer-cloud role while the customer owns resources and workload data.
+davdeploy will orchestrate through a scoped customer-cloud role while the customer owns resources and workload data.
 
 ## Alternatives
 
-Host all customer workloads in an AgentConstruct cloud account.
+Host all customer workloads in an davdeploy cloud account.
 
 ## Consequences
 

@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 from argparse import Namespace
 
-from agentconstruct.cli import run
-from agentconstruct.mcp import TOOL_DEFINITIONS, AgentConstructMcp, handle_request
-from agentconstruct.policy import PolicyClient
-from agentconstruct.security import LOCAL_USERS, Principal
-from agentconstruct.service import ProductService
+from davdeploy.cli import run
+from davdeploy.mcp import TOOL_DEFINITIONS, davdeployMcp, handle_request
+from davdeploy.policy import PolicyClient
+from davdeploy.security import LOCAL_USERS, Principal
+from davdeploy.service import ProductService
 from test_product import LocalExecutor, complete_prompt, founder, make_service
 
 
@@ -56,14 +56,14 @@ def test_mcp_catalogue_exposes_governed_operations_but_no_approval_or_credential
 
 def test_mcp_compares_candidates_and_preserves_api_authority():
     client = RecordingClient()
-    result = AgentConstructMcp(client).call_tool("compare_architectures", {"plan_id": "plan-1"})
+    result = davdeployMcp(client).call_tool("compare_architectures", {"plan_id": "plan-1"})
     assert result["selected"] == "aws-app-runner"
     assert client.calls == [("GET", "/api/v1/deployment-plans/plan-1", None)]
 
 
 def test_mcp_day2_tools_only_request_governed_api_operations():
     client = RecordingClient()
-    server = AgentConstructMcp(client)
+    server = davdeployMcp(client)
     assert server.call_tool("recommend_optimization", {"environment_id": "env-1"}) == {"ok": True}
     assert server.call_tool("create_change_plan", {"environment_id": "env-1"}) == {"ok": True}
     assert client.calls == [
@@ -74,7 +74,7 @@ def test_mcp_day2_tools_only_request_governed_api_operations():
 
 def test_mcp_customer_plan_tools_request_api_without_approval_or_credentials():
     client = RecordingClient()
-    server = AgentConstructMcp(client)
+    server = davdeployMcp(client)
     assert server.call_tool("create_customer_plan_review", {"plan_id": "plan-1"}) == {"ok": True}
     assert server.call_tool("get_customer_plan_review", {"revision_id": "revision-1"}) == {"ok": True}
     assert server.call_tool("submit_customer_plan_review", {"revision_id": "revision-1"}) == {
@@ -92,7 +92,7 @@ def test_mcp_customer_plan_tools_request_api_without_approval_or_credentials():
 
 
 def test_mcp_json_rpc_tools_list_and_error_shape_are_deterministic():
-    server = AgentConstructMcp(RecordingClient())
+    server = davdeployMcp(RecordingClient())
     listed = handle_request(server, {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     assert listed and listed["result"]["tools"] == TOOL_DEFINITIONS
     invalid = handle_request(

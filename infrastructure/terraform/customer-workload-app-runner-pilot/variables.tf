@@ -50,19 +50,19 @@ variable "enable_service" {
 variable "image_identifier" {
   type        = string
   description = "Full ECR image URI with tag for the customer workload. Required when enable_service is true."
-  default     = "placeholder.invalid/agentconstruct-customer-workload:unset"
+  default     = "placeholder.invalid/davdeploy-customer-workload:unset"
 }
 
 variable "service_name" {
   type        = string
   description = "App Runner service name."
-  default     = "agentconstruct-customer-sandbox-workload"
+  default     = "davdeploy-customer-sandbox-workload"
 }
 
 variable "ecr_repository_name" {
   type        = string
   description = "ECR repository name for the customer workload image."
-  default     = "agentconstruct-customer-sandbox-workload"
+  default     = "davdeploy-customer-sandbox-workload"
 }
 
 variable "source_repository" {
@@ -78,7 +78,7 @@ variable "source_commit" {
 
 variable "plan_digest" {
   type        = string
-  description = "AgentConstruct approved plan digest represented by this pilot execution."
+  description = "davdeploy approved plan digest represented by this pilot execution."
 }
 
 variable "cpu" {

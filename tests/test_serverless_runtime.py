@@ -5,25 +5,25 @@ import json
 from pathlib import Path
 
 import pytest
-from agentconstruct import db, lambda_cognito_link, policy, security
-from agentconstruct.domain import PolicyResult
-from agentconstruct.lambda_policy import handler as policy_handler
+from davdeploy import db, lambda_cognito_link, policy, security
+from davdeploy.domain import PolicyResult
+from davdeploy.lambda_policy import handler as policy_handler
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_database_url_requires_complete_data_api_configuration(monkeypatch):
-    monkeypatch.setenv("AGENTCONSTRUCT_AURORA_CLUSTER_ARN", "arn:cluster")
-    monkeypatch.delenv("AGENTCONSTRUCT_DATABASE_SECRET_ARN", raising=False)
+    monkeypatch.setenv("DAVDEPLOY_AURORA_CLUSTER_ARN", "arn:cluster")
+    monkeypatch.delenv("DAVDEPLOY_DATABASE_SECRET_ARN", raising=False)
     with pytest.raises(RuntimeError, match="both cluster and secret"):
         db.database_url()
 
 
 def test_data_api_engine_uses_arn_connect_arguments(monkeypatch):
     captured = {}
-    monkeypatch.setenv("AGENTCONSTRUCT_AURORA_CLUSTER_ARN", "arn:cluster")
-    monkeypatch.setenv("AGENTCONSTRUCT_DATABASE_SECRET_ARN", "arn:secret")
-    monkeypatch.setenv("AGENTCONSTRUCT_DATABASE_NAME", "controlplane")
+    monkeypatch.setenv("DAVDEPLOY_AURORA_CLUSTER_ARN", "arn:cluster")
+    monkeypatch.setenv("DAVDEPLOY_DATABASE_SECRET_ARN", "arn:secret")
+    monkeypatch.setenv("DAVDEPLOY_DATABASE_NAME", "controlplane")
 
     def fake_create_engine(url, **kwargs):
         captured.update(url=url, **kwargs)

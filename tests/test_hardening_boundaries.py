@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 import pytest
-from agentconstruct.boundaries import (
+from davdeploy.boundaries import (
     DataLifecycle,
     EvidenceGraph,
     FeatureFlag,
@@ -14,7 +14,7 @@ from agentconstruct.boundaries import (
     require_same_tenant,
     validate_runner_context,
 )
-from agentconstruct.contracts import (
+from davdeploy.contracts import (
     CapabilityKind,
     EvidenceKind,
     EvidenceRef,

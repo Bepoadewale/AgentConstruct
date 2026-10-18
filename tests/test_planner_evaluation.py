@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from agentconstruct.evaluation import run_default_benchmark
+from davdeploy.evaluation import run_default_benchmark
 
 
 def test_default_planner_benchmark_passes():

@@ -1,29 +1,29 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: AgentConstruct read-only AWS discovery connection. Creates no workload resources.
+Description: davdeploy read-only AWS discovery connection. Creates no workload resources.
 
 Parameters:
-  AgentConstructControlPlaneRoleArn:
+  davdeployControlPlaneRoleArn:
     Type: String
-    Description: AgentConstruct role allowed to assume this read-only customer role.
+    Description: davdeploy role allowed to assume this read-only customer role.
   ExternalId:
     Type: String
     NoEcho: true
-    Description: Unique AgentConstruct connection value for this customer account.
+    Description: Unique davdeploy connection value for this customer account.
   ConnectionId:
     Type: String
     AllowedPattern: "[A-Za-z0-9-]{8,40}"
-    Description: Non-secret AgentConstruct connection identifier.
+    Description: Non-secret davdeploy connection identifier.
 
 Resources:
   DiscoveryRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "AgentConstructDiscovery-${ConnectionId}"
-      Description: AgentConstruct read-only infrastructure and cost discovery. No workload mutation or data access.
+      RoleName: !Sub "davdeployDiscovery-${ConnectionId}"
+      Description: davdeploy read-only infrastructure and cost discovery. No workload mutation or data access.
       MaxSessionDuration: 3600
       Tags:
         - Key: ManagedBy
-          Value: agentconstruct
+          Value: davdeploy
         - Key: ConnectionId
           Value: !Ref ConnectionId
         - Key: Access
@@ -33,13 +33,13 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Ref AgentConstructControlPlaneRoleArn
+              AWS: !Ref davdeployControlPlaneRoleArn
             Action: sts:AssumeRole
             Condition:
               StringEquals:
                 sts:ExternalId: !Ref ExternalId
       Policies:
-        - PolicyName: AgentConstructDiscoveryMetadataOnly
+        - PolicyName: davdeployDiscoveryMetadataOnly
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -78,7 +78,7 @@ Resources:
 
 Outputs:
   DiscoveryRoleArn:
-    Description: Provide this output to AgentConstruct only if automatic verification is unavailable.
+    Description: Provide this output to davdeploy only if automatic verification is unavailable.
     Value: !GetAtt DiscoveryRole.Arn
   ConnectionId:
     Value: !Ref ConnectionId

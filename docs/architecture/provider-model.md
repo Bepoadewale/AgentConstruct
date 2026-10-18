@@ -1,6 +1,6 @@
 # Provider Model
 
-AgentConstruct plans in capabilities first and maps them to a cloud provider second. The current executable catalogue is AWS-only. Other clouds are future adapters, not supported execution targets.
+davdeploy plans in capabilities first and maps them to a cloud provider second. The current executable catalogue is AWS-only. Other clouds are future adapters, not supported execution targets.
 
 The provider boundary covers:
 

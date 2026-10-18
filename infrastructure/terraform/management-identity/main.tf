@@ -1,9 +1,9 @@
 data "aws_caller_identity" "current" {}
 locals {
-  tags = { Project = "agentconstruct", ManagedBy = "terraform", Scope = "control-plane-identity", Purpose = "customer-discovery" }
+  tags = { Project = "davdeploy", ManagedBy = "terraform", Scope = "control-plane-identity", Purpose = "customer-discovery" }
   discovery_arns = [
-    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/agentconstruct-*-discovery",
-    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/AgentConstructDiscovery-*",
+    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/davdeploy-*-discovery",
+    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/davdeployDiscovery-*",
   ]
 }
 
@@ -48,8 +48,8 @@ data "aws_iam_policy_document" "assume" {
 }
 
 resource "aws_iam_role" "control_plane" {
-  name                 = "agentconstruct-control-plane-github"
-  description          = "GitHub OIDC control-plane identity. It can assume only AgentConstruct customer discovery roles."
+  name                 = "davdeploy-control-plane-github"
+  description          = "GitHub OIDC control-plane identity. It can assume only davdeploy customer discovery roles."
   assume_role_policy   = data.aws_iam_policy_document.assume.json
   max_session_duration = 3600
   tags                 = local.tags
@@ -62,7 +62,7 @@ data "aws_iam_policy_document" "discover_customer" {
   }
 }
 resource "aws_iam_role_policy" "discover_customer" {
-  name   = "agentconstruct-assume-customer-discovery"
+  name   = "davdeploy-assume-customer-discovery"
   role   = aws_iam_role.control_plane.id
   policy = data.aws_iam_policy_document.discover_customer.json
 }

@@ -4,14 +4,14 @@ set -euo pipefail
 : "${COGNITO_USER_POOL_ID:?Set COGNITO_USER_POOL_ID}"
 : "${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID}"
 
-keychain_service="${GOOGLE_CLIENT_SECRET_KEYCHAIN_SERVICE:-agentconstruct-google-oauth-client-secret}"
+keychain_service="${GOOGLE_CLIENT_SECRET_KEYCHAIN_SERVICE:-davdeploy-google-oauth-client-secret}"
 secret="$(security find-generic-password -a "${USER}" -s "${keychain_service}" -w)"
-payload="$(mktemp "${TMPDIR:-/tmp}/agentconstruct-google-idp.XXXXXX.json")"
+payload="$(mktemp "${TMPDIR:-/tmp}/davdeploy-google-idp.XXXXXX.json")"
 
 cleanup() {
   secret=""
   case "${payload}" in
-    "${TMPDIR:-/tmp}"/agentconstruct-google-idp.*.json) rm -f -- "${payload}" ;;
+    "${TMPDIR:-/tmp}"/davdeploy-google-idp.*.json) rm -f -- "${payload}" ;;
     *) printf 'Refusing to clean unexpected path: %s\n' "${payload}" >&2 ;;
   esac
 }

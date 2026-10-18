@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Any
 
 import boto3
-from agentconstruct.model_gateway import decode_structured_json
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
+from davdeploy.model_gateway import decode_structured_json
 
 MODEL_ID = "us.amazon.nova-2-lite-v1:0"
 MAX_OUTPUT_TOKENS_PER_CASE = 384
@@ -121,7 +121,7 @@ def _case_result(client: Any, case: dict[str, Any]) -> dict[str, Any]:
                     "topP": 0.9,
                 },
                 requestMetadata={
-                    "evaluation": "agentconstruct-nova-live-v1",
+                    "evaluation": "davdeploy-nova-live-v1",
                     "case": case["name"],
                     "attempt": str(attempt + 1),
                 },

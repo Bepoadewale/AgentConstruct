@@ -18,4 +18,4 @@ The GitHub App must use installation-scoped permissions. A customer browser, AI 
 
 ## Delivery format decision
 
-AgentConstruct uses Kustomize for the initial generated customer overlay. This keeps the first product workflow small and reviewable. Helm is deliberately not added as a second templating layer in V1. A future customer-provided Helm chart adapter may be added only when it has typed values, schema validation and the same plan/approval/audit boundary.
+davdeploy uses Kustomize for the initial generated customer overlay. This keeps the first product workflow small and reviewable. Helm is deliberately not added as a second templating layer in V1. A future customer-provided Helm chart adapter may be added only when it has typed values, schema validation and the same plan/approval/audit boundary.

@@ -1,6 +1,6 @@
 # Scale-ready local boundaries
 
-AgentConstruct keeps the first deployment small while making the product contracts
+davdeploy keeps the first deployment small while making the product contracts
 safe to distribute later. This document describes the local implementations and
 the replacement seams; it is not evidence of a cloud deployment.
 

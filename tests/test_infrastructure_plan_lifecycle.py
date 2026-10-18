@@ -1,14 +1,14 @@
-from agentconstruct.domain import InfrastructurePlanDecision, InfrastructurePlanState
-from agentconstruct.models import InfrastructurePlanDecisionRecord
-from agentconstruct.security import Principal
-from agentconstruct.service import plan_hash
+from davdeploy.domain import InfrastructurePlanDecision, InfrastructurePlanState
+from davdeploy.models import InfrastructurePlanDecisionRecord
+from davdeploy.security import Principal
+from davdeploy.service import plan_hash
 from sqlalchemy import select
 from test_product import founder, make_service, operator
 
 
 def plan_content() -> dict:
     return {
-        "kind": "agentconstruct.aws.infrastructure-plan.review.v1",
+        "kind": "davdeploy.aws.infrastructure-plan.review.v1",
         "application_analysis": {
             "repository": "https://github.com/example/service",
             "branch": "main",

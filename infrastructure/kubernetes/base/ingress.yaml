@@ -1,8 +1,8 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: agentconstruct-console
-  namespace: agentconstruct
+  name: davdeploy-console
+  namespace: davdeploy
   annotations:
     alb.ingress.kubernetes.io/scheme: internal
     alb.ingress.kubernetes.io/target-type: ip
@@ -16,4 +16,4 @@ spec:
           - path: /
             pathType: Prefix
             backend:
-              service: { name: agentconstruct-api, port: { name: http } }
+              service: { name: davdeploy-api, port: { name: http } }

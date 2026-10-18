@@ -1,6 +1,6 @@
 # Agent Interfaces
 
-AgentConstruct has one governed product API. The browser, CLI, and MCP server use it instead of carrying separate infrastructure authority.
+davdeploy has one governed product API. The browser, CLI, and MCP server use it instead of carrying separate infrastructure authority.
 
 | Interface | Local capability | Safety boundary |
 | --- | --- | --- |
@@ -15,10 +15,10 @@ The MCP `execute_approved_plan` name is deliberate: it forwards a request to the
 Start the local stack, obtain a local fixture API token, then set it only in your shell:
 
 ```bash
-export AGENTCONSTRUCT_API_URL=http://127.0.0.1:8080
-export AGENTCONSTRUCT_TOKEN="$(curl -fsS -X POST "$AGENTCONSTRUCT_API_URL/api/v1/auth/local-login" -H 'content-type: application/json' -d '{"username":"founder"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')"
-agentconstruct --help
-agentconstruct-mcp
+export DAVDEPLOY_API_URL=http://127.0.0.1:8080
+export DAVDEPLOY_TOKEN="$(curl -fsS -X POST "$DAVDEPLOY_API_URL/api/v1/auth/local-login" -H 'content-type: application/json' -d '{"username":"founder"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')"
+davdeploy --help
+davdeploy-mcp
 ```
 
 The local token is a development fixture. Do not use it as a production identity design and do not commit it.

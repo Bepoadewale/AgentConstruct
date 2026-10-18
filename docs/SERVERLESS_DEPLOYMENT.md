@@ -8,7 +8,7 @@ This is an implementation contract, not evidence of a live deployment. `terrafor
 
 ## Release sequence
 
-1. Build `dist/lambda/agentconstruct-control-plane.zip` with `bash scripts/build_lambda_packages.sh` on Amazon Linux or the CI packaging image. Native dependencies must target Lambda Python 3.12, not macOS.
+1. Build `dist/lambda/davdeploy-control-plane.zip` with `bash scripts/build_lambda_packages.sh` on Amazon Linux or the CI packaging image. Native dependencies must target Lambda Python 3.12, not macOS.
 2. Upload the immutable zip to an existing versioned private S3 artifact bucket.
 3. Configure the single production remote Terraform state and reviewed inputs for `infrastructure/terraform/serverless-control-plane`.
 4. Run `terraform plan` and review exact cost, IAM, deletion-protection, origin, region, and artifact inputs.
@@ -22,9 +22,9 @@ This is an implementation contract, not evidence of a live deployment. `terrafor
 
 ## Google identity provider
 
-Create a Google OAuth web client with Cognito's generated `/oauth2/idpresponse` URL as an exact authorized redirect URI. Store the secret in macOS Keychain under `agentconstruct-google-oauth-client-secret`, set `COGNITO_USER_POOL_ID` and `GOOGLE_CLIENT_ID`, then run `bash scripts/configure_cognito_google.sh`. The script requests only `openid email profile`, uses a mode-600 temporary payload, and removes it on exit. The secret must never be committed, logged, placed in a `VITE_*` variable, or written to Terraform state.
+Create a Google OAuth web client with Cognito's generated `/oauth2/idpresponse` URL as an exact authorized redirect URI. Store the secret in macOS Keychain under `davdeploy-google-oauth-client-secret`, set `COGNITO_USER_POOL_ID` and `GOOGLE_CLIENT_ID`, then run `bash scripts/configure_cognito_google.sh`. The script requests only `openid email profile`, uses a mode-600 temporary payload, and removes it on exit. The secret must never be committed, logged, placed in a `VITE_*` variable, or written to Terraform state.
 
-The pre-sign-up Lambda links Google to an existing native Cognito account only when Google supplies a verified email. AgentConstruct still resolves organization and role from its own database.
+The pre-sign-up Lambda links Google to an existing native Cognito account only when Google supplies a verified email. davdeploy still resolves organization and role from its own database.
 
 ## Email OTP
 

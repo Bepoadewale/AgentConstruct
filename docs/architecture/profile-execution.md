@@ -1,6 +1,6 @@
 # Profile-aware execution
 
-AgentConstruct does not send every approved plan to Kubernetes.
+davdeploy does not send every approved plan to Kubernetes.
 
 The planner selects an architecture profile. The executor then selects the matching, bounded delivery contract. A static site uses a static-hosting contract; a Lambda API uses a serverless contract; App Runner and ECS use their own managed-container contracts. GitOps and Kubernetes are required only for the `aws-eks-governed` profile.
 

@@ -1,6 +1,6 @@
-# Why AgentConstruct exists
+# Why davdeploy exists
 
-General AI tools can write infrastructure code. AgentConstruct is the governed system that remembers a customer's approved cloud context and turns an outcome into a reviewable change.
+General AI tools can write infrastructure code. davdeploy is the governed system that remembers a customer's approved cloud context and turns an outcome into a reviewable change.
 
 It keeps the organisation boundary, cloud connection, policies, plans, approvals, observed results, audit history, cost assumptions and recommendations. A developer can use the web UI, CLI, Codex, Claude, Cursor or another agent as a client. The client does not become the authority.
 

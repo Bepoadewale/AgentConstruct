@@ -37,12 +37,12 @@ def test_customer_sandbox_has_a_dedicated_low_cost_vpc_boundary():
     assert 'egress_type       = "VPC"' in CUSTOMER_MAIN
     assert 'resource "aws_nat_gateway"' not in CUSTOMER_MAIN
     assert 'resource "aws_internet_gateway"' not in CUSTOMER_MAIN
-    assert "agentconstruct-customer-sandbox-apprunner-runtime" in CUSTOMER_MAIN
+    assert "davdeploy-customer-sandbox-apprunner-runtime" in CUSTOMER_MAIN
 
 
 def test_state_and_teardown_are_scope_specific_and_account_guarded():
-    assert "agentconstruct/platform/app-runner-runtime.tfstate" in PLATFORM_SCRIPT
-    assert "agentconstruct/customer-sandbox/workload-app-runner.tfstate" in CUSTOMER_SCRIPT
+    assert "davdeploy/platform/app-runner-runtime.tfstate" in PLATFORM_SCRIPT
+    assert "davdeploy/customer-sandbox/workload-app-runner.tfstate" in CUSTOMER_SCRIPT
     assert "EXPECTED_AWS_ACCOUNT_ID" in PLATFORM_SCRIPT
     assert "EXPECTED_AWS_ACCOUNT_ID" in CUSTOMER_SCRIPT
     assert "Customer sandbox VPC still exists" in CUSTOMER_SCRIPT

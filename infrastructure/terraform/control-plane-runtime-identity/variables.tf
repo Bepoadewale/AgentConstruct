@@ -1,7 +1,7 @@
 variable "region" { type = string }
 variable "oidc_provider_arn" {
   type        = string
-  description = "OIDC provider ARN for the AgentConstruct runtime cluster; not GitHub Actions."
+  description = "OIDC provider ARN for the davdeploy runtime cluster; not GitHub Actions."
 }
 variable "oidc_issuer_hostpath" {
   type        = string
@@ -9,7 +9,7 @@ variable "oidc_issuer_hostpath" {
 }
 variable "namespace" {
   type    = string
-  default = "agentconstruct"
+  default = "davdeploy"
 }
 variable "service_account" {
   type    = string

@@ -1,6 +1,6 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
-metadata: { name: agentconstruct-api, namespace: agentconstruct }
+metadata: { name: davdeploy-api, namespace: davdeploy }
 spec:
   minAvailable: 1
-  selector: { matchLabels: { app: agentconstruct-api } }
+  selector: { matchLabels: { app: davdeploy-api } }

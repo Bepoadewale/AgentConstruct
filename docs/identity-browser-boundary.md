@@ -3,9 +3,9 @@
 Local V1 uses a signed development token. Production uses the `JwksIdentityVerifier` interface with a trusted issuer, exact issuer/audience checks and JWKS signature verification.
 
 The static browser client is owned by the private
-`Bepoadewale/agentconstruct-frontend` repository. Its OIDC client must list only
+`Bepoadewale/davdeploy-frontend` repository. Its OIDC client must list only
 exact redirect and logout URLs for the deployed `pages.dev` origin and any
-later custom domain. `AGENTCONSTRUCT_ALLOWED_FRONTEND_ORIGINS` must contain the
+later custom domain. `DAVDEPLOY_ALLOWED_FRONTEND_ORIGINS` must contain the
 same exact HTTPS origins. Wildcards, URL paths and public HTTP origins fail
 closed; localhost HTTP is accepted only for development.
 

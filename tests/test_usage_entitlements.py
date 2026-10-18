@@ -1,5 +1,5 @@
-from agentconstruct.contracts import Entitlement, TenantScope, UsageEvent
-from agentconstruct.usage import InMemoryUsageLedger, UsageMeterLedger
+from davdeploy.contracts import Entitlement, TenantScope, UsageEvent
+from davdeploy.usage import InMemoryUsageLedger, UsageMeterLedger
 
 
 def tenant(org="org-demo"):

@@ -34,8 +34,8 @@ module "workload_iam" {
   name              = "${var.project}-${var.environment}"
   oidc_issuer       = module.eks.oidc_issuer
   oidc_provider_arn = module.eks.oidc_provider_arn
-  namespace         = "agentconstruct"
-  service_account   = "agentconstruct-api"
+  namespace         = "davdeploy"
+  service_account   = "davdeploy-api"
   secret_arns       = [module.rds.master_secret_arn, aws_secretsmanager_secret.application.arn]
   tags              = local.tags
 }

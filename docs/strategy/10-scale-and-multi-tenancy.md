@@ -2,7 +2,7 @@
 
 ## Goal
 
-AgentConstruct is being designed to support millions of customer identities over time without turning every customer into a bespoke deployment. The goal is not to provision million-customer infrastructure now. The goal is to make the boundaries that determine future scale explicit before implementation hardens around a single tenant, single queue, single database, or single execution process.
+davdeploy is being designed to support millions of customer identities over time without turning every customer into a bespoke deployment. The goal is not to provision million-customer infrastructure now. The goal is to make the boundaries that determine future scale explicit before implementation hardens around a single tenant, single queue, single database, or single execution process.
 
 ## Current implementation checkpoint
 
@@ -37,7 +37,7 @@ Registered-user count alone is not a capacity model.
 flowchart LR
   C[Web / CLI / MCP / external agents] --> EDGE[Global edge, WAF, API limits]
   EDGE --> ROUTER[Tenant and cell router]
-  ROUTER --> API[Shared AgentConstruct control plane]
+  ROUTER --> API[Shared davdeploy control plane]
   API --> DATA[Partitioned tenant metadata and evidence]
   API --> QUEUES[Typed durable job queues]
   QUEUES --> RUNNERS[Isolated execution runners]

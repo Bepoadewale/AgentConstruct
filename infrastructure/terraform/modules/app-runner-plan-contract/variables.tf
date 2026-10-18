@@ -1,6 +1,6 @@
 variable "project_id" {
   type        = string
-  description = "AgentConstruct project ID that owns the approved customer plan."
+  description = "davdeploy project ID that owns the approved customer plan."
 }
 
 variable "revision_id" {
