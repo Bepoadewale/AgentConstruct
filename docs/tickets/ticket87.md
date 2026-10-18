@@ -36,14 +36,14 @@ No serverless control-plane resource has been applied.
 - [x] Plan and apply environments remain distinct.
 - [x] No wildcard subject is introduced.
 - [x] Required local validation passes.
-- [ ] Required GitHub checks pass.
+- [x] Required GitHub checks pass.
 - [ ] Post-merge Terraform changes only the two trust policies.
 - [ ] Manual staging plan succeeds without applying the control plane.
 
 ## Acceptance status
 
-Implementation and local validation are complete. GitHub and post-merge operational checks are
-pending.
+Implementation plus local and GitHub validation are complete. Post-merge operational checks remain
+pending and will be recorded in a follow-up PR.
 
 ## Tests / validation performed
 
