@@ -10,6 +10,10 @@ and apply workflows:
 It adopts the existing AgentConstruct state bucket, lock table, and GitHub OIDC provider as data
 sources. It does not create or apply the serverless control plane.
 
+The OIDC trust uses GitHub's configured immutable subject form with owner and repository IDs. If
+the repository is transferred or recreated, update `github_oidc_repository_subject` through a
+reviewed PR before running either workflow.
+
 Initialize this root against the existing remote backend:
 
 ```bash

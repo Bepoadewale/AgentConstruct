@@ -54,7 +54,9 @@ Both workflows use GitHub OIDC and short-lived AWS credentials. Do not add acces
 The plan role may read state, acquire the state lock, publish versioned release packages, write
 encrypted saved plans, and perform the read permissions Terraform needs. The apply role may read
 the selected plan and state, acquire the lock, and change only the approved control-plane resource
-scope. Both trust policies should restrict the repository, branch, and GitHub environment.
+scope. Both trust policies should restrict the repository, branch, and GitHub environment. This
+repository uses GitHub's immutable OIDC subject customization, which includes owner and repository
+numeric IDs. Role trust must use that exact subject rather than a name-only repository subject.
 
 ## Current boundary
 

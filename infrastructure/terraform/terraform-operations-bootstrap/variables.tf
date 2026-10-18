@@ -4,10 +4,10 @@ variable "region" {
   default     = "us-east-1"
 }
 
-variable "github_repository" {
+variable "github_oidc_repository_subject" {
   type        = string
-  description = "Exact GitHub owner and repository trusted by the OIDC roles."
-  default     = "Bepoadewale/AgentConstruct"
+  description = "Immutable GitHub OIDC repository subject prefix configured for this repository."
+  default     = "repo:Bepoadewale@99020860/AgentConstruct@1391292548"
 }
 
 variable "state_bucket_name" {
