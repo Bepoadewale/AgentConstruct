@@ -437,6 +437,8 @@ resource "aws_lambda_event_source_mapping" "worker" {
   event_source_arn = aws_sqs_queue.worker.arn
   function_name    = aws_lambda_function.worker.arn
   batch_size       = 1
+
+  depends_on = [aws_iam_role_policy.worker_queue]
 }
 
 resource "aws_cloudwatch_event_rule" "worker_tick" {
