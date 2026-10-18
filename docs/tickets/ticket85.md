@@ -1,57 +1,92 @@
-# Ticket 85: Migrate the hosted control plane to serverless AWS
+# ticket85: Migrate the hosted control plane to serverless AWS
 
-## Goal
+PR: #85
 
-Replace the proposed always-on App Runner and NAT-based hosted runtime with a cost-conscious serverless control plane using API Gateway, Lambda, Aurora Serverless v2 through the RDS Data API, Cognito, SES, SQS, and an isolated policy Lambda.
+Branch: `feat/serverless-control-plane`
+
+## Problem / goal
+
+Replace the proposed always-on App Runner and NAT-based hosted runtime with a cost-conscious
+serverless control plane using API Gateway, Lambda, Aurora Serverless v2 through the RDS Data API,
+Cognito, SES, SQS, and an isolated policy Lambda. Add Google federation and passwordless email OTP
+while keeping tenant membership and roles authoritative in the backend.
 
 ## Current repo state
 
-The local product is a FastAPI modular monolith with SQLAlchemy persistence, a PostgreSQL-backed job contract, external OPA over HTTP, and trusted OIDC verification. The existing hosted Terraform contract is App Runner-oriented and includes networking that can require a NAT Gateway. No serverless stack has been applied.
+The local product is a FastAPI modular monolith with SQLAlchemy persistence, a PostgreSQL-backed
+job contract, external OPA over HTTP, and trusted OIDC verification. The prior hosted Terraform
+contract was App Runner-oriented and could require a NAT Gateway. No serverless stack has been
+applied.
 
-## Research and references
+## Research / references used
 
-- AWS Lambda can call public AWS service APIs and the public internet without joining a customer VPC.
+- AWS Lambda can call regional AWS APIs without joining a customer VPC.
 - Aurora PostgreSQL Serverless v2 supports the RDS Data API.
-- Cognito choice-based authentication supports email one-time passwords when the user pool uses an eligible feature plan and SES email delivery.
-- API Gateway HTTP API JWT authorizers validate Cognito access tokens before Lambda invocation.
+- Cognito choice-based authentication supports email OTP on an eligible user-pool tier.
+- Cognito managed login supports Google federation through OIDC.
+- API Gateway HTTP API JWT authorizers validate Cognito tokens before Lambda invocation.
+- Saved Terraform plans can contain sensitive values, so this public repository stores them only
+  in a private KMS-encrypted S3 bucket rather than GitHub artifacts.
 
-## Work planned
+## Work planned for the PR
 
-- Add Lambda adapters for FastAPI, background work, Cognito identity linking, and policy evaluation.
-- Add a bounded Aurora Data API SQLAlchemy adapter while retaining local PostgreSQL and SQLite development.
-- Add SQS transport support behind the existing queue boundary.
+- Add Lambda adapters for FastAPI, background work, Cognito identity linking, and policy checks.
+- Add Aurora Data API persistence while retaining local PostgreSQL and SQLite development.
+- Add SQS wake-up and dead-letter contracts behind the existing worker boundary.
 - Add Cognito user-pool contracts for Google federation and email OTP.
-- Add a serverless Terraform root with no NAT Gateway and no Lambda VPC attachment.
-- Add explicit CORS, IAM, secret, logging, budget, and deletion-protection boundaries.
-- Update API contracts, tests, validation scripts, and operator documentation.
-- Keep all AWS changes plan-only and unapplied.
+- Add a serverless Terraform root with no NAT Gateway and no application Lambda VPC attachment.
+- Add exact CORS, IAM, logging, budget, secret, deletion-protection, and artifact boundaries.
+- Add separate manual Terraform plan and apply workflows. Apply must consume the exact successful
+  saved plan selected by run ID and can never trigger automatically.
+- Reduce the repository clean-room rule to one complete clean cycle.
+- Update contracts, tests, validation scripts, operator documentation, and deployment handoff.
 
 ## Acceptance criteria
 
-- [ ] FastAPI runs behind a Lambda adapter.
-- [ ] Hosted SQL uses Aurora Serverless v2 Data API without a database socket.
-- [ ] Background work has an SQS and DLQ adapter with explicit retries.
-- [ ] Policy evaluation runs through an isolated Lambda boundary and fails closed.
-- [ ] Cognito supports Google federation and passwordless email OTP without putting secrets in the browser.
-- [ ] API Gateway authorizes tokens while the application still resolves server-side membership.
-- [ ] Terraform contains no NAT Gateway and does not attach application Lambdas to a VPC.
-- [ ] Local behavior and existing contracts remain functional.
-- [ ] Static Terraform validation and two clean validation cycles pass.
+- [x] FastAPI runs behind a Lambda adapter.
+- [x] Hosted SQL uses Aurora Serverless v2 Data API without a database socket.
+- [x] Background work has SQS and DLQ behavior with explicit retry boundaries.
+- [x] Policy evaluation runs through an isolated Lambda boundary and fails closed.
+- [x] Cognito supports Google federation and passwordless email OTP without browser secrets.
+- [x] API Gateway authorizes tokens while the application resolves server-side membership.
+- [x] Terraform contains no NAT Gateway and does not attach application Lambdas to a VPC.
+- [x] Manual Terraform plan and apply are separate, and apply uses only a verified saved plan.
+- [x] Local behavior and existing contracts remain functional.
+- [x] Static Terraform validation and one clean validation cycle pass.
 
-## Validation performed
+## Acceptance status
 
-Pending implementation.
+All code acceptance criteria are met locally. Live AWS, Cognito, Google, SES, Data API, plan, and
+apply behavior remains intentionally unexecuted until the required accounts, roles, buckets,
+identities, and GitHub environments are configured.
 
-## Evidence files
+## Tests / validation performed
 
-No customer workload or AWS apply is planned, so no `docs/test/test85.md` is required.
+- Two complete clean cycles passed before the rule changed, each ending with 216 passing tests.
+- The required current gate is one clean cycle and is therefore satisfied.
+- Canonical, simple, complex, degraded, Day-2, policy-failure, readiness-failure, customer-plan,
+  seed, tracing, lint, test, OpenAPI, and Compose checks passed in each cycle.
+- `make terraform-validate` passed for every Terraform root.
+- The Lambda package built and its ZIP integrity was checked during CI-oriented validation.
+- Workflow syntax and final repository checks are rerun after the governance additions.
+
+## Evidence files produced
+
+- `docs/test/test85.md`
+- `docs/SERVERLESS_DEPLOYMENT.md`
+- `docs/TERRAFORM_GITHUB_OPERATIONS.md`
 
 ## Boundaries
 
-- This PR does not apply Terraform, create AWS resources, configure Google credentials, verify SES identities, or claim live authentication.
-- Aurora Data API and Cognito behavior require live-environment validation after deployment.
-- Tenant membership, roles, approvals, policy, and execution authority remain backend responsibilities.
+- This PR does not apply Terraform, create AWS resources, configure Google credentials, verify SES
+  identities, or claim live authentication.
+- Aurora Data API and Cognito require live validation after deployment.
+- Tenant membership, roles, approvals, policy, and execution authority remain backend concerns.
+- Manual workflows remain unusable until least-privilege OIDC roles and private encrypted state,
+  plan, and release buckets are configured.
 
 ## Follow-up work
 
-Record exact deployed endpoints, Cognito identifiers, verified SES identities, and live smoke evidence in a later deployment PR.
+Configure GitHub environments and AWS OIDC roles, run the manual plan, review its exact cost and
+resource changes, then manually apply its saved plan. Record deployed endpoints, Cognito IDs, SES
+identity, Google configuration, live auth smoke results, and teardown evidence in a deployment PR.

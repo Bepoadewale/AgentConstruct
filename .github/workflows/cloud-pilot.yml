@@ -7,9 +7,9 @@ on:
         description: Terraform operation
         required: true
         type: choice
-        options: [plan, apply, destroy]
+        options: [plan, destroy]
       confirmation:
-        description: Type PLAN_AGENTCONSTRUCT_PILOT, APPLY_AGENTCONSTRUCT_PILOT, or DESTROY_AGENTCONSTRUCT_PILOT
+        description: Type PLAN_AGENTCONSTRUCT_PILOT or DESTROY_AGENTCONSTRUCT_PILOT
         required: true
         type: string
       aws_role_arn:
@@ -47,7 +47,6 @@ jobs:
   pilot:
     if: >-
       (inputs.operation == 'plan' && inputs.confirmation == 'PLAN_AGENTCONSTRUCT_PILOT') ||
-      (inputs.operation == 'apply' && inputs.confirmation == 'APPLY_AGENTCONSTRUCT_PILOT') ||
       (inputs.operation == 'destroy' && inputs.confirmation == 'DESTROY_AGENTCONSTRUCT_PILOT')
     environment: cloud-pilot
     runs-on: ubuntu-latest
@@ -67,7 +66,6 @@ jobs:
           TF_STATE_BUCKET: ${{ inputs.state_bucket }}
           TF_LOCK_TABLE: ${{ inputs.lock_table }}
           PROJECT: ${{ inputs.project }}
-          CONFIRM_APPLY: ${{ inputs.operation == 'apply' && 'APPLY_AGENTCONSTRUCT_PILOT' || '' }}
           CONFIRM_DESTROY: ${{ inputs.operation == 'destroy' && 'DESTROY_AGENTCONSTRUCT_PILOT' || '' }}
         run: |
           chmod +x scripts/pilot-cloud.sh

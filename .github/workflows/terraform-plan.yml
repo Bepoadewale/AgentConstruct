@@ -1,0 +1,134 @@
+name: Terraform plan
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Control-plane environment
+        required: true
+        type: choice
+        options: [staging, production]
+      confirmation:
+        description: Type PLAN_SERVERLESS_CONTROL_PLANE
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-plan-serverless-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'PLAN_SERVERLESS_CONTROL_PLANE'
+    environment: terraform-plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EXPECTED_AWS_ACCOUNT_ID: ${{ vars.EXPECTED_AWS_ACCOUNT_ID }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_LOCK_TABLE: ${{ vars.TF_STATE_LOCK_TABLE }}
+      TF_PLAN_BUCKET: ${{ vars.TF_PLAN_BUCKET }}
+      TF_PLAN_KMS_KEY_ARN: ${{ vars.TF_PLAN_KMS_KEY_ARN }}
+      TF_RELEASE_BUCKET: ${{ vars.TF_RELEASE_BUCKET }}
+      TF_RELEASE_KMS_KEY_ARN: ${{ vars.TF_RELEASE_KMS_KEY_ARN }}
+      TF_VAR_region: ${{ vars.AWS_REGION }}
+      TF_VAR_environment: ${{ inputs.environment }}
+      TF_VAR_frontend_origin: ${{ vars.FRONTEND_ORIGIN }}
+      TF_VAR_artifact_bucket: ${{ vars.TF_RELEASE_BUCKET }}
+      TF_VAR_cognito_domain_prefix: ${{ vars.COGNITO_DOMAIN_PREFIX }}
+      TF_VAR_google_identity_provider_enabled: ${{ vars.GOOGLE_IDENTITY_PROVIDER_ENABLED || 'false' }}
+      TF_VAR_ses_identity_arn: ${{ vars.SES_IDENTITY_ARN }}
+      TF_VAR_ses_from_address: ${{ vars.SES_FROM_ADDRESS }}
+      TF_VAR_budget_notification_email: ${{ vars.BUDGET_NOTIFICATION_EMAIL }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.14.7'
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_TERRAFORM_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Validate required configuration and AWS identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in AWS_REGION EXPECTED_AWS_ACCOUNT_ID TF_STATE_BUCKET TF_STATE_LOCK_TABLE TF_PLAN_BUCKET TF_PLAN_KMS_KEY_ARN TF_RELEASE_BUCKET TF_RELEASE_KMS_KEY_ARN TF_VAR_frontend_origin TF_VAR_cognito_domain_prefix; do
+            test -n "${!name:-}" || { echo "Missing required GitHub environment variable: ${name}" >&2; exit 1; }
+          done
+          actual_account_id="$(aws sts get-caller-identity --query Account --output text)"
+          test "${actual_account_id}" = "${EXPECTED_AWS_ACCOUNT_ID}" || { echo "AWS account mismatch" >&2; exit 1; }
+
+      - name: Build and publish immutable Lambda package
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/build_lambda_packages.sh dist/lambda
+          artifact_key="releases/serverless-control-plane/${GITHUB_SHA}/agentconstruct-control-plane.zip"
+          aws s3api put-object \
+            --bucket "${TF_RELEASE_BUCKET}" \
+            --key "${artifact_key}" \
+            --body dist/lambda/agentconstruct-control-plane.zip \
+            --server-side-encryption aws:kms \
+            --ssekms-key-id "${TF_RELEASE_KMS_KEY_ARN}" >/tmp/release-result.json
+          version_id="$(jq -r '.VersionId // empty' /tmp/release-result.json)"
+          test -n "${version_id}" || { echo "The release bucket must have versioning enabled" >&2; exit 1; }
+          echo "artifact_key=${artifact_key}" >>"${GITHUB_OUTPUT}"
+          echo "artifact_version=${version_id}" >>"${GITHUB_OUTPUT}"
+
+      - name: Initialize and create saved plan
+        id: plan
+        working-directory: infrastructure/terraform/serverless-control-plane
+        shell: bash
+        env:
+          TF_VAR_artifact_key: ${{ steps.release.outputs.artifact_key }}
+          TF_VAR_artifact_object_version: ${{ steps.release.outputs.artifact_version }}
+        run: |
+          set -euo pipefail
+          terraform init -input=false -reconfigure \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=serverless-control-plane/${TF_VAR_environment}.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${TF_STATE_LOCK_TABLE}" \
+            -backend-config="encrypt=true"
+          terraform fmt -check -recursive
+          terraform validate
+          terraform plan -input=false -out=tfplan
+          sha256sum tfplan | awk '{print $1}' >tfplan.sha256
+          plan_key="plans/serverless-control-plane/${GITHUB_SHA}/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}"
+          jq -n \
+            --arg commit "${GITHUB_SHA}" \
+            --arg run_id "${GITHUB_RUN_ID}" \
+            --arg run_attempt "${GITHUB_RUN_ATTEMPT}" \
+            --arg environment "${TF_VAR_environment}" \
+            --arg sha256 "$(cat tfplan.sha256)" \
+            '{commit:$commit,run_id:$run_id,run_attempt:$run_attempt,environment:$environment,sha256:$sha256,terraform_root:"infrastructure/terraform/serverless-control-plane"}' \
+            >tfplan-manifest.json
+          aws s3api put-object --bucket "${TF_PLAN_BUCKET}" --key "${plan_key}/tfplan" --body tfplan --server-side-encryption aws:kms --ssekms-key-id "${TF_PLAN_KMS_KEY_ARN}" >/dev/null
+          aws s3api put-object --bucket "${TF_PLAN_BUCKET}" --key "${plan_key}/manifest.json" --body tfplan-manifest.json --server-side-encryption aws:kms --ssekms-key-id "${TF_PLAN_KMS_KEY_ARN}" >/dev/null
+          echo "plan_key=${plan_key}" >>"${GITHUB_OUTPUT}"
+
+      - name: Record manual apply instructions
+        shell: bash
+        run: |
+          {
+            echo '## Saved Terraform plan'
+            echo
+            echo "Plan run ID: \`${GITHUB_RUN_ID}\`"
+            echo "Plan run attempt: \`${GITHUB_RUN_ATTEMPT}\`"
+            echo "Commit: \`${GITHUB_SHA}\`"
+            echo "Environment: \`${{ inputs.environment }}\`"
+            echo
+            echo 'Review this run. If it is acceptable, manually start the Terraform apply workflow with this plan run ID.'
+          } >>"${GITHUB_STEP_SUMMARY}"

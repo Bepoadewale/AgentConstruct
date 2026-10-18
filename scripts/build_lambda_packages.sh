@@ -3,6 +3,10 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 output_dir="${1:-${repo_root}/dist/lambda}"
+case "${output_dir}" in
+  /*) ;;
+  *) output_dir="${repo_root}/${output_dir}" ;;
+esac
 build_root="$(mktemp -d "${TMPDIR:-/tmp}/agentconstruct-lambda.XXXXXX")"
 
 cleanup() {

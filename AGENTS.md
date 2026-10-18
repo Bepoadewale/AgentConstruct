@@ -53,7 +53,6 @@ Before calling a runnable change review-ready, execute and record:
 
 ```text
 clean → bootstrap → smoke → simple demo → complex demo → degraded/Day-2 demos → policy failure → readiness failure → trace check → verify → clean
-→ second bootstrap → second smoke → second simple, complex, degraded and Day-2 demos → second policy and readiness failures → trace check → verify → clean
 ```
 
 Do not infer reproducibility from an existing environment.

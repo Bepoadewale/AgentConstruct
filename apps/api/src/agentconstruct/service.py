@@ -3533,7 +3533,7 @@ class ProductService:
             "summary": {
                 "selected_profile": architecture["profile"],
                 "why": architecture["recommendation_reason"],
-                "status": "DRAFT — review only; not submitted, approved, or deployed",
+                "status": "DRAFT: review only; not submitted, approved, or deployed",
             },
             "application_analysis": {
                 "project": project.name,
