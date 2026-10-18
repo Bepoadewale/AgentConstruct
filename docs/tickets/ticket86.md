@@ -4,26 +4,26 @@ PR: #86
 
 Branch: `feat/terraform-github-bootstrap`
 
-## Goal
+## Problem / goal
 
 Add and validate the reviewable Terraform needed to create or safely adopt the AWS prerequisites
 for manual GitHub plan and apply workflows. Leave both the bootstrap apply and serverless control
 plane apply until this PR is merged.
 
-## Current repository state
+## Current repo state
 
 The repository contains manually dispatched plan and apply workflows, older Terraform bootstrap
 roots, and historical local state. GitHub currently has no `terraform-plan` or `terraform-apply`
 environment. AWS already has a suitable state bucket, state-lock table, and GitHub OIDC provider.
 
-## Research and references
+## Research / references used
 
 - Existing Terraform bootstrap, identity, and serverless-control-plane roots.
 - Existing manual plan and apply workflows.
 - Current AWS identity and tagged-resource inventory.
 - GitHub Actions OIDC trust and environment configuration requirements.
 
-## Work completed
+## Work planned for the PR
 
 - Inventoried existing state, lock, artifact, IAM, OIDC, and KMS resources.
 - Added a dedicated Terraform operations bootstrap root.
@@ -48,7 +48,7 @@ environment. AWS already has a suitable state bucket, state-lock table, and GitH
 All PR-scoped criteria met. Post-merge creation and GitHub environment configuration remain in the
 follow-up operational PR.
 
-## Validation performed
+## Tests / validation performed
 
 - Existing account `654654474502` inventory verified in `us-east-1`.
 - Existing state bucket, lock table, and GitHub OIDC provider verified.
@@ -57,7 +57,7 @@ follow-up operational PR.
   failure, readiness failure, trace check, verify, Terraform validation, clean.
 - Full test suite: 224 passed, 1 dependency deprecation warning.
 
-## Evidence files
+## Evidence files produced
 
 - `docs/test/test86.md`
 
