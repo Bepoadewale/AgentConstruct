@@ -1,7 +1,7 @@
 # Manual Terraform plan and apply
 
-AgentConstruct uses two separate, manually dispatched GitHub Actions workflows for the serverless
-control plane. Merging Terraform code never provisions infrastructure.
+AgentConstruct uses two separate, manually dispatched GitHub Actions workflows for its single
+production serverless control plane. Merging Terraform code never provisions infrastructure.
 
 ## Safety sequence
 
@@ -34,8 +34,8 @@ Required environment variables:
 - `TF_RELEASE_BUCKET` for `terraform-plan`
 - `TF_RELEASE_KMS_KEY_ARN` for `terraform-plan`
 - `FRONTEND_ORIGIN` for `terraform-plan`
-- `COGNITO_DOMAIN_PREFIX` for `terraform-plan`; the workflow appends `-staging` or `-production`
-  so both environments have globally distinct Cognito domains
+- `COGNITO_DOMAIN_PREFIX` for `terraform-plan`; this is the single globally unique production
+  Cognito domain prefix
 
 Optional `terraform-plan` variables:
 
@@ -64,10 +64,15 @@ The prerequisite layer is active. The state bucket, state-lock table, and GitHub
 adopted from the existing account. Dedicated plan and release buckets, KMS keys, and least-privilege
 GitHub OIDC roles were then created for these workflows.
 
-Staging plan run `39140954204` completed successfully from `main` at commit
-`3f4fe983a1b34a91e42967c1057bb723c20bdad9`. It reported 39 additions, no changes, and no destroys,
-then stored the encrypted saved plan and versioned Lambda release artifact. Terraform apply has not
-been dispatched, so no serverless control-plane or customer workload resource has been created.
+Historical staging plan run `39140954204` completed successfully from `main` at commit
+`3f4fe983a1b34a91e42967c1057bb723c20bdad9`, but it predates the single-production manifest
+contract and cannot be applied. Terraform apply has not been dispatched, so no serverless
+control-plane or customer workload resource has been created.
+
+The production workflow uses one remote state object at
+`serverless-control-plane/terraform.tfstate`, one canonical `agentconstruct` resource namespace,
+and one Cognito domain. Future development or staging environments require a separately reviewed
+design change rather than an operator choice in the current workflow.
 
 Google identity federation remains disabled. SES sender configuration and budget notification email
 are also unset. These optional integrations can be configured before a future plan when their

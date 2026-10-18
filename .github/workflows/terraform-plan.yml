@@ -3,11 +3,6 @@ name: Terraform plan
 on:
   workflow_dispatch:
     inputs:
-      environment:
-        description: Control-plane environment
-        required: true
-        type: choice
-        options: [staging, production]
       confirmation:
         description: Type PLAN_SERVERLESS_CONTROL_PLANE
         required: true
@@ -18,7 +13,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: terraform-plan-serverless-${{ inputs.environment }}
+  group: terraform-plan-serverless-control-plane
   cancel-in-progress: false
 
 jobs:
@@ -37,10 +32,9 @@ jobs:
       TF_RELEASE_BUCKET: ${{ vars.TF_RELEASE_BUCKET }}
       TF_RELEASE_KMS_KEY_ARN: ${{ vars.TF_RELEASE_KMS_KEY_ARN }}
       TF_VAR_region: ${{ vars.AWS_REGION }}
-      TF_VAR_environment: ${{ inputs.environment }}
       TF_VAR_frontend_origin: ${{ vars.FRONTEND_ORIGIN }}
       TF_VAR_artifact_bucket: ${{ vars.TF_RELEASE_BUCKET }}
-      TF_VAR_cognito_domain_prefix: ${{ format('{0}-{1}', vars.COGNITO_DOMAIN_PREFIX, inputs.environment) }}
+      TF_VAR_cognito_domain_prefix: ${{ vars.COGNITO_DOMAIN_PREFIX }}
       TF_VAR_google_identity_provider_enabled: ${{ vars.GOOGLE_IDENTITY_PROVIDER_ENABLED || 'false' }}
       TF_VAR_ses_identity_arn: ${{ vars.SES_IDENTITY_ARN }}
       TF_VAR_ses_from_address: ${{ vars.SES_FROM_ADDRESS }}
@@ -98,7 +92,7 @@ jobs:
           set -euo pipefail
           terraform init -input=false -reconfigure \
             -backend-config="bucket=${TF_STATE_BUCKET}" \
-            -backend-config="key=serverless-control-plane/${TF_VAR_environment}.tfstate" \
+            -backend-config="key=serverless-control-plane/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
             -backend-config="dynamodb_table=${TF_STATE_LOCK_TABLE}" \
             -backend-config="encrypt=true"
@@ -108,12 +102,13 @@ jobs:
           sha256sum tfplan | awk '{print $1}' >tfplan.sha256
           plan_key="plans/serverless-control-plane/${GITHUB_SHA}/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}"
           jq -n \
+            --arg manifest_version "2" \
             --arg commit "${GITHUB_SHA}" \
             --arg run_id "${GITHUB_RUN_ID}" \
             --arg run_attempt "${GITHUB_RUN_ATTEMPT}" \
-            --arg environment "${TF_VAR_environment}" \
+            --arg deployment "production" \
             --arg sha256 "$(cat tfplan.sha256)" \
-            '{commit:$commit,run_id:$run_id,run_attempt:$run_attempt,environment:$environment,sha256:$sha256,terraform_root:"infrastructure/terraform/serverless-control-plane"}' \
+            '{manifest_version:$manifest_version,commit:$commit,run_id:$run_id,run_attempt:$run_attempt,deployment:$deployment,sha256:$sha256,terraform_root:"infrastructure/terraform/serverless-control-plane"}' \
             >tfplan-manifest.json
           aws s3api put-object --bucket "${TF_PLAN_BUCKET}" --key "${plan_key}/tfplan" --body tfplan --server-side-encryption aws:kms --ssekms-key-id "${TF_PLAN_KMS_KEY_ARN}" >/dev/null
           aws s3api put-object --bucket "${TF_PLAN_BUCKET}" --key "${plan_key}/manifest.json" --body tfplan-manifest.json --server-side-encryption aws:kms --ssekms-key-id "${TF_PLAN_KMS_KEY_ARN}" >/dev/null
@@ -128,7 +123,7 @@ jobs:
             echo "Plan run ID: \`${GITHUB_RUN_ID}\`"
             echo "Plan run attempt: \`${GITHUB_RUN_ATTEMPT}\`"
             echo "Commit: \`${GITHUB_SHA}\`"
-            echo "Environment: \`${{ inputs.environment }}\`"
+            echo 'Deployment: `production`'
             echo
             echo 'Review this run. If it is acceptable, manually start the Terraform apply workflow with this plan run ID.'
           } >>"${GITHUB_STEP_SUMMARY}"

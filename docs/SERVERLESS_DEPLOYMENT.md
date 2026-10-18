@@ -10,7 +10,7 @@ This is an implementation contract, not evidence of a live deployment. `terrafor
 
 1. Build `dist/lambda/agentconstruct-control-plane.zip` with `bash scripts/build_lambda_packages.sh` on Amazon Linux or the CI packaging image. Native dependencies must target Lambda Python 3.12, not macOS.
 2. Upload the immutable zip to an existing versioned private S3 artifact bucket.
-3. Configure remote Terraform state and create a reviewed variable file for `infrastructure/terraform/serverless-control-plane`.
+3. Configure the single production remote Terraform state and reviewed inputs for `infrastructure/terraform/serverless-control-plane`.
 4. Run `terraform plan` and review exact cost, IAM, deletion-protection, origin, region, and artifact inputs.
 5. Apply only through the guarded operator workflow after explicit approval.
 6. Invoke the emitted migration Lambda once and require `migrations-complete` before routing customer traffic.
@@ -48,3 +48,5 @@ All are public identifiers. None is a credential.
 - AWS Budget is alerting, not a hard spending cap.
 - Database deletion protection and final snapshots are enabled by default.
 - The stack does not create customer workload resources.
+- The current workflow deploys one production control plane. It has no development or staging
+  selector and uses `serverless-control-plane/terraform.tfstate` as its only state object.
