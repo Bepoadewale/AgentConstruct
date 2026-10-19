@@ -5,9 +5,11 @@ import json
 from pathlib import Path
 
 import pytest
-from davdeploy import db, lambda_cognito_link, policy, security
+from botocore.exceptions import ClientError
+from davdeploy import db, lambda_cognito_link, main, policy, security
 from davdeploy.domain import PolicyResult
 from davdeploy.lambda_policy import handler as policy_handler
+from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -37,6 +39,68 @@ def test_data_api_engine_uses_arn_connect_arguments(monkeypatch):
         "secret_arn": "arn:secret",
     }
     assert captured["pool_pre_ping"] is False
+
+
+def test_aurora_readiness_retries_a_resuming_database(monkeypatch):
+    attempts = []
+    sleeps = []
+
+    class DataApi:
+        def execute_statement(self, **kwargs):
+            attempts.append(kwargs)
+            if len(attempts) < 3:
+                raise ClientError(
+                    {"Error": {"Code": "DatabaseResumingException", "Message": "resuming"}},
+                    "ExecuteStatement",
+                )
+
+    monkeypatch.setenv("DAVDEPLOY_AURORA_CLUSTER_ARN", "arn:cluster")
+    monkeypatch.setenv("DAVDEPLOY_DATABASE_SECRET_ARN", "arn:secret")
+    guard = db.AuroraReadinessGuard()
+    guard.ensure_ready(
+        client=DataApi(),
+        sleeper=sleeps.append,
+        clock=lambda: 100.0,
+        delays=(2.0, 3.0),
+    )
+
+    assert len(attempts) == 3
+    assert sleeps == [2.0, 3.0]
+    assert attempts[-1]["sql"] == "SELECT 1"
+
+
+def test_aurora_readiness_exhaustion_is_a_controlled_503(monkeypatch):
+    class DataApi:
+        def execute_statement(self, **kwargs):
+            raise ClientError(
+                {"Error": {"Code": "DatabaseResumingException", "Message": "resuming"}},
+                "ExecuteStatement",
+            )
+
+    monkeypatch.setenv("DAVDEPLOY_AURORA_CLUSTER_ARN", "arn:cluster")
+    monkeypatch.setenv("DAVDEPLOY_DATABASE_SECRET_ARN", "arn:secret")
+    guard = db.AuroraReadinessGuard()
+    with pytest.raises(db.AuroraDatabaseUnavailable, match="retry shortly"):
+        guard.ensure_ready(
+            client=DataApi(),
+            sleeper=lambda delay: None,
+            clock=lambda: 100.0,
+            delays=(0.0,),
+        )
+
+    monkeypatch.setattr(
+        main,
+        "ensure_aurora_ready",
+        lambda: (_ for _ in ()).throw(
+            db.AuroraDatabaseUnavailable("database is resuming; retry shortly")
+        ),
+    )
+    response = TestClient(main.app).get("/api/v1/me")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "database is resuming; retry shortly"}
+    assert response.headers["retry-after"] == "10"
+    assert response.headers["x-davdeploy-api-version"] == "v1"
 
 
 def test_policy_lambda_preserves_approval_boundary():
@@ -173,3 +237,9 @@ def test_serverless_stack_pins_an_orderable_aurora_postgresql_version():
     ).read_text()
     assert 'default     = "16.15"' in variables
     assert 'default     = "16.6"' not in variables
+
+
+def test_serverless_stack_selects_the_implemented_bedrock_gateway():
+    terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
+    assert 'DAVDEPLOY_MODEL_PROVIDER           = "bedrock"' in terraform
+    assert "bedrock-nova" not in terraform

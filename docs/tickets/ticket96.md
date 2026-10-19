@@ -41,11 +41,21 @@ unsupported `bedrock-nova` selector. The first database request after pause also
 
 ## Acceptance status
 
-Pending implementation and validation.
+- [x] Production selects the implemented `bedrock` model gateway.
+- [x] Aurora retains minimum capacity zero and the existing 900-second auto-pause setting.
+- [x] Transient resume responses are retried through a bounded 20-second backoff budget.
+- [x] Exhausted resume attempts return a controlled 503 with `Retry-After`.
+- [x] One required clean-room cycle passed.
+- [x] The authenticated state-aware plan contains no deletion or replacement.
+- [ ] Live deployment and post-apply validation remain follow-up operations after merge.
 
 ## Tests / validation performed
 
-Pending.
+- Focused Ruff and Pytest validation passed with 21 tests.
+- One complete clean-room cycle passed with all 230 tests.
+- All Terraform roots, OpenAPI, Compose, API contract, customer-plan, demo, failure, readiness,
+  and trace checks passed.
+- Authenticated production state plan: 0 add, 4 in-place changes, 0 delete, 0 replace.
 
 ## Evidence files produced
 

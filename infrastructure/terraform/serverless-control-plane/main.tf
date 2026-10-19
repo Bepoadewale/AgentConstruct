@@ -276,7 +276,7 @@ locals {
     DAVDEPLOY_OIDC_ISSUER              = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.identity.id}"
     DAVDEPLOY_OIDC_AUDIENCE            = aws_cognito_user_pool_client.frontend.id
     DAVDEPLOY_POLICY_FUNCTION_ARN      = aws_lambda_function.policy.arn
-    DAVDEPLOY_MODEL_PROVIDER           = "bedrock-nova"
+    DAVDEPLOY_MODEL_PROVIDER           = "bedrock"
     DAVDEPLOY_BEDROCK_MODEL_ID         = var.nova_model_id
   }
 }
