@@ -265,3 +265,11 @@ def test_serverless_stack_manages_logs_and_actionable_alarms():
         "database_capacity_high",
     ):
         assert f'resource "aws_cloudwatch_metric_alarm" "{alarm}"' in terraform
+
+
+def test_serverless_stack_allows_only_preflight_without_jwt():
+    terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
+    assert 'route_key = "OPTIONS /"' in terraform
+    assert 'route_key = "OPTIONS /{proxy+}"' in terraform
+    assert terraform.count('authorization_type = "JWT"') == 1
+    assert terraform.count("authorizer_id      = aws_apigatewayv2_authorizer.cognito.id") == 1

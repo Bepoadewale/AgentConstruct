@@ -388,6 +388,20 @@ resource "aws_apigatewayv2_route" "health" {
   target    = "integrations/${aws_apigatewayv2_integration.api.id}"
 }
 
+# An authenticated $default route also captures preflight requests. Explicit OPTIONS routes take
+# precedence and let the API's CORS middleware answer browsers without weakening application routes.
+resource "aws_apigatewayv2_route" "preflight_root" {
+  api_id    = aws_apigatewayv2_api.control_plane.id
+  route_key = "OPTIONS /"
+  target    = "integrations/${aws_apigatewayv2_integration.api.id}"
+}
+
+resource "aws_apigatewayv2_route" "preflight_proxy" {
+  api_id    = aws_apigatewayv2_api.control_plane.id
+  route_key = "OPTIONS /{proxy+}"
+  target    = "integrations/${aws_apigatewayv2_integration.api.id}"
+}
+
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.control_plane.id
   name        = "$default"
