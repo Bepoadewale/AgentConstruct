@@ -243,3 +243,25 @@ def test_serverless_stack_selects_the_implemented_bedrock_gateway():
     terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
     assert 'DAVDEPLOY_MODEL_PROVIDER           = "bedrock"' in terraform
     assert "bedrock-nova" not in terraform
+
+
+def test_serverless_stack_authorizes_only_the_selected_nova_model_family():
+    terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
+    assert "foundation-model/amazon.nova-2-lite-v1:0" in terraform
+    assert "inference-profile/${var.nova_model_id}" in terraform
+    assert "foundation-model/*" not in terraform
+
+
+def test_serverless_stack_manages_logs_and_actionable_alarms():
+    terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
+    assert 'resource "aws_cloudwatch_log_group" "lambda"' in terraform
+    assert "retention_in_days = 14" in terraform
+    assert 'resource "aws_sns_topic" "operations"' in terraform
+    for alarm in (
+        "api_errors",
+        "worker_errors",
+        "api_gateway_5xx",
+        "worker_dead_letter",
+        "database_capacity_high",
+    ):
+        assert f'resource "aws_cloudwatch_metric_alarm" "{alarm}"' in terraform

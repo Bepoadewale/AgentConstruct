@@ -484,6 +484,36 @@ data "aws_iam_policy_document" "apply_control_plane" {
     resources = ["arn:${data.aws_partition.current.partition}:budgets::${data.aws_caller_identity.current.account_id}:budget/davdeploy-*"]
   }
   statement {
+    sid    = "OperationalLogs"
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:PutRetentionPolicy",
+      "logs:DeleteRetentionPolicy", "logs:TagResource", "logs:UntagResource"
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/davdeploy-*",
+      "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/davdeploy-*:*"
+    ]
+  }
+  statement {
+    sid    = "OperationalAlarms"
+    effect = "Allow"
+    actions = [
+      "cloudwatch:PutMetricAlarm", "cloudwatch:DeleteAlarms",
+      "cloudwatch:TagResource", "cloudwatch:UntagResource"
+    ]
+    resources = ["arn:${data.aws_partition.current.partition}:cloudwatch:${var.region}:${data.aws_caller_identity.current.account_id}:alarm:davdeploy-*"]
+  }
+  statement {
+    sid    = "OperationalNotifications"
+    effect = "Allow"
+    actions = [
+      "sns:CreateTopic", "sns:DeleteTopic", "sns:SetTopicAttributes",
+      "sns:TagResource", "sns:UntagResource", "sns:Subscribe", "sns:Unsubscribe"
+    ]
+    resources = ["arn:${data.aws_partition.current.partition}:sns:${var.region}:${data.aws_caller_identity.current.account_id}:davdeploy-*"]
+  }
+  statement {
     sid    = "RuntimeRoles"
     effect = "Allow"
     actions = [

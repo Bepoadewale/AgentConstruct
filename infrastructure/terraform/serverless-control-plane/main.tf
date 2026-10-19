@@ -181,9 +181,12 @@ resource "aws_iam_role_policy" "api" {
         Resource = aws_lambda_function.policy.arn
       },
       {
-        Effect   = "Allow"
-        Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
-        Resource = "arn:aws:bedrock:*::foundation-model/*"
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0",
+          "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${var.nova_model_id}"
+        ]
       }
     ]
   })
@@ -230,6 +233,23 @@ resource "aws_iam_role_policy" "cognito_link" {
   })
 }
 
+locals {
+  lambda_log_groups = toset(["api", "cognito-link", "migrate", "policy", "worker"])
+}
+
+resource "aws_cloudwatch_log_group" "lambda" {
+  for_each          = local.lambda_log_groups
+  name              = "/aws/lambda/${local.name}-${each.value}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+import {
+  for_each = toset(["api", "cognito-link", "migrate", "worker"])
+  to       = aws_cloudwatch_log_group.lambda[each.value]
+  id       = "/aws/lambda/${local.name}-${each.value}"
+}
+
 resource "aws_lambda_function" "policy" {
   function_name     = "${local.name}-policy"
   role              = aws_iam_role.policy.arn
@@ -241,6 +261,7 @@ resource "aws_lambda_function" "policy" {
   timeout           = 5
   memory_size       = 256
   tags              = local.common_tags
+  depends_on        = [aws_cloudwatch_log_group.lambda]
 }
 
 resource "aws_lambda_function" "cognito_link" {
@@ -254,6 +275,7 @@ resource "aws_lambda_function" "cognito_link" {
   timeout           = 10
   memory_size       = 256
   tags              = local.common_tags
+  depends_on        = [aws_cloudwatch_log_group.lambda]
 }
 
 resource "aws_lambda_permission" "cognito_link" {
@@ -291,6 +313,7 @@ resource "aws_lambda_function" "api" {
   s3_object_version = var.artifact_object_version
   timeout           = 29
   memory_size       = 1024
+  depends_on        = [aws_cloudwatch_log_group.lambda]
 
   environment {
     variables = local.runtime_environment
@@ -308,6 +331,7 @@ resource "aws_lambda_function" "migrate" {
   s3_object_version = var.artifact_object_version
   timeout           = 300
   memory_size       = 1024
+  depends_on        = [aws_cloudwatch_log_group.lambda]
 
   environment {
     variables = local.runtime_environment
@@ -426,6 +450,7 @@ resource "aws_lambda_function" "worker" {
   s3_object_version = var.artifact_object_version
   timeout           = 300
   memory_size       = 1024
+  depends_on        = [aws_cloudwatch_log_group.lambda]
 
   environment {
     variables = local.runtime_environment
@@ -484,6 +509,105 @@ resource "aws_budgets_budget" "monthly" {
       subscriber_email_addresses = [notification.value]
     }
   }
+}
+
+resource "aws_sns_topic" "operations" {
+  name = "${local.name}-operations"
+  tags = local.common_tags
+}
+
+resource "aws_sns_topic_subscription" "operations_email" {
+  count     = var.budget_notification_email == "" ? 0 : 1
+  topic_arn = aws_sns_topic.operations.arn
+  protocol  = "email"
+  endpoint  = var.budget_notification_email
+}
+
+locals {
+  alarm_actions = [aws_sns_topic.operations.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_errors" {
+  alarm_name          = "${local.name}-api-errors"
+  alarm_description   = "The control-plane API reported a Lambda error."
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  dimensions          = { FunctionName = aws_lambda_function.api.function_name }
+  tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "worker_errors" {
+  alarm_name          = "${local.name}-worker-errors"
+  alarm_description   = "The durable worker reported a Lambda error."
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  dimensions          = { FunctionName = aws_lambda_function.worker.function_name }
+  tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "api_gateway_5xx" {
+  alarm_name          = "${local.name}-api-gateway-5xx"
+  alarm_description   = "The public API returned a server error."
+  namespace           = "AWS/ApiGateway"
+  metric_name         = "5xx"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  dimensions = {
+    ApiId = aws_apigatewayv2_api.control_plane.id
+    Stage = aws_apigatewayv2_stage.default.name
+  }
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "worker_dead_letter" {
+  alarm_name          = "${local.name}-worker-dead-letter"
+  alarm_description   = "At least one worker job reached the dead-letter queue."
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  dimensions          = { QueueName = aws_sqs_queue.worker_dead_letter.name }
+  tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "database_capacity_high" {
+  alarm_name          = "${local.name}-database-capacity-high"
+  alarm_description   = "Aurora stayed near the configured serverless capacity ceiling."
+  namespace           = "AWS/RDS"
+  metric_name         = "ServerlessDatabaseCapacity"
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 3
+  threshold           = var.aurora_max_capacity * 0.8
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = local.alarm_actions
+  dimensions          = { DBClusterIdentifier = aws_rds_cluster.control_plane.cluster_identifier }
+  tags                = local.common_tags
 }
 
 check "no_network_egress_infrastructure" {
