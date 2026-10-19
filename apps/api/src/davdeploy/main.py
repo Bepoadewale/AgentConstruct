@@ -6,11 +6,19 @@ from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_client import Counter, generate_latest
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
-from davdeploy.db import SessionLocal, run_migrations, session
+from davdeploy.db import (
+    AuroraDatabaseUnavailable,
+    SessionLocal,
+    ensure_aurora_ready,
+    run_migrations,
+    session,
+)
 from davdeploy.domain import (
     ApiCredentialRequest,
     ApprovalRequest,
@@ -137,7 +145,20 @@ async def apply_api_guardrails(request: Request, call_next):
     client = request.client.host if request.client else "unknown"
     if RATE_LIMIT.limit and not request.url.path.startswith("/healthz") and not RATE_LIMIT.allow(client):
         return Response(status_code=429, content='{"detail":"rate limit exceeded"}', media_type="application/json", headers={"Retry-After": "60"})
-    response = await call_next(request)
+    public_paths = {"/", "/healthz", "/status", "/metrics", "/openapi.json"}
+    if request.method != "OPTIONS" and request.url.path not in public_paths:
+        try:
+            await run_in_threadpool(ensure_aurora_ready)
+        except AuroraDatabaseUnavailable as error:
+            response = JSONResponse(
+                status_code=503,
+                content={"detail": str(error)},
+                headers={"Retry-After": "10"},
+            )
+        else:
+            response = await call_next(request)
+    else:
+        response = await call_next(request)
     response.headers["X-davdeploy-API-Version"] = API_CONTRACT_VERSION
     for name, value in security_headers().items():
         response.headers[name] = value

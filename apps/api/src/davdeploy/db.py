@@ -1,13 +1,84 @@
 from __future__ import annotations
 
 import os
+import threading
+import time
 from collections.abc import Generator
 from pathlib import Path
+from typing import ClassVar
 
+import boto3
+from botocore.exceptions import ClientError
 from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from davdeploy.models import Base
+
+
+class AuroraDatabaseUnavailable(RuntimeError):
+    """Raised when a paused Aurora cluster does not become ready in time."""
+
+
+class AuroraReadinessGuard:
+    """Wake a scale-to-zero Aurora cluster before opening an application session."""
+
+    _RESUMING_CODES: ClassVar[frozenset[str]] = frozenset(
+        {"DatabaseResumingException", "DatabaseUnavailableException"}
+    )
+
+    def __init__(self, *, cache_seconds: float = 600.0) -> None:
+        self._cache_seconds = cache_seconds
+        self._ready_until = 0.0
+        self._lock = threading.Lock()
+
+    def ensure_ready(
+        self,
+        *,
+        client=None,
+        sleeper=time.sleep,
+        clock=time.monotonic,
+        delays: tuple[float, ...] = (2.0, 3.0, 4.0, 5.0, 6.0),
+    ) -> None:
+        cluster_arn = os.getenv("DAVDEPLOY_AURORA_CLUSTER_ARN")
+        secret_arn = os.getenv("DAVDEPLOY_DATABASE_SECRET_ARN")
+        if not cluster_arn and not secret_arn:
+            return
+        if not cluster_arn or not secret_arn:
+            raise AuroraDatabaseUnavailable("database configuration is incomplete")
+        if clock() < self._ready_until:
+            return
+
+        with self._lock:
+            if clock() < self._ready_until:
+                return
+            data_api = client or boto3.client("rds-data")
+            database = os.getenv("DAVDEPLOY_DATABASE_NAME", "davdeploy")
+            for attempt in range(len(delays) + 1):
+                try:
+                    data_api.execute_statement(
+                        resourceArn=cluster_arn,
+                        secretArn=secret_arn,
+                        database=database,
+                        sql="SELECT 1",
+                    )
+                    self._ready_until = clock() + self._cache_seconds
+                    return
+                except ClientError as error:
+                    code = error.response.get("Error", {}).get("Code")
+                    if code not in self._RESUMING_CODES:
+                        raise
+                    if attempt == len(delays):
+                        raise AuroraDatabaseUnavailable(
+                            "database is resuming; retry shortly"
+                        ) from error
+                    sleeper(delays[attempt])
+
+
+AURORA_READINESS = AuroraReadinessGuard()
+
+
+def ensure_aurora_ready() -> None:
+    AURORA_READINESS.ensure_ready()
 
 
 def database_url() -> str:
