@@ -445,12 +445,21 @@ data "aws_iam_policy_document" "apply_control_plane" {
     sid    = "ApiGateway"
     effect = "Allow"
     actions = [
-      "apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE"
+      "apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE",
+      "apigateway:TagResource", "apigateway:UntagResource"
     ]
     resources = [
       "arn:${data.aws_partition.current.partition}:apigateway:${var.region}::/apis*",
       "arn:${data.aws_partition.current.partition}:apigateway:${var.region}::/tags/arn%3Aaws%3Aapigateway%3A${var.region}%3A%3A%2Fv2%2Fapis%2F*"
     ]
+  }
+  statement {
+    sid    = "RdsManagedMasterSecrets"
+    effect = "Allow"
+    actions = [
+      "secretsmanager:CreateSecret", "secretsmanager:TagResource"
+    ]
+    resources = ["arn:${data.aws_partition.current.partition}:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:rds!cluster-*"]
   }
   statement {
     sid    = "Queues"

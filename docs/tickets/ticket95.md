@@ -38,11 +38,16 @@ AWS-managed master-password secret or tag the API Gateway stage.
 
 ## Acceptance status
 
-- Pending implementation and validation.
+- Met. The scoped permissions and regression assertions are implemented, all repository checks
+  pass, and a state-aware plan proposes 12 additions with no changes or destruction.
 
 ## Tests / validation performed
 
-- Pending.
+- `pytest -q tests/test_terraform_operations_bootstrap.py tests/test_serverless_runtime.py`: 15 passed.
+- `make terraform-validate`: every Terraform root valid.
+- `make verify`: Ruff passed, 227 tests passed, OpenAPI matched, and Compose validated.
+- State-aware production `terraform plan`: 12 to add, 0 to change, 0 to destroy.
+- `git diff --check` and PR document conventions are checked before review readiness.
 
 ## Evidence files produced
 

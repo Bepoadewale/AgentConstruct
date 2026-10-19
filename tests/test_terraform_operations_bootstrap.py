@@ -51,6 +51,9 @@ def test_apply_role_is_limited_to_required_control_plane_services() -> None:
     assert 'values   = ["rds.amazonaws.com"]' in source
     assert 'apigateway:${var.region}::/apis*' in source
     assert 'apigateway:${var.region}::/tags/arn%3Aaws%3Aapigateway%3A${var.region}%3A%3A%2Fv2%2Fapis%2F*' in source
+    assert '"apigateway:TagResource", "apigateway:UntagResource"' in source
+    assert '"secretsmanager:CreateSecret", "secretsmanager:TagResource"' in source
+    assert 'secret:rds!cluster-*' in source
 
 
 def test_plan_workflow_uses_one_production_cognito_domain() -> None:
