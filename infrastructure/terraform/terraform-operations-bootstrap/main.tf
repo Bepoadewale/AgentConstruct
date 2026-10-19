@@ -447,7 +447,10 @@ data "aws_iam_policy_document" "apply_control_plane" {
     actions = [
       "apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE"
     ]
-    resources = ["arn:${data.aws_partition.current.partition}:apigateway:${var.region}::/apis*"]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:apigateway:${var.region}::/apis*",
+      "arn:${data.aws_partition.current.partition}:apigateway:${var.region}::/tags/arn%3Aaws%3Aapigateway%3A${var.region}%3A%3A%2Fv2%2Fapis%2F*"
+    ]
   }
   statement {
     sid    = "Queues"

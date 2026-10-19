@@ -165,3 +165,11 @@ def test_serverless_stack_keeps_google_secret_out_of_terraform_state():
     contract = "\n".join(path.read_text() for path in terraform_root.glob("*.tf"))
     assert "google_client_secret" not in contract
     assert "aws_cognito_identity_provider" not in contract
+
+
+def test_serverless_stack_pins_an_orderable_aurora_postgresql_version():
+    variables = (
+        ROOT / "infrastructure/terraform/serverless-control-plane/variables.tf"
+    ).read_text()
+    assert 'default     = "16.15"' in variables
+    assert 'default     = "16.6"' not in variables

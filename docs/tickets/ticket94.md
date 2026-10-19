@@ -41,11 +41,16 @@ successful resources in the production remote state.
 
 ## Acceptance status
 
-- Pending implementation and validation.
+- Met for the reviewed repository change. Post-merge bootstrap reconciliation, saved planning, and
+  apply remain controlled operational steps.
 
 ## Tests / validation performed
 
-- Pending.
+- Focused Terraform regression suite: 15 tests passed.
+- `make terraform-validate`: every Terraform root passed.
+- `make verify`: Ruff, 227 Pytest tests, OpenAPI snapshot, and Compose validation passed.
+- A real read-only plan against the partial production state proposed 14 additions, zero changes,
+  and zero deletions.
 
 ## Evidence files produced
 

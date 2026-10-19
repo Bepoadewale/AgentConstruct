@@ -62,7 +62,7 @@ variable "database_name" {
 variable "aurora_engine_version" {
   type        = string
   description = "Aurora PostgreSQL version approved for Data API and Serverless v2."
-  default     = "16.6"
+  default     = "16.15"
 }
 
 variable "aurora_min_capacity" {
