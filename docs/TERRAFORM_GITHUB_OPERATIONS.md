@@ -86,6 +86,12 @@ Historical staging plan run `39140954204` completed successfully from `main` at 
 contract and cannot be applied. Terraform apply has not been dispatched, so no serverless
 control-plane or customer workload resource has been created.
 
+Current production plan run `39167209906` completed successfully from `main` at commit
+`5c03b37ab1a46cd96a55a5a7e888167badfc8b3b`. It authenticated through
+`davdeploy-terraform-plan-github`, uploaded a versioned Lambda package and encrypted saved plan,
+and produced the reviewed production plan. It did not apply that plan. The apply workflow remains a
+separate manual action.
+
 The production workflow uses one remote state object at
 `serverless-control-plane/terraform.tfstate`, one canonical `davdeploy` resource namespace,
 and one Cognito domain. Future development or staging environments require a separately reviewed
@@ -94,3 +100,8 @@ design change rather than an operator choice in the current workflow.
 Google identity federation and SES sender configuration remain disabled until their provider setup
 exists. The budget notification address is supplied through the encrypted `terraform-plan`
 environment secret when configured.
+
+The static frontend is active at `https://davdeploy-frontend.pages.dev`. Its API base URL, OIDC
+authority, Cognito user-pool client ID, and public OIDC client ID remain unset because they are
+outputs of the unapplied control plane. Set those values from real Terraform outputs only after an
+explicitly authorized apply, then rebuild and smoke-test the frontend.
