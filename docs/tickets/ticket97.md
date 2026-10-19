@@ -45,11 +45,17 @@ log retention or operational CloudWatch alarms.
 
 ## Acceptance status
 
-Pending implementation and validation.
+Complete in the reviewed branch. Live production validation remains the post-merge release gate.
 
 ## Tests / validation performed
 
-Pending.
+- Focused serverless runtime and Terraform contract tests: 15 passed.
+- Terraform validation passed before the clean-room cycle.
+- One complete clean-room cycle passed, including all demos, API contract, customer-plan E2E,
+  tracing, Terraform validation, lint, 232 tests, OpenAPI consistency, and cleanup.
+- Authenticated state-aware plans contained no deletes or replacements:
+  - operations bootstrap: 0 add, 1 in-place update, 0 destroy;
+  - control plane: 4 imports, 8 adds, 6 in-place updates, 0 destroy.
 
 ## Evidence files produced
 
