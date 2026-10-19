@@ -37,11 +37,13 @@ correct CORS headers. This prevents browsers from issuing authenticated cross-or
 
 ## Acceptance status
 
-Pending implementation and validation.
+Complete in the reviewed branch. Live production validation remains the post-merge release gate.
 
 ## Tests / validation performed
 
-Pending.
+- State-aware production plan: 2 adds, 0 changes, 0 destroys or replacements.
+- One clean-room cycle passed, including all demos, API contract, customer-plan E2E, tracing,
+  Terraform validation, lint, 233 tests, OpenAPI consistency, and cleanup.
 
 ## Evidence files produced
 
