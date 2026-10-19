@@ -39,11 +39,14 @@ apply has not run.
 
 ## Acceptance status
 
-- Pending documentation and validation.
+- Met.
 
 ## Tests / validation performed
 
-- Pending.
+- PR #93 ticket and evidence conventions passed.
+- `git diff --check` passed.
+- External results were cross-checked against GitHub Actions, Cloudflare Pages, AWS IAM, GitHub
+  environment, S3, and DynamoDB inventories.
 
 ## Evidence files produced
 
