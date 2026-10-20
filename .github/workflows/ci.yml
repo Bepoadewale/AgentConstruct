@@ -19,6 +19,7 @@ jobs:
       - run: python scripts/check_doc_conventions.py
         env:
           GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+      - run: python scripts/check_actions_configuration.py
 
   python:
     runs-on: ubuntu-latest

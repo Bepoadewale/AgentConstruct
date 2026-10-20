@@ -43,11 +43,23 @@ proportionate evidence.
 
 ## Acceptance status
 
-In progress.
+Complete. The value-free audit classified every workflow reference. The only sensitive configured
+value was already stored as a GitHub environment secret. No credential migration was necessary.
+The two required state configuration variables that were absent from `terraform-plan` were restored
+as non-secret environment variables.
 
 ## Tests / validation performed
 
-Pending.
+- Listed repository and environment variable and secret names without printing their values.
+- Confirmed the frontend repository has no GitHub Actions variables or secrets.
+- `make config-check`: passed with 15 classified metadata names and one classified secret name.
+- `python3 scripts/check_doc_conventions.py`: passed.
+- `python3 -m py_compile scripts/check_actions_configuration.py`: passed.
+- `git diff --check`: passed.
+- Searched tracked non-evidence files for the Cloudflare token prefix: no matches.
+- The local clean-room gate was not due because this PR changes static policy, documentation, and
+  CI configuration validation, not runtime product, database, worker, provider, or Terraform code.
+  Required CI supplies the fresh-runner integration gate.
 
 ## Evidence files produced
 
@@ -61,4 +73,4 @@ configuration values in repository files or logs.
 
 ## Follow-up work
 
-Pending implementation and CI.
+Required PR CI remains pending.

@@ -47,12 +47,17 @@ Build and maintain **davdeploy**, the private commercial product. Use plain Engl
 - Each ticket must include the PR goal, current repo state relevant to the PR, research/references, work to be done, acceptance criteria, whether each criterion was met, validation performed, evidence files, boundaries, and follow-up work.
 - Keep the ticket updated as implementation changes. Before marking the PR review-ready, update the acceptance status truthfully.
 
-## Clean-room gate
+## Validation gate
 
-Before calling a runnable change review-ready, execute and record:
-
-```text
-clean → bootstrap → smoke → simple demo → complex demo → degraded/Day-2 demos → policy failure → readiness failure → trace check → verify → clean
-```
-
-Do not infer reproducibility from an existing environment.
+- Run focused local tests for every runnable change and record the exact commands and results.
+- Required GitHub CI is the merge gate for every PR and performs the clean integration proof on a
+  fresh runner.
+- Run and record one full local clean-room cycle for releases and changes that affect database
+  migrations, dependency/bootstrap behavior, worker concurrency or recovery, execution lifecycle,
+  authentication/authorization, provider deployment, or Terraform behavior.
+- A reviewer may require the clean-room gate for another high-risk change. Documentation-only,
+  static policy, and narrowly scoped UI changes do not require it unless they affect executable
+  behavior.
+- The full local cycle remains:
+  `clean -> bootstrap -> smoke -> simple demo -> complex demo -> degraded/Day-2 demos -> policy failure -> readiness failure -> trace check -> verify -> clean`.
+- Never infer reproducibility from an existing environment when the clean-room gate applies.

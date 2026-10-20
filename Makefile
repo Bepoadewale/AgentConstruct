@@ -3,7 +3,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 export PYTHONPATH := apps/api/src
 
-.PHONY: help install lint test bootstrap-local smoke local-load-smoke seed-demo-data demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check api-contract openapi-check openapi-update customer-plan-e2e customer-plan-persistence local-proof verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local validate-environment admin-diagnostics customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy customer-aws-template-host-plan customer-aws-template-host-apply customer-aws-template-host-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
+.PHONY: help install lint test config-check bootstrap-local smoke local-load-smoke seed-demo-data demo demo-simple demo-complex demo-day2 demo-degraded demo-failure demo-readiness-failure trace-check api-contract openapi-check openapi-update customer-plan-e2e customer-plan-persistence local-proof verify clean-local compose-logs opa-test terraform-validate kubernetes-render mcp-local validate-environment admin-diagnostics customer-aws-connection-plan customer-aws-connection-apply customer-aws-connection-destroy customer-aws-template-host-plan customer-aws-template-host-apply customer-aws-template-host-destroy pilot-guardrails-plan pilot-cloud-plan pilot-cloud-apply pilot-cloud-push-image pilot-cloud-bootstrap-runtime pilot-cloud-smoke pilot-cloud-validate pilot-cloud-destroy
 
 help:
 	@echo "davdeploy local commands"
@@ -14,6 +14,7 @@ help:
 	@echo "  make seed-demo-data          Seed realistic local developer/admin demo records"
 	@echo "  make local-proof             Bootstrap, then run API contract, customer-plan E2E, seed data, trace check, verify"
 	@echo "  make customer-plan-e2e       Prove developer submit, admin decision, self-approval, dry-run, destroy"
+	@echo "  make config-check            Validate GitHub Actions variable/secret classification"
 	@echo "  make verify                  Run lint, tests, and Compose config validation"
 	@echo "  make validate-environment    Validate self-hosted configuration without cloud access"
 	@echo "  make admin-diagnostics       Verify local database reachability"
@@ -32,6 +33,9 @@ lint:
 
 test:
 	$(PY) -m pytest -q
+
+config-check:
+	$(PYTHON) scripts/check_actions_configuration.py
 
 bootstrap-local: install
 	docker compose up -d --build
@@ -145,6 +149,7 @@ pilot-cloud-destroy:
 	./scripts/pilot-cloud.sh destroy
 
 verify:
+	$(MAKE) config-check
 	$(MAKE) lint
 	$(MAKE) test
 	$(MAKE) openapi-check
