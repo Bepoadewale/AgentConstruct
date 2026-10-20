@@ -3,6 +3,7 @@
 Date: 2026-10-20
 Execution type: Controlled live production customer journey
 Customer repository: No customer repository write; DavDeploy production control plane only
+Commit: `test/live-customer-journey` worktree before final evidence commit
 AWS account: 654654474502
 AWS region: us-east-1
 
