@@ -36,7 +36,7 @@ also many releases behind the current official release.
 
 ## Acceptance status
 
-Implemented. Remote CI must confirm the current action and corrected input contract.
+Complete. The current action and corrected severity input passed on a fresh GitHub runner.
 
 ## Tests / validation performed
 
@@ -46,6 +46,8 @@ Implemented. Remote CI must confirm the current action and corrected input contr
 - `git diff --check`: passed.
 - The local clean-room gate is not due because this change only configures the CI scanner. The
   required fresh-runner supply-chain job is the authoritative validation.
+- GitHub Actions run `39474429780`: all seven jobs passed. The supply-chain job used Trivy action
+  `v0.36.0` and its annotations no longer contain `Unexpected input(s) 'HIGH'`.
 
 ## Evidence files produced
 
@@ -58,4 +60,4 @@ workloads.
 
 ## Follow-up work
 
-Required PR CI remains pending.
+None.
