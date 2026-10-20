@@ -59,8 +59,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: anchore/sbom-action@v0
         with: { path: ., output-file: sbom.spdx.json }
-      - uses: aquasecurity/trivy-action@v0.9.2
-        with: { scan-type: fs, ignore-unfixed: true, severity: CRITICAL,HIGH }
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
       - run: docker build -f apps/api/Dockerfile .
       - name: Build Lambda release package
         run: bash scripts/build_lambda_packages.sh && unzip -t dist/lambda/davdeploy-control-plane.zip
