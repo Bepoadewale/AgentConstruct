@@ -142,6 +142,21 @@ def test_nova_intent_repairs_one_schema_violation_and_records_usage():
     assert result.model_metadata["usage"]["retry_count"] == 1
 
 
+def test_nova_intent_repair_receives_bounded_validation_diagnostics():
+    invalid = proposal(execute_terraform=True, average_rps="twenty")
+    intent_provider, gateway = provider([invalid, proposal()])
+
+    intent_provider.interpret("Deploy my API.", "example/api", scope())
+
+    _, repair_document, _ = gateway.calls[1]
+    assert repair_document["previous_response"] == invalid
+    assert repair_document["validation_issues"] == [
+        {"location": "average_rps", "type": "int_parsing"},
+        {"location": "execute_terraform", "type": "extra_forbidden"},
+    ]
+    assert "input" not in repair_document["validation_issues"][0]
+
+
 def test_model_gateway_failure_translates_to_bounded_service_unavailable():
     with pytest.raises(HTTPException) as raised:
         translate(ModelGatewayUnavailable("model response failed validation"))
