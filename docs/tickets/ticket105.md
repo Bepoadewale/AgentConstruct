@@ -36,11 +36,16 @@ also many releases behind the current official release.
 
 ## Acceptance status
 
-In progress.
+Implemented. Remote CI must confirm the current action and corrected input contract.
 
 ## Tests / validation performed
 
-Pending.
+- Confirmed the official latest Trivy action release is `v0.36.0` through the GitHub API.
+- `python3 scripts/check_doc_conventions.py`: passed.
+- `python3 scripts/check_actions_configuration.py`: passed.
+- `git diff --check`: passed.
+- The local clean-room gate is not due because this change only configures the CI scanner. The
+  required fresh-runner supply-chain job is the authoritative validation.
 
 ## Evidence files produced
 
@@ -53,4 +58,4 @@ workloads.
 
 ## Follow-up work
 
-Pending implementation and CI.
+Required PR CI remains pending.
