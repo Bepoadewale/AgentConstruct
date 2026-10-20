@@ -99,6 +99,7 @@ def test_nova_intent_is_typed_tenant_scoped_and_non_authoritative():
     assert request.model == NOVA_2_LITE_MODEL_ID
     assert request.prompt_version == "intent-nova2-v1"
     assert document["selected_repository"] == "example/support-rag-api"
+    assert "use false when the capability is not explicitly required" in document["task"]
     assert output_schema["additionalProperties"] is False
     assert result.spec.cloud == "aws"
     assert result.spec.unknowns == []

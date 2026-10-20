@@ -23,7 +23,15 @@ Pending.
 
 ## Observed result
 
-Pending.
+- Authentication remained healthy after the PR #99 release.
+- The first post-release Nova request failed closed with HTTP 503. Direct production-model
+  diagnostics found that Nova returned `null` for `requires_kubernetes`, a required boolean, on
+  both the initial and repair attempt.
+- A revised extraction instruction was tested directly against the same Nova model and generic
+  workload request. It returned a proposal that passed the exact Pydantic contract.
+- One clean-room cycle passed all demonstrations, contract checks, Terraform validation, lint,
+  OpenAPI drift checking, and 234 tests. One upstream Starlette deprecation warning remains.
+- The remaining live journey is pending the governed release.
 
 ## Teardown
 
