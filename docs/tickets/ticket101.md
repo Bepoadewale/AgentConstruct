@@ -11,8 +11,10 @@ Record the final bounded production customer journey after the Nova extraction c
 ## Current repo state
 
 The production serverless control plane and frontend are deployed. Authentication, onboarding,
-tenant-scoped projects, Aurora persistence, Nova 2 Lite, plan governance, the SQS fixture worker,
-observed state, usage, and audit APIs are live. Customer workload provisioning remains disabled.
+tenant-scoped projects, Aurora persistence, Nova 2 Lite, plan governance, observed state, usage,
+and audit APIs are live. The production run showed that the SQS worker still selected the local
+Docker-only HTTP fixture hostname, so queued dry runs could not complete in Lambda. Customer
+workload provisioning remains disabled.
 
 ## Research / references used
 
@@ -30,6 +32,9 @@ observed state, usage, and audit APIs are live. Customer workload provisioning r
 - Create, approve, and execute a governed fixture teardown.
 - Verify audit and usage evidence.
 - Delete temporary Cognito identities and clean local response artifacts.
+- Replace the Lambda worker's Docker-only fixture transport with a bounded, stateless embedded
+  fixture adapter selected explicitly by hosted Terraform configuration.
+- Ensure stateless teardown marks every previously observed output and resource as destroyed.
 
 ## Acceptance criteria
 
@@ -45,7 +50,11 @@ In progress.
 
 ## Tests / validation performed
 
-Pending the final production journey.
+- Focused Ruff check passed.
+- Focused executor, serverless-runtime, and product tests passed: 48 tests.
+- One full clean-room cycle passed: clean, bootstrap, smoke, API contract, customer-plan E2E,
+  simple, complex, degraded, Day-2, canonical, policy-failure, readiness-failure, trace, Ruff,
+  236 tests, OpenAPI drift, Compose configuration, OPA 3/3, Terraform validation, final clean.
 
 ## Evidence files produced
 
@@ -58,4 +67,5 @@ workload provisioning or a customer-cloud Terraform apply.
 
 ## Follow-up work
 
-Record only issues directly demonstrated by this final run.
+Deploy the reviewed worker correction, resume the queued production fixture jobs, and complete the
+governed teardown and final live evidence.

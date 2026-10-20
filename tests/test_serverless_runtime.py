@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from botocore.exceptions import ClientError
-from davdeploy import db, lambda_cognito_link, main, policy, security
+from davdeploy import db, executor, lambda_cognito_link, main, policy, security
 from davdeploy.domain import PolicyResult
 from davdeploy.lambda_policy import handler as policy_handler
 from fastapi.testclient import TestClient
@@ -243,6 +243,24 @@ def test_serverless_stack_selects_the_implemented_bedrock_gateway():
     terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
     assert 'DAVDEPLOY_MODEL_PROVIDER           = "bedrock"' in terraform
     assert "bedrock-nova" not in terraform
+
+
+def test_serverless_stack_uses_network_independent_bounded_fixture_executor():
+    terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
+    assert 'DAVDEPLOY_EXECUTOR_MODE            = "embedded_fixture"' in terraform
+
+
+def test_embedded_fixture_executor_is_stateless_and_bounded(monkeypatch):
+    monkeypatch.setenv("DAVDEPLOY_EXECUTOR_MODE", "embedded_fixture")
+    adapter = executor.configured_executor()
+
+    deployed = adapter.deploy("environment-1", "starter")
+    destroyed = adapter.destroy("environment-1")
+
+    assert deployed.state == "READY"
+    assert deployed.detail["fixture"] == "bounded-embedded-executor"
+    assert destroyed.state == "DESTROYED"
+    assert destroyed.detail["cleanup_verified"] is True
 
 
 def test_serverless_stack_authorizes_only_the_selected_nova_model_family():

@@ -33,7 +33,7 @@ from davdeploy.domain import (
     WorkloadSpec,
 )
 from davdeploy.execution_profiles import execution_profile
-from davdeploy.executor import FixtureExecutor
+from davdeploy.executor import ExecutionAdapter, configured_executor
 from davdeploy.integrations import (
     FixtureAwsDiscovery,
     GitHubConnection,
@@ -97,7 +97,7 @@ class ProductService:
         self,
         db: Session,
         policy: PolicyClient | None = None,
-        executor: FixtureExecutor | None = None,
+        executor: ExecutionAdapter | None = None,
         intent_provider: IntentProvider | None = None,
         connection_secrets: ConnectionSecretStore | None = None,
         github: GitHubConnection | None = None,
@@ -110,7 +110,7 @@ class ProductService:
         self.github = github or configured_github_connection()
         self.day2_advisor = FixtureDay2Advisor()
         self.policy = policy or PolicyClient()
-        self.executor = executor or FixtureExecutor()
+        self.executor = executor or configured_executor()
         self.connection_secrets = connection_secrets or configured_connection_secret_store()
         self.cloud_execution = cloud_execution or configured_cloud_execution_adapter()
 
@@ -1117,6 +1117,25 @@ class ProductService:
         self, environment: Environment, observation: dict[str, Any]
     ) -> None:
         forced_status = "DESTROYED" if observation.get("state") == "DESTROYED" else None
+        if forced_status:
+            outputs = list(
+                self.db.scalars(
+                    select(EnvironmentOutput).where(
+                        EnvironmentOutput.environment_id == environment.id
+                    )
+                )
+            )
+            resources = list(
+                self.db.scalars(
+                    select(ObservedResource).where(
+                        ObservedResource.environment_id == environment.id
+                    )
+                )
+            )
+            for output in outputs:
+                output.status = forced_status
+            for resource in resources:
+                resource.status = forced_status
         for item in observation.get("outputs", []):
             name = str(item.get("name") or "").strip()
             if not name:
@@ -3778,12 +3797,13 @@ class ProductService:
                         "Fixture observation detected degraded application health.",
                         observation.detail,
                     )
-            environment.observed_state = observation.detail
-            self._record_environment_observation_assets(environment, observation.detail)
+            observation_detail = {**observation.detail, "state": observation.state}
+            environment.observed_state = observation_detail
+            self._record_environment_observation_assets(environment, observation_detail)
             job.state = (
                 "SUCCEEDED" if observation.state in {"READY", "DEGRADED", "DESTROYED"} else "FAILED"
             )
-            job.result = {"observation": observation.detail, "state": environment.state}
+            job.result = {"observation": observation_detail, "state": environment.state}
             principal = Principal(
                 subject="system-worker",
                 organization_id=environment.organization_id,
@@ -3794,7 +3814,7 @@ class ProductService:
                 action,
                 "environment",
                 environment.id,
-                {"state": environment.state, "observation": observation.detail},
+                {"state": environment.state, "observation": observation_detail},
             )
             self.db.commit()
         return True

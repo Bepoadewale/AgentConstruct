@@ -325,7 +325,14 @@ def test_production_plan_needs_distinct_operator_and_destroy_is_observed():
     destroyed = service.execute(operator(), destroy.id)[0]
     assert destroyed.state == LifecycleState.DESTROY_REQUESTED
     assert service.run_next_job()
-    assert service._environment(founder(), destroyed.id).state == LifecycleState.DESTROYED
+    destroyed = service._environment(founder(), destroyed.id)
+    assert destroyed.state == LifecycleState.DESTROYED
+    assert {item["status"] for item in service._environment_outputs(destroyed.id)} == {
+        "DESTROYED"
+    }
+    assert {item["status"] for item in service._observed_resources(destroyed.id)} == {
+        "DESTROYED"
+    }
     assert any(event.action == "environment.destroyed" for event in service.audits(founder()))
 
 
