@@ -20,7 +20,7 @@ App Runner output name, ARN, and resource type.
 - The four implemented AWS execution profiles.
 - PR #101 live production evidence.
 
-## Work to be done
+## Work planned for the PR
 
 - Map each implemented architecture profile to matching simulated output and resource metadata.
 - Use provider-neutral fixture references for unknown future profiles.
@@ -35,7 +35,11 @@ App Runner output name, ARN, and resource type.
 - [x] Local and embedded executors share one mapping.
 - [x] One complete clean-room validation cycle passes.
 
-## Validation performed
+## Acceptance status
+
+All PR acceptance criteria are met.
+
+## Tests / validation performed
 
 Focused Ruff and six embedded-executor tests passed. One clean-room cycle passed from a clean
 bootstrap through smoke, API contract, simple, complex, degraded, Day-2, canonical,
@@ -45,7 +49,7 @@ Terraform roots. Final cleanup removed the local containers, network, volume, vi
 and generated local state. The only warning was the existing upstream Starlette `httpx`
 deprecation warning.
 
-## Evidence files
+## Evidence files produced
 
 - `docs/test/test102.md`
 
