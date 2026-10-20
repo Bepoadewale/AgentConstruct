@@ -43,11 +43,23 @@ additions, five in-place Lambda updates, and zero deletions. Apply run `39418139
 
 ## Acceptance status
 
-In progress.
+Complete. The final production journey passed every acceptance criterion. Two earlier harness
+attempts failed only in test-side polling and response-shape assertions. Their four fixture
+environments were recovered through the governed teardown APIs and independently verified as
+DESTROYED with cleanup evidence.
 
 ## Tests / validation performed
 
-Pending.
+- Verified the live Cognito, API Gateway, Lambda, Aurora Data API, SQS, EventBridge, Bedrock Nova,
+  policy, approval, audit, and metering path.
+- Verified cross-tenant access, developer approval, and stale plan-digest attempts fail closed.
+- Verified the selected `aws-lambda-api` profile produces `lambda_function` metadata and no App
+  Runner metadata.
+- Verified staging and production reach READY, then DESTROYED through their respective governed
+  teardown paths.
+- Verified every Live QA 103 environment from all attempts is DESTROYED with
+  `cleanup_verified=true`.
+- Verified Cognito contains zero `qa103-*` temporary users.
 
 ## Evidence files produced
 
@@ -60,4 +72,4 @@ authorize Terraform apply or workload provisioning in a customer cloud account.
 
 ## Follow-up work
 
-Pending final evidence.
+None for this ticket.
