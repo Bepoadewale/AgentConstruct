@@ -27,6 +27,69 @@ class ExecutionAdapter(Protocol):
     def change(self, environment_id: str, minimum_replicas: int) -> ExecutionObservation: ...
 
 
+def fixture_primary_resource(environment_id: str, profile: str, status: str) -> tuple[dict, dict]:
+    resource_families = {
+        "aws-lambda-api": (
+            "lambda_function_arn",
+            "lambda_function",
+            f"arn:aws:lambda:us-east-1:000000000000:function:local-{environment_id}",
+        ),
+        "aws-app-runner": (
+            "app_runner_service_arn",
+            "apprunner_service",
+            (
+                "arn:aws:apprunner:us-east-1:000000000000:"
+                f"service/local-{profile}/{environment_id}"
+            ),
+        ),
+        "aws-ecs-fargate": (
+            "ecs_service_arn",
+            "ecs_service",
+            (
+                "arn:aws:ecs:us-east-1:000000000000:"
+                f"service/local-{profile}/{environment_id}"
+            ),
+        ),
+        "aws-eks-governed": (
+            "eks_cluster_arn",
+            "eks_cluster",
+            f"arn:aws:eks:us-east-1:000000000000:cluster/local-{environment_id}",
+        ),
+    }
+    output_name, resource_type, external_id = resource_families.get(
+        profile,
+        (
+            "simulated_resource_reference",
+            "simulated_service",
+            f"fixture://{profile}/{environment_id}",
+        ),
+    )
+    provider = "aws" if profile in resource_families else "fixture"
+    return (
+        {
+            "name": output_name,
+            "type": "aws_arn" if provider == "aws" else "resource_reference",
+            "value": external_id,
+            "visibility": "customer",
+            "sensitive": False,
+            "source": "fixture-observer",
+            "status": status,
+        },
+        {
+            "provider": provider,
+            "resource_type": resource_type,
+            "name": f"local-{profile}",
+            "external_id": external_id,
+            "region": "us-east-1" if provider == "aws" else None,
+            "status": status,
+            "tags": {
+                "davdeploy:environment-id": environment_id,
+                "davdeploy:execution-mode": "LOCAL_DRY_RUN",
+            },
+        },
+    )
+
+
 def fixture_deployment(
     environment_id: str,
     profile: str,
@@ -35,11 +98,8 @@ def fixture_deployment(
 ) -> dict:
     state = "FAILED" if should_fail else "DEGRADED" if should_degrade else "READY"
     app_url = f"https://{environment_id}.local.davdeploy.example"
-    service_arn = (
-        "arn:aws:apprunner:us-east-1:000000000000:"
-        f"service/local-{profile}/{environment_id}"
-    )
     status = "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED"
+    primary_output, primary_resource = fixture_primary_resource(environment_id, profile, status)
     return {
         "environment_id": environment_id,
         "profile": profile,
@@ -57,30 +117,9 @@ def fixture_deployment(
                 "source": "fixture-observer",
                 "status": status,
             },
-            {
-                "name": "app_runner_service_arn",
-                "type": "aws_arn",
-                "value": service_arn,
-                "visibility": "customer",
-                "sensitive": False,
-                "source": "fixture-observer",
-                "status": status,
-            },
+            primary_output,
         ],
-        "resources": [
-            {
-                "provider": "aws",
-                "resource_type": "apprunner_service",
-                "name": f"local-{profile}",
-                "external_id": service_arn,
-                "region": "us-east-1",
-                "status": status,
-                "tags": {
-                    "davdeploy:environment-id": environment_id,
-                    "davdeploy:execution-mode": "LOCAL_DRY_RUN",
-                },
-            }
-        ],
+        "resources": [primary_resource],
     }
 
 
