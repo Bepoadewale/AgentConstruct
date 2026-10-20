@@ -108,8 +108,10 @@ class NovaIntentProvider:
         document = {
             "task": (
                 "Extract only explicitly stated or strongly evidenced infrastructure requirements. "
-                "Use null or an empty list for missing material values. AWS is the product's current "
-                "cloud boundary, not a fact to infer from model memory."
+                "Use null only for nullable schema fields. For required boolean requirement fields, "
+                "use false when the capability is not explicitly required. Use an empty list for "
+                "missing list values. AWS is the product's current cloud boundary, not a fact to "
+                "infer from model memory."
             ),
             "customer_request": prompt,
             "selected_repository": source_repository,
