@@ -60,6 +60,8 @@ as non-secret environment variables.
 - The local clean-room gate was not due because this PR changes static policy, documentation, and
   CI configuration validation, not runtime product, database, worker, provider, or Terraform code.
   Required CI supplies the fresh-runner integration gate.
+- GitHub Actions run `39472955347`: all seven jobs passed, including fresh-runner local E2E,
+  Python, policy, cloud contracts, supply chain, documentation/configuration, and secret scanning.
 
 ## Evidence files produced
 
@@ -73,4 +75,4 @@ configuration values in repository files or logs.
 
 ## Follow-up work
 
-Required PR CI remains pending.
+None.
