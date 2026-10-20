@@ -5,7 +5,7 @@
 - [ ] Tests/lint pass.
 - [ ] Claims are labelled executed, simulated or planned.
 - [ ] No secret, customer or private strategy data was added.
-- [ ] Runnable changes include clean-room evidence, or the PR explains why the gate is not yet due.
+- [ ] Focused local validation is recorded; high-risk/release changes also include one clean-room cycle.
 
 ## Cloud evidence (only if a cloud pilot was authorised)
 

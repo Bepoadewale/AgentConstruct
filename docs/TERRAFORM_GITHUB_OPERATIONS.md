@@ -40,6 +40,10 @@ Required environment variables:
 - `COGNITO_DOMAIN_PREFIX` for `terraform-plan`; this is the single globally unique production
   Cognito domain prefix
 
+These are non-secret deployment identifiers. Keep them as GitHub environment variables so their
+classification is honest. Public visitors cannot read repository Settings, but workflow variables
+are unencrypted and must never hold credentials. See `docs/CONFIGURATION_SECURITY.md`.
+
 Optional `terraform-plan` variables:
 
 - `GOOGLE_IDENTITY_PROVIDER_ENABLED`, default `false`
