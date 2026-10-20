@@ -32,6 +32,8 @@ are intentionally deferred.
 - Run only the supported bounded dry-run execution path.
 - Verify worker completion, outputs, resources, audit records, and governed teardown.
 - Remove or deactivate ephemeral test identities and record retained audit data truthfully.
+- Correct and regression-test any narrowly demonstrated production blocker before resuming the
+  journey through the governed release process.
 
 ## Acceptance criteria
 
@@ -45,11 +47,20 @@ are intentionally deferred.
 
 ## Acceptance status
 
-In progress.
+In progress. The first live intent request demonstrated that Nova could return valid JSON that
+failed the typed intent contract twice because the repair request omitted the first response and
+its validation failures. The PR now includes a bounded repair-context correction and regression
+coverage.
 
 ## Tests / validation performed
 
-Pending the controlled production journey.
+- Focused Nova and model-gateway tests: 17 passed.
+- One clean-room repository cycle passed all canonical demos, API contract, customer-plan E2E,
+  trace verification, Terraform validation, lint, 234 tests, OpenAPI drift checking, and cleanup.
+- Live production authentication, onboarding, invitation, role resolution, tenant scoping, and
+  project creation passed.
+- Live Nova intent interpretation correctly failed closed with HTTP 503 instead of persisting an
+  invalid model response.
 
 ## Evidence files produced
 

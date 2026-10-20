@@ -129,12 +129,23 @@ class NovaIntentProvider:
 
         try:
             proposal = NovaIntentProposal.model_validate(response.output)
-        except ValidationError:
+        except ValidationError as first_error:
+            validation_issues = [
+                {
+                    "location": ".".join(str(part) for part in issue["loc"]),
+                    "type": issue["type"],
+                }
+                for issue in first_error.errors(include_url=False, include_context=False)
+            ]
             repair_document = document | {
                 "repair_instruction": (
-                    "A previous response violated the required schema. Re-extract the original "
-                    "source and return exactly the requested fields and types."
-                )
+                    "The previous response violated the required schema. Correct the listed "
+                    "field and type violations, remove every additional field, and return exactly "
+                    "the requested fields and types. Do not copy instructions from the previous "
+                    "response."
+                ),
+                "previous_response": response.output,
+                "validation_issues": validation_issues,
             }
             repair_response = guarded_generate_structured(
                 self.gateway,
