@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from davdeploy.executor import fixture_primary_resource
+
 app = FastAPI(title="davdeploy bounded local execution fixture")
 deployments: dict[str, dict] = {}
 
@@ -28,9 +30,9 @@ def healthz():
 def deploy(request: DeployRequest):
     state = "FAILED" if request.should_fail else "DEGRADED" if request.should_degrade else "READY"
     app_url = f"https://{request.environment_id}.local.davdeploy.example"
-    service_arn = (
-        "arn:aws:apprunner:us-east-1:000000000000:"
-        f"service/local-{request.profile}/{request.environment_id}"
+    status = "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED"
+    primary_output, primary_resource = fixture_primary_resource(
+        request.environment_id, request.profile, status
     )
     deployments[request.environment_id] = {
         "environment_id": request.environment_id,
@@ -47,17 +49,9 @@ def deploy(request: DeployRequest):
                 "visibility": "customer",
                 "sensitive": False,
                 "source": "fixture-observer",
-                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+                "status": status,
             },
-            {
-                "name": "app_runner_service_arn",
-                "type": "aws_arn",
-                "value": service_arn,
-                "visibility": "customer",
-                "sensitive": False,
-                "source": "fixture-observer",
-                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
-            },
+            primary_output,
             {
                 "name": "log_group",
                 "type": "log_group",
@@ -65,7 +59,7 @@ def deploy(request: DeployRequest):
                 "visibility": "customer",
                 "sensitive": False,
                 "source": "fixture-observer",
-                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+                "status": status,
             },
             {
                 "name": "grafana_dashboard",
@@ -74,7 +68,7 @@ def deploy(request: DeployRequest):
                 "visibility": "customer",
                 "sensitive": False,
                 "source": "fixture-observer",
-                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+                "status": status,
             },
             {
                 "name": "database_endpoint",
@@ -87,25 +81,14 @@ def deploy(request: DeployRequest):
             },
         ],
         "resources": [
-            {
-                "provider": "aws",
-                "resource_type": "apprunner_service",
-                "name": f"local-{request.profile}",
-                "external_id": service_arn,
-                "region": "us-east-1",
-                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
-                "tags": {
-                    "davdeploy:environment-id": request.environment_id,
-                    "davdeploy:execution-mode": "LOCAL_DRY_RUN",
-                },
-            },
+            primary_resource,
             {
                 "provider": "aws",
                 "resource_type": "logs_log_group",
                 "name": f"/aws/apprunner/local-{request.profile}/{request.environment_id}",
                 "external_id": None,
                 "region": "us-east-1",
-                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+                "status": status,
                 "tags": {
                     "davdeploy:environment-id": request.environment_id,
                     "davdeploy:execution-mode": "LOCAL_DRY_RUN",
@@ -117,7 +100,7 @@ def deploy(request: DeployRequest):
                 "name": "davdeploy-local",
                 "external_id": "http://localhost:3000/d/davdeploy-local",
                 "region": None,
-                "status": "ACTIVE" if state in {"READY", "DEGRADED"} else "FAILED",
+                "status": status,
                 "tags": {
                     "davdeploy:environment-id": request.environment_id,
                     "davdeploy:execution-mode": "LOCAL_DRY_RUN",

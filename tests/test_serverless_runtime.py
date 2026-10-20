@@ -254,13 +254,35 @@ def test_embedded_fixture_executor_is_stateless_and_bounded(monkeypatch):
     monkeypatch.setenv("DAVDEPLOY_EXECUTOR_MODE", "embedded_fixture")
     adapter = executor.configured_executor()
 
-    deployed = adapter.deploy("environment-1", "starter")
+    deployed = adapter.deploy("environment-1", "aws-lambda-api")
     destroyed = adapter.destroy("environment-1")
 
     assert deployed.state == "READY"
     assert deployed.detail["fixture"] == "bounded-embedded-executor"
+    assert deployed.detail["outputs"][1]["name"] == "lambda_function_arn"
+    assert deployed.detail["resources"][0]["resource_type"] == "lambda_function"
+    assert "app_runner" not in str(deployed.detail)
     assert destroyed.state == "DESTROYED"
     assert destroyed.detail["cleanup_verified"] is True
+
+
+@pytest.mark.parametrize(
+    ("profile", "output_name", "resource_type"),
+    [
+        ("aws-lambda-api", "lambda_function_arn", "lambda_function"),
+        ("aws-app-runner", "app_runner_service_arn", "apprunner_service"),
+        ("aws-ecs-fargate", "ecs_service_arn", "ecs_service"),
+        ("aws-eks-governed", "eks_cluster_arn", "eks_cluster"),
+        ("future-provider", "simulated_resource_reference", "simulated_service"),
+    ],
+)
+def test_embedded_fixture_reports_the_selected_resource_family(
+    profile, output_name, resource_type
+):
+    deployed = executor.EmbeddedFixtureExecutor().deploy("environment-1", profile)
+
+    assert deployed.detail["outputs"][1]["name"] == output_name
+    assert deployed.detail["resources"][0]["resource_type"] == resource_type
 
 
 def test_serverless_stack_authorizes_only_the_selected_nova_model_family():
