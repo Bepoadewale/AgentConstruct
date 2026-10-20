@@ -4,7 +4,9 @@
 
 **AI proposes. Policy and approved deterministic systems authorize and execute.**
 
-The browser holds only a short-lived local fixture token in this demo. It does not receive cloud, Kubernetes, Terraform or secret credentials. The executor can call a fixed local fixture API only.
+The browser does not receive cloud, Kubernetes, Terraform, or secret credentials. Local Compose
+uses a fixed fixture API. Hosted Lambda uses a deterministic embedded fixture adapter with no
+network, shell, Terraform, or cloud authority. Both paths persist only simulated observations.
 
 | Threat | V1 control |
 | --- | --- |

@@ -300,6 +300,7 @@ locals {
     DAVDEPLOY_POLICY_FUNCTION_ARN      = aws_lambda_function.policy.arn
     DAVDEPLOY_MODEL_PROVIDER           = "bedrock"
     DAVDEPLOY_BEDROCK_MODEL_ID         = var.nova_model_id
+    DAVDEPLOY_EXECUTOR_MODE            = "embedded_fixture"
   }
 }
 
