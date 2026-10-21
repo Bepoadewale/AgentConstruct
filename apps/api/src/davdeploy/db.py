@@ -120,6 +120,31 @@ engine = make_engine()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
+def _add_columns_if_missing(connection, table_name: str, additions: dict[str, str]) -> None:
+    """Add known migration columns without PostgreSQL schema reflection.
+
+    Aurora Data API cannot return PostgreSQL's internal ``CHAR`` values used by SQLAlchemy's
+    reflection query. PostgreSQL supports idempotent ``ADD COLUMN IF NOT EXISTS`` directly, so
+    migrations do not need to retrieve the system catalogue at all. SQLite keeps the reflection
+    fallback used by local tests and development.
+    """
+    if connection.dialect.name == "postgresql":
+        for name, definition in additions.items():
+            connection.execute(
+                text(
+                    f'ALTER TABLE "{table_name}" ADD COLUMN IF NOT EXISTS "{name}" {definition}'
+                )
+            )
+        return
+
+    columns = {column["name"] for column in inspect(connection).get_columns(table_name)}
+    for name, definition in additions.items():
+        if name not in columns:
+            connection.execute(
+                text(f'ALTER TABLE "{table_name}" ADD COLUMN "{name}" {definition}')
+            )
+
+
 def run_migrations(target: Engine | None = None) -> None:
     """Small versioned bootstrap for V1; replace with an expanded migration set as schemas evolve."""
     selected = target or engine
@@ -161,24 +186,22 @@ def run_migrations(target: Engine | None = None) -> None:
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (4)"))
             version = 4
         if version < 5:
-            columns = {column["name"] for column in inspect(connection).get_columns("cloud_connections")}
-            additions = {
-                "account_id": "ALTER TABLE cloud_connections ADD COLUMN account_id VARCHAR(12)",
-                "discovery_role_arn": "ALTER TABLE cloud_connections ADD COLUMN discovery_role_arn TEXT",
-                "external_id": "ALTER TABLE cloud_connections ADD COLUMN external_id TEXT",
-                "setup_state": "ALTER TABLE cloud_connections ADD COLUMN setup_state VARCHAR(32) DEFAULT 'DRAFT'",
-            }
-            for name, statement in additions.items():
-                if name not in columns:
-                    connection.execute(text(statement))
+            _add_columns_if_missing(
+                connection,
+                "cloud_connections",
+                {
+                    "account_id": "VARCHAR(12)",
+                    "discovery_role_arn": "TEXT",
+                    "external_id": "TEXT",
+                    "setup_state": "VARCHAR(32) DEFAULT 'DRAFT'",
+                },
+            )
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (5)"))
             version = 5
         if version < 6:
-            columns = {column["name"] for column in inspect(connection).get_columns("cloud_connections")}
-            if "external_id_secret_ref" not in columns:
-                connection.execute(
-                    text("ALTER TABLE cloud_connections ADD COLUMN external_id_secret_ref TEXT")
-                )
+            _add_columns_if_missing(
+                connection, "cloud_connections", {"external_id_secret_ref": "TEXT"}
+            )
             Base.metadata.create_all(bind=connection)
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (6)"))
             version = 6
@@ -187,11 +210,9 @@ def run_migrations(target: Engine | None = None) -> None:
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (7)"))
             version = 7
         if version < 8:
-            columns = {column["name"] for column in inspect(connection).get_columns("repository_connections")}
-            if "selected_branch" not in columns:
-                connection.execute(
-                    text("ALTER TABLE repository_connections ADD COLUMN selected_branch VARCHAR(255)")
-                )
+            _add_columns_if_missing(
+                connection, "repository_connections", {"selected_branch": "VARCHAR(255)"}
+            )
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (8)"))
             version = 8
         if version < 9:
@@ -239,21 +260,18 @@ def run_migrations(target: Engine | None = None) -> None:
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (19)"))
             version = 19
         if version < 20:
-            columns = {
-                column["name"]
-                for column in inspect(connection).get_columns("workspace_invitations")
-            }
-            additions = {
-                "delivery_state": "ALTER TABLE workspace_invitations ADD COLUMN delivery_state VARCHAR(24) DEFAULT 'PENDING'",
-                "delivery_provider": "ALTER TABLE workspace_invitations ADD COLUMN delivery_provider VARCHAR(40)",
-                "provider_message_id": "ALTER TABLE workspace_invitations ADD COLUMN provider_message_id VARCHAR(255)",
-                "send_count": "ALTER TABLE workspace_invitations ADD COLUMN send_count INTEGER DEFAULT 0",
-                "last_sent_at": "ALTER TABLE workspace_invitations ADD COLUMN last_sent_at TIMESTAMP WITH TIME ZONE",
-                "cancelled_at": "ALTER TABLE workspace_invitations ADD COLUMN cancelled_at TIMESTAMP WITH TIME ZONE",
-            }
-            for name, statement in additions.items():
-                if name not in columns:
-                    connection.execute(text(statement))
+            _add_columns_if_missing(
+                connection,
+                "workspace_invitations",
+                {
+                    "delivery_state": "VARCHAR(24) DEFAULT 'PENDING'",
+                    "delivery_provider": "VARCHAR(40)",
+                    "provider_message_id": "VARCHAR(255)",
+                    "send_count": "INTEGER DEFAULT 0",
+                    "last_sent_at": "TIMESTAMP WITH TIME ZONE",
+                    "cancelled_at": "TIMESTAMP WITH TIME ZONE",
+                },
+            )
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (20)"))
 
 

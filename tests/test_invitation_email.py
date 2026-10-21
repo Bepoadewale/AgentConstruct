@@ -2,9 +2,38 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from davdeploy.db import run_migrations
+from davdeploy.db import _add_columns_if_missing, run_migrations
 from davdeploy.invitation_email import SesInvitationEmailSender
 from sqlalchemy import create_engine, inspect, text
+
+
+def test_postgresql_column_migrations_avoid_schema_reflection():
+    class Dialect:
+        name = "postgresql"
+
+    class Connection:
+        dialect = Dialect()
+
+        def __init__(self):
+            self.statements = []
+
+        def execute(self, statement):
+            self.statements.append(str(statement))
+
+    connection = Connection()
+
+    _add_columns_if_missing(
+        connection,
+        "workspace_invitations",
+        {"delivery_state": "VARCHAR(24) DEFAULT 'PENDING'"},
+    )
+
+    assert connection.statements == [
+        (
+            'ALTER TABLE "workspace_invitations" ADD COLUMN IF NOT EXISTS "delivery_state" '
+            "VARCHAR(24) DEFAULT 'PENDING'"
+        )
+    ]
 
 
 def test_ses_invitation_sender_uses_one_bounded_transactional_message():
@@ -69,6 +98,7 @@ def test_invitation_migration_upgrades_existing_version_19_schema():
             )
         )
 
+    run_migrations(engine)
     run_migrations(engine)
 
     columns = {column["name"] for column in inspect(engine).get_columns("workspace_invitations")}
