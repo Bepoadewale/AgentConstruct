@@ -37,6 +37,7 @@ from davdeploy.executor import ExecutionAdapter, configured_executor
 from davdeploy.integrations import (
     FixtureAwsDiscovery,
     GitHubConnection,
+    PublicGitHubRepositoryReader,
     StsAwsDiscovery,
     configured_github_connection,
     verify_github_webhook_signature,
@@ -101,6 +102,7 @@ class ProductService:
         intent_provider: IntentProvider | None = None,
         connection_secrets: ConnectionSecretStore | None = None,
         github: GitHubConnection | None = None,
+        public_github: PublicGitHubRepositoryReader | None = None,
         cloud_execution: CloudExecutionAdapter | None = None,
     ):
         self.db = db
@@ -108,6 +110,7 @@ class ProductService:
         self.planner = AwsV1Planner()
         self.cloud_discovery = FixtureAwsDiscovery()
         self.github = github or configured_github_connection()
+        self.public_github = public_github or PublicGitHubRepositoryReader()
         self.day2_advisor = FixtureDay2Advisor()
         self.policy = policy or PolicyClient()
         self.executor = executor or configured_executor()
@@ -141,7 +144,9 @@ class ProductService:
         invitation_token: str | None = None,
     ) -> dict[str, Any]:
         """Create or join a tenant using only a provider-verified identity."""
-        existing = self.db.scalar(select(ProductUser).where(ProductUser.subject == identity.subject))
+        existing = self.db.scalar(
+            select(ProductUser).where(ProductUser.subject == identity.subject)
+        )
         if existing:
             return self.workspace_profile(
                 Principal(existing.subject, existing.organization_id, existing.role)
@@ -169,9 +174,7 @@ class ProductService:
             role = invitation.role
             invitation.state = "ACCEPTED"
         else:
-            organization = Organization(
-                name=f"{workspace_name.strip()} {identity.subject[-8:]}"
-            )
+            organization = Organization(name=f"{workspace_name.strip()} {identity.subject[-8:]}")
             self.db.add(organization)
             self.db.flush()
             organization_id = organization.id
@@ -230,7 +233,9 @@ class ProductService:
         if not self._is_workspace_administrator(principal):
             raise PermissionError("workspace administrator role required")
 
-    def invite_workspace_member(self, principal: Principal, email: str, role: str) -> dict[str, Any]:
+    def invite_workspace_member(
+        self, principal: Principal, email: str, role: str
+    ) -> dict[str, Any]:
         self._require_workspace_admin(principal)
         raw_token = secrets.token_urlsafe(24)
         invitation = WorkspaceInvitation(
@@ -243,49 +248,106 @@ class ProductService:
         )
         self.db.add(invitation)
         self.db.flush()
-        self.audit(principal, "workspace.invitation_created", "workspace_invitation", invitation.id, {"email": invitation.email, "role": role})
+        self.audit(
+            principal,
+            "workspace.invitation_created",
+            "workspace_invitation",
+            invitation.id,
+            {"email": invitation.email, "role": role},
+        )
         self.db.commit()
-        return {"id": invitation.id, "email": invitation.email, "role": invitation.role, "state": invitation.state, "expires_at": invitation.expires_at, "invite_token": raw_token}
+        return {
+            "id": invitation.id,
+            "email": invitation.email,
+            "role": invitation.role,
+            "state": invitation.state,
+            "expires_at": invitation.expires_at,
+            "invite_token": raw_token,
+        }
 
     def list_workspace_members(self, principal: Principal) -> list[dict[str, Any]]:
         self.workspace_profile(principal)
-        users = self.db.scalars(select(ProductUser).where(ProductUser.organization_id == principal.organization_id).order_by(ProductUser.subject)).all()
+        users = self.db.scalars(
+            select(ProductUser)
+            .where(ProductUser.organization_id == principal.organization_id)
+            .order_by(ProductUser.subject)
+        ).all()
         return [{"subject": user.subject, "role": user.role, "state": "ACTIVE"} for user in users]
 
-    def change_workspace_member_role(self, principal: Principal, subject: str, role: str) -> dict[str, str]:
+    def change_workspace_member_role(
+        self, principal: Principal, subject: str, role: str
+    ) -> dict[str, str]:
         self._require_workspace_admin(principal)
         if subject == principal.subject and role != principal.role:
             raise ValueError("administrators cannot change their own role")
-        member = self.db.scalar(select(ProductUser).where(ProductUser.organization_id == principal.organization_id, ProductUser.subject == subject))
+        member = self.db.scalar(
+            select(ProductUser).where(
+                ProductUser.organization_id == principal.organization_id,
+                ProductUser.subject == subject,
+            )
+        )
         if not member:
             raise KeyError("workspace member not found")
         member.role = role
-        self.audit(principal, "workspace.member_role_changed", "user", member.id, {"subject": subject, "role": role})
+        self.audit(
+            principal,
+            "workspace.member_role_changed",
+            "user",
+            member.id,
+            {"subject": subject, "role": role},
+        )
         self.db.commit()
         return {"subject": member.subject, "role": member.role}
 
     def subscription(self, principal: Principal) -> dict[str, Any]:
         self.workspace_profile(principal)
-        subscription = self.db.scalar(select(WorkspaceSubscription).where(WorkspaceSubscription.organization_id == principal.organization_id))
+        subscription = self.db.scalar(
+            select(WorkspaceSubscription).where(
+                WorkspaceSubscription.organization_id == principal.organization_id
+            )
+        )
         if not subscription:
-            subscription = WorkspaceSubscription(organization_id=principal.organization_id, limits={"plans_created": 25, "repository_analyses": 25, "execution_jobs": 10}, trial_ends_at=datetime.now(UTC) + timedelta(days=14))
+            subscription = WorkspaceSubscription(
+                organization_id=principal.organization_id,
+                limits={"plans_created": 25, "repository_analyses": 25, "execution_jobs": 10},
+                trial_ends_at=datetime.now(UTC) + timedelta(days=14),
+            )
             self.db.add(subscription)
             self.db.commit()
-        return {"plan_name": subscription.plan_name, "state": subscription.state, "limits": subscription.limits, "trial_ends_at": subscription.trial_ends_at}
+        return {
+            "plan_name": subscription.plan_name,
+            "state": subscription.state,
+            "limits": subscription.limits,
+            "trial_ends_at": subscription.trial_ends_at,
+        }
 
-    def set_subscription(self, principal: Principal, plan_name: str, state: str, limits: dict[str, int]) -> dict[str, Any]:
+    def set_subscription(
+        self, principal: Principal, plan_name: str, state: str, limits: dict[str, int]
+    ) -> dict[str, Any]:
         self._require_workspace_admin(principal)
-        subscription = self.db.scalar(select(WorkspaceSubscription).where(WorkspaceSubscription.organization_id == principal.organization_id))
+        subscription = self.db.scalar(
+            select(WorkspaceSubscription).where(
+                WorkspaceSubscription.organization_id == principal.organization_id
+            )
+        )
         if not subscription:
             subscription = WorkspaceSubscription(organization_id=principal.organization_id)
             self.db.add(subscription)
         subscription.plan_name, subscription.state, subscription.limits = plan_name, state, limits
         self.db.flush()
-        self.audit(principal, "billing.subscription_updated", "workspace_subscription", subscription.id, {"plan_name": plan_name, "state": state, "limits": limits})
+        self.audit(
+            principal,
+            "billing.subscription_updated",
+            "workspace_subscription",
+            subscription.id,
+            {"plan_name": plan_name, "state": state, "limits": limits},
+        )
         self.db.commit()
         return self.subscription(principal)
 
-    def create_api_credential(self, principal: Principal, name: str, scopes: list[str]) -> dict[str, Any]:
+    def create_api_credential(
+        self, principal: Principal, name: str, scopes: list[str]
+    ) -> dict[str, Any]:
         self._require_workspace_admin(principal)
         raw_token = f"ac_live_{secrets.token_urlsafe(32)}"
         credential = ApiCredential(
@@ -297,60 +359,128 @@ class ProductService:
         )
         self.db.add(credential)
         self.db.flush()
-        self.audit(principal, "api_credential.created", "api_credential", credential.id, {"name": name, "scopes": credential.scopes["items"]})
+        self.audit(
+            principal,
+            "api_credential.created",
+            "api_credential",
+            credential.id,
+            {"name": name, "scopes": credential.scopes["items"]},
+        )
         self.db.commit()
-        return {"id": credential.id, "name": credential.name, "scopes": credential.scopes["items"], "token": raw_token, "created_at": credential.created_at}
+        return {
+            "id": credential.id,
+            "name": credential.name,
+            "scopes": credential.scopes["items"],
+            "token": raw_token,
+            "created_at": credential.created_at,
+        }
 
     def revoke_api_credential(self, principal: Principal, credential_id: str) -> None:
         self._require_workspace_admin(principal)
-        credential = self.db.scalar(select(ApiCredential).where(ApiCredential.id == credential_id, ApiCredential.organization_id == principal.organization_id))
+        credential = self.db.scalar(
+            select(ApiCredential).where(
+                ApiCredential.id == credential_id,
+                ApiCredential.organization_id == principal.organization_id,
+            )
+        )
         if not credential:
             raise KeyError("API credential not found")
         credential.revoked_at = datetime.now(UTC)
         self.audit(principal, "api_credential.revoked", "api_credential", credential.id, {})
         self.db.commit()
 
-    def record_usage(self, principal: Principal, metric: str, quantity: int = 1, source: str = "api") -> UsageRecord:
-        record = UsageRecord(organization_id=principal.organization_id, metric=metric, quantity=quantity, source=source)
+    def record_usage(
+        self, principal: Principal, metric: str, quantity: int = 1, source: str = "api"
+    ) -> UsageRecord:
+        record = UsageRecord(
+            organization_id=principal.organization_id,
+            metric=metric,
+            quantity=quantity,
+            source=source,
+        )
         self.db.add(record)
         self.db.flush()
         return record
 
     def usage_summary(self, principal: Principal) -> list[dict[str, Any]]:
         self.workspace_profile(principal)
-        records = self.db.scalars(select(UsageRecord).where(UsageRecord.organization_id == principal.organization_id).order_by(UsageRecord.created_at.desc()).limit(200)).all()
+        records = self.db.scalars(
+            select(UsageRecord)
+            .where(UsageRecord.organization_id == principal.organization_id)
+            .order_by(UsageRecord.created_at.desc())
+            .limit(200)
+        ).all()
         totals: dict[str, int] = {}
         for record in records:
             totals[record.metric] = totals.get(record.metric, 0) + record.quantity
-        return [{"metric": metric, "quantity": quantity} for metric, quantity in sorted(totals.items())]
+        return [
+            {"metric": metric, "quantity": quantity} for metric, quantity in sorted(totals.items())
+        ]
 
     def add_plan_comment(self, principal: Principal, revision_id: str, body: str) -> PlanComment:
         revision = self._infrastructure_revision(principal, revision_id)
-        comment = PlanComment(organization_id=principal.organization_id, revision_id=revision.id, author_subject=principal.subject, body=body)
+        comment = PlanComment(
+            organization_id=principal.organization_id,
+            revision_id=revision.id,
+            author_subject=principal.subject,
+            body=body,
+        )
         self.db.add(comment)
         self.db.flush()
-        self.audit(principal, "plan.comment_added", "infrastructure_plan_revision", revision.id, {"comment_id": comment.id})
+        self.audit(
+            principal,
+            "plan.comment_added",
+            "infrastructure_plan_revision",
+            revision.id,
+            {"comment_id": comment.id},
+        )
         self.db.commit()
         return comment
 
     def plan_comments(self, principal: Principal, revision_id: str) -> list[PlanComment]:
         self._infrastructure_revision(principal, revision_id)
-        return list(self.db.scalars(select(PlanComment).where(PlanComment.organization_id == principal.organization_id, PlanComment.revision_id == revision_id).order_by(PlanComment.created_at)).all())
+        return list(
+            self.db.scalars(
+                select(PlanComment)
+                .where(
+                    PlanComment.organization_id == principal.organization_id,
+                    PlanComment.revision_id == revision_id,
+                )
+                .order_by(PlanComment.created_at)
+            ).all()
+        )
 
     def create_support_ticket(self, principal: Principal, subject: str, body: str) -> SupportTicket:
-        ticket = SupportTicket(organization_id=principal.organization_id, subject=subject, body=body, created_by_subject=principal.subject)
+        ticket = SupportTicket(
+            organization_id=principal.organization_id,
+            subject=subject,
+            body=body,
+            created_by_subject=principal.subject,
+        )
         self.db.add(ticket)
         self.db.flush()
-        self.audit(principal, "support.ticket_created", "support_ticket", ticket.id, {"subject": subject})
+        self.audit(
+            principal, "support.ticket_created", "support_ticket", ticket.id, {"subject": subject}
+        )
         self.db.commit()
         return ticket
 
     def request_data_lifecycle(self, principal: Principal, request_type: str) -> dict[str, Any]:
         self._require_workspace_admin(principal)
-        request = DataLifecycleRequest(organization_id=principal.organization_id, request_type=request_type, requested_by_subject=principal.subject)
+        request = DataLifecycleRequest(
+            organization_id=principal.organization_id,
+            request_type=request_type,
+            requested_by_subject=principal.subject,
+        )
         self.db.add(request)
         self.db.flush()
-        self.audit(principal, "data_lifecycle.requested", "data_lifecycle_request", request.id, {"request_type": request_type})
+        self.audit(
+            principal,
+            "data_lifecycle.requested",
+            "data_lifecycle_request",
+            request.id,
+            {"request_type": request_type},
+        )
         self.db.commit()
         if request_type == "EXPORT":
             return {"id": request.id, "state": "READY", "export": self.audit_evidence(principal)}
@@ -372,7 +502,10 @@ class ProductService:
         ).all()
         revisions_query = (
             select(InfrastructurePlanRevision, InfrastructurePlan)
-            .join(InfrastructurePlan, InfrastructurePlan.id == InfrastructurePlanRevision.infrastructure_plan_id)
+            .join(
+                InfrastructurePlan,
+                InfrastructurePlan.id == InfrastructurePlanRevision.infrastructure_plan_id,
+            )
             .where(InfrastructurePlanRevision.organization_id == principal.organization_id)
             .order_by(InfrastructurePlanRevision.created_at.desc())
         )
@@ -447,10 +580,7 @@ class ProductService:
         rows = self._admin_infrastructure_revision_rows(
             principal, InfrastructurePlanState.SUBMITTED
         )
-        return [
-            self._admin_plan_queue_item(revision, plan)
-            for revision, plan in rows
-        ]
+        return [self._admin_plan_queue_item(revision, plan) for revision, plan in rows]
 
     def admin_infrastructure_plan_revisions(
         self, principal: Principal, state: str | None = None
@@ -477,7 +607,10 @@ class ProductService:
     ) -> list[tuple[InfrastructurePlanRevision, InfrastructurePlan]]:
         statement = (
             select(InfrastructurePlanRevision, InfrastructurePlan)
-            .join(InfrastructurePlan, InfrastructurePlan.id == InfrastructurePlanRevision.infrastructure_plan_id)
+            .join(
+                InfrastructurePlan,
+                InfrastructurePlan.id == InfrastructurePlanRevision.infrastructure_plan_id,
+            )
             .where(InfrastructurePlanRevision.organization_id == principal.organization_id)
             .order_by(InfrastructurePlanRevision.created_at.desc())
         )
@@ -513,7 +646,9 @@ class ProductService:
             "is_self_approval": bool(decision and decision.is_self_approval),
             "decision": decision.decision if decision else None,
             "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
-            "decided_at": decision.decided_at.isoformat() if decision and decision.decided_at else None,
+            "decided_at": decision.decided_at.isoformat()
+            if decision and decision.decided_at
+            else None,
             "not_deployed": True,
         }
 
@@ -571,7 +706,11 @@ class ProductService:
             "infrastructure_plan.draft_created",
             "infrastructure_plan_revision",
             revision.id,
-            {"plan_id": plan.id, "revision": revision.revision_number, "digest": revision.content_digest},
+            {
+                "plan_id": plan.id,
+                "revision": revision.revision_number,
+                "digest": revision.content_digest,
+            },
         )
         self.db.commit()
         return revision
@@ -601,7 +740,11 @@ class ProductService:
             "infrastructure_plan.revised",
             "infrastructure_plan_revision",
             revision.id,
-            {"plan_id": plan.id, "revision": revision.revision_number, "digest": revision.content_digest},
+            {
+                "plan_id": plan.id,
+                "revision": revision.revision_number,
+                "digest": revision.content_digest,
+            },
         )
         self.db.commit()
         return revision
@@ -639,9 +782,7 @@ class ProductService:
                 "plan_id": plan.id,
                 "revision": revision.revision_number,
                 "changed": sorted(
-                    key
-                    for key, value in constraints.items()
-                    if value not in (None, [], {})
+                    key for key, value in constraints.items() if value not in (None, [], {})
                 ),
             },
         )
@@ -653,9 +794,7 @@ class ProductService:
         content: dict[str, Any], constraints: dict[str, Any]
     ) -> dict[str, Any]:
         updated = json.loads(json.dumps(content))
-        workload = updated.setdefault("application_analysis", {}).setdefault(
-            "workload_spec", {}
-        )
+        workload = updated.setdefault("application_analysis", {}).setdefault("workload_spec", {})
         target = updated.setdefault("target", {})
         summary = updated.setdefault("summary", {})
         previous_constraints = updated.get("user_constraints", {})
@@ -704,11 +843,20 @@ class ProductService:
         before_target = before.get("target", {})
         after_target = after.get("target", {})
         fields = {
-            "monthly_budget_usd": (before_spec.get("monthly_budget_usd"), after_spec.get("monthly_budget_usd")),
+            "monthly_budget_usd": (
+                before_spec.get("monthly_budget_usd"),
+                after_spec.get("monthly_budget_usd"),
+            ),
             "region": (before_target.get("region"), after_target.get("region")),
             "environments": (before_spec.get("environments"), after_spec.get("environments")),
-            "data_classification": (before_spec.get("data_classification"), after_spec.get("data_classification")),
-            "availability_target": (before_spec.get("availability_target"), after_spec.get("availability_target")),
+            "data_classification": (
+                before_spec.get("data_classification"),
+                after_spec.get("data_classification"),
+            ),
+            "availability_target": (
+                before_spec.get("availability_target"),
+                after_spec.get("availability_target"),
+            ),
             "workload_type": (before_spec.get("workload_type"), after_spec.get("workload_type")),
             "requires_private_connectivity": (
                 before_spec.get("requires_private_connectivity"),
@@ -760,7 +908,11 @@ class ProductService:
             "infrastructure_plan.submitted",
             "infrastructure_plan_revision",
             revision.id,
-            {"plan_id": plan.id, "revision": revision.revision_number, "digest": revision.content_digest},
+            {
+                "plan_id": plan.id,
+                "revision": revision.revision_number,
+                "digest": revision.content_digest,
+            },
         )
         self.db.commit()
         return revision
@@ -815,7 +967,10 @@ class ProductService:
     ) -> dict[str, Any]:
         revision = self._infrastructure_revision(principal, revision_id)
         plan = self._infrastructure_plan(principal, revision.infrastructure_plan_id)
-        if not self._is_workspace_administrator(principal) and plan.creator_subject != principal.subject:
+        if (
+            not self._is_workspace_administrator(principal)
+            and plan.creator_subject != principal.subject
+        ):
             raise PermissionError("infrastructure plan revision is not visible to this user")
         decision = self.db.scalar(
             select(InfrastructurePlanDecisionRecord).where(
@@ -939,8 +1094,13 @@ class ProductService:
         This is deliberately separate from approval and never assumes AWS credentials.
         """
         revision, plan, source_deployment = self._approved_customer_revision(principal, revision_id)
-        if not self._is_workspace_administrator(principal) and plan.creator_subject != principal.subject:
-            raise PermissionError("only the plan creator or a workspace administrator can execute the local dry run")
+        if (
+            not self._is_workspace_administrator(principal)
+            and plan.creator_subject != principal.subject
+        ):
+            raise PermissionError(
+                "only the plan creator or a workspace administrator can execute the local dry run"
+            )
         existing = self._customer_plan_environments(principal, revision.id)
         active = [
             environment
@@ -1062,10 +1222,15 @@ class ProductService:
     ) -> tuple[InfrastructurePlanRevision, InfrastructurePlan, DeploymentPlan]:
         revision = self._infrastructure_revision(principal, revision_id)
         plan = self._infrastructure_plan(principal, revision.infrastructure_plan_id)
-        if not self._is_workspace_administrator(principal) and plan.creator_subject != principal.subject:
+        if (
+            not self._is_workspace_administrator(principal)
+            and plan.creator_subject != principal.subject
+        ):
             raise PermissionError("infrastructure plan revision is not visible to this user")
         if revision.state != InfrastructurePlanState.APPROVED:
-            raise ValueError("customer-plan revision must be approved before local dry-run execution")
+            raise ValueError(
+                "customer-plan revision must be approved before local dry-run execution"
+            )
         decision = self.db.scalar(
             select(InfrastructurePlanDecisionRecord).where(
                 InfrastructurePlanDecisionRecord.revision_id == revision.id
@@ -1279,7 +1444,10 @@ class ProductService:
         plan = self._infrastructure_plan(principal, revision.infrastructure_plan_id)
         if revision.state != InfrastructurePlanState.SUBMITTED:
             raise ValueError("only a submitted revision can be decided")
-        if revision.content_digest != provided_digest or plan_hash(revision.content) != provided_digest:
+        if (
+            revision.content_digest != provided_digest
+            or plan_hash(revision.content) != provided_digest
+        ):
             raise ValueError("stale decision: submitted plan digest changed")
         if decision == InfrastructurePlanDecision.REJECTED and not (reason or "").strip():
             raise ValueError("a rejection reason is required")
@@ -1442,12 +1610,12 @@ class ProductService:
         control_plane_role_arn = os.getenv("DAVDEPLOY_CONTROL_PLANE_ROLE_ARN")
         template_url = os.getenv("DAVDEPLOY_AWS_CONNECTION_TEMPLATE_URL")
         if not control_plane_role_arn or not template_url:
-            raise RuntimeError("AWS customer connection setup is not configured with a hosted template")
+            raise RuntimeError(
+                "AWS customer connection setup is not configured with a hosted template"
+            )
         external_id = secrets.token_urlsafe(32)
         stack_name = f"davdeploy-Discovery-{connection.id[:8]}"
-        discovery_role_arn = (
-            f"arn:aws:iam::{account_id}:role/davdeployDiscovery-{connection.id}"
-        )
+        discovery_role_arn = f"arn:aws:iam::{account_id}:role/davdeployDiscovery-{connection.id}"
         parameters = {
             "davdeployControlPlaneRoleArn": control_plane_role_arn,
             "ExternalId": external_id,
@@ -1472,7 +1640,11 @@ class ProductService:
             "cloud_connection.aws_quick_create_generated",
             "cloud_connection",
             connection.id,
-            {"account_id": account_id, "stack_name": stack_name, "template_published": bool(template_url)},
+            {
+                "account_id": account_id,
+                "stack_name": stack_name,
+                "template_published": bool(template_url),
+            },
         )
         self.db.commit()
         return {
@@ -1493,7 +1665,13 @@ class ProductService:
         self, principal: Principal, connection_id: str, region: str
     ) -> CloudDiscoveryJob:
         connection = self._cloud_connection(principal, connection_id)
-        if not all([connection.account_id, connection.discovery_role_arn, connection.external_id_secret_ref]):
+        if not all(
+            [
+                connection.account_id,
+                connection.discovery_role_arn,
+                connection.external_id_secret_ref,
+            ]
+        ):
             raise ValueError("generate a new AWS setup link before verifying this connection")
         if os.getenv("DAVDEPLOY_AWS_LIVE_DISCOVERY_ENABLED", "false").lower() != "true":
             raise RuntimeError("live AWS discovery is not enabled for this control-plane process")
@@ -1538,7 +1716,13 @@ class ProductService:
     ) -> StoredCloudInventorySnapshot:
         """Assume only the per-customer read-only role and store no credentials."""
         connection = self._cloud_connection(principal, connection_id)
-        if not all([connection.account_id, connection.discovery_role_arn, connection.external_id_secret_ref]):
+        if not all(
+            [
+                connection.account_id,
+                connection.discovery_role_arn,
+                connection.external_id_secret_ref,
+            ]
+        ):
             raise ValueError("generate a new AWS setup link before verifying this connection")
         if os.getenv("DAVDEPLOY_AWS_LIVE_DISCOVERY_ENABLED", "false").lower() != "true":
             raise RuntimeError("live AWS discovery is not enabled for this control-plane process")
@@ -1562,7 +1746,11 @@ class ProductService:
             "cloud_connection.aws_verified",
             "cloud_connection",
             connection.id,
-            {"account_id": connection.account_id, "region": region, "provenance": snapshot.provenance},
+            {
+                "account_id": connection.account_id,
+                "region": region,
+                "provenance": snapshot.provenance,
+            },
         )
         self.db.commit()
         return self.record_cloud_inventory_snapshot(
@@ -1844,9 +2032,7 @@ class ProductService:
         return organization_id
 
     @staticmethod
-    def _github_installation_state(
-        event: str, action: str | None, payload: dict[str, Any]
-    ) -> str:
+    def _github_installation_state(event: str, action: str | None, payload: dict[str, Any]) -> str:
         permissions = (
             (payload.get("installation") or {}).get("permissions")
             or payload.get("permissions")
@@ -1866,8 +2052,12 @@ class ProductService:
             return "BRANCH_UPDATED"
         return "CONNECTED"
 
-    def github_repositories(self, principal: Principal, installation_id: str) -> list[dict[str, str]]:
-        del principal  # The configured adapter independently scopes access to installation repositories.
+    def github_repositories(
+        self, principal: Principal, installation_id: str
+    ) -> list[dict[str, str]]:
+        del (
+            principal
+        )  # The configured adapter independently scopes access to installation repositories.
         try:
             return [item.__dict__ for item in self.github.repositories(installation_id)]
         except HTTPError as error:
@@ -1885,6 +2075,21 @@ class ProductService:
             raise ValueError(
                 "GitHub branch list is unavailable, expired, or missing permissions"
             ) from error
+
+    def public_github_repository(self, principal: Principal, repository_url: str) -> dict[str, Any]:
+        self.workspace_profile(principal)
+        try:
+            metadata = self.public_github.inspect_repository(repository_url)
+            branches = self.public_github.branches(repository_url)
+        except HTTPError as error:
+            raise ValueError("public GitHub repository is unavailable") from error
+        return {
+            "full_name": metadata.repository,
+            "html_url": f"https://github.com/{metadata.repository}",
+            "default_branch": metadata.default_branch,
+            "branches": branches,
+            "execution": self.public_github.execution,
+        }
 
     def disconnect_project_repository(self, principal: Principal, project_id: str) -> None:
         project = self._project(principal, project_id)
@@ -1905,13 +2110,31 @@ class ProductService:
             select(RepositoryConnection).where(RepositoryConnection.project_id == project.id)
         )
         selected_branch = connection.selected_branch if connection else None
-        analysis = self.github.analyze_repository(
-            installation_id, project.repository_url, selected_branch
+        authorized_names = {
+            item.full_name.lower() for item in self.github.repositories(installation_id)
+        }
+        repository_name = PublicGitHubRepositoryReader.repository_name(project.repository_url)
+        configured_fixture_repository = (
+            getattr(self.github, "execution", None) == "SIMULATED"
+            and repository_name.lower().startswith("example/")
         )
-        metadata = self.github.inspect_repository(
-            installation_id, project.repository_url, selected_branch
-        )
-        execution = getattr(self.github, "execution", "SIMULATED")
+        if repository_name.lower() in authorized_names or configured_fixture_repository:
+            analysis = self.github.analyze_repository(
+                installation_id, project.repository_url, selected_branch
+            )
+            metadata = self.github.inspect_repository(
+                installation_id, project.repository_url, selected_branch
+            )
+            execution = getattr(self.github, "execution", "SIMULATED")
+        else:
+            try:
+                analysis = self.public_github.analyze_repository(
+                    project.repository_url, selected_branch
+                )
+                metadata = self.public_github.inspect_repository(project.repository_url)
+            except HTTPError as error:
+                raise ValueError("public GitHub repository is unavailable") from error
+            execution = self.public_github.execution
         stored = StoredRepositoryAnalysis(
             organization_id=principal.organization_id,
             project_id=project.id,
@@ -2005,7 +2228,10 @@ class ProductService:
         revision, infrastructure_plan, source_deployment = self._approved_customer_revision(
             principal, revision_id
         )
-        if revision.content_digest != provided_digest or plan_hash(revision.content) != provided_digest:
+        if (
+            revision.content_digest != provided_digest
+            or plan_hash(revision.content) != provided_digest
+        ):
             raise ValueError("stale desired-state publication: approved digest changed")
         project = self._project(principal, infrastructure_plan.project_id)
         content = revision.content
@@ -2023,7 +2249,10 @@ class ProductService:
         )
         if repository_connection is None:
             raise ValueError("selected repository is no longer connected to this project")
-        if repository_connection.selected_branch and repository_connection.selected_branch != branch:
+        if (
+            repository_connection.selected_branch
+            and repository_connection.selected_branch != branch
+        ):
             raise ValueError("selected repository branch changed after approval")
         self._assert_github_installation_publishable(principal)
         existing = self.db.scalar(
@@ -2109,9 +2338,14 @@ class ProductService:
         writes GitHub, never merges, and never deploys.
         """
         if not self._is_workspace_administrator(principal):
-            raise PermissionError("only a workspace administrator can update fixture PR review state")
+            raise PermissionError(
+                "only a workspace administrator can update fixture PR review state"
+            )
         revision, _, _ = self._approved_customer_revision(principal, revision_id)
-        if revision.content_digest != content_digest or plan_hash(revision.content) != content_digest:
+        if (
+            revision.content_digest != content_digest
+            or plan_hash(revision.content) != content_digest
+        ):
             raise ValueError("stale desired-state state update: approved digest changed")
         publication = self.db.get(DesiredStatePublication, publication_id)
         if (
@@ -2228,11 +2462,17 @@ class ProductService:
         return contract
 
     @staticmethod
-    def _profile_desired_state_contract(profile_name: str, common: dict[str, Any]) -> dict[str, Any]:
+    def _profile_desired_state_contract(
+        profile_name: str, common: dict[str, Any]
+    ) -> dict[str, Any]:
         if profile_name == "aws-app-runner":
             return {
                 "profile": profile_name,
-                "resources": ["aws_apprunner_service", "aws_iam_role", "aws_secretsmanager_secret_reference"],
+                "resources": [
+                    "aws_apprunner_service",
+                    "aws_iam_role",
+                    "aws_secretsmanager_secret_reference",
+                ],
                 "source": "container image or repository source resolved by a later reviewed pipeline",
                 "networking": "managed HTTPS ingress with private data/service boundaries where supported",
                 "monitoring": common["observability"],
@@ -2241,7 +2481,12 @@ class ProductService:
         if profile_name == "aws-ecs-fargate":
             return {
                 "profile": profile_name,
-                "resources": ["aws_ecs_service", "aws_ecs_task_definition", "aws_lb", "aws_iam_role"],
+                "resources": [
+                    "aws_ecs_service",
+                    "aws_ecs_task_definition",
+                    "aws_lb",
+                    "aws_iam_role",
+                ],
                 "source": "immutable image digest from an approved build",
                 "networking": "private subnets with narrowly scoped load balancer ingress when required",
                 "monitoring": common["observability"],
@@ -2298,12 +2543,17 @@ class ProductService:
         revision, infrastructure_plan, source_deployment = self._approved_customer_revision(
             principal, revision_id
         )
-        if revision.content_digest != provided_digest or plan_hash(revision.content) != provided_digest:
+        if (
+            revision.content_digest != provided_digest
+            or plan_hash(revision.content) != provided_digest
+        ):
             raise ValueError("stale Terraform render request: approved digest changed")
         content = revision.content
         profile_name = str(content.get("summary", {}).get("selected_profile") or "")
         if profile_name != "aws-app-runner":
-            raise ValueError("App Runner Terraform renderer only supports aws-app-runner approved plans")
+            raise ValueError(
+                "App Runner Terraform renderer only supports aws-app-runner approved plans"
+            )
         project = self._project(principal, infrastructure_plan.project_id)
         application = content.get("application_analysis") or {}
         target = content.get("target") or {}
@@ -2322,7 +2572,10 @@ class ProductService:
         )
         if repository_connection is None:
             raise ValueError("selected repository is no longer connected to this project")
-        if repository_connection.selected_branch and repository_connection.selected_branch != branch:
+        if (
+            repository_connection.selected_branch
+            and repository_connection.selected_branch != branch
+        ):
             raise ValueError("selected repository branch changed after approval")
         existing = self.db.scalar(
             select(TerraformPlanRender).where(
@@ -2386,8 +2639,7 @@ class ProductService:
         observability = content.get("observability") or {}
         workload = content.get("application_analysis", {}).get("workload_spec", {})
         resource_names = [
-            resource.get("name", "")
-            for resource in content.get("resource_breakdown", [])
+            resource.get("name", "") for resource in content.get("resource_breakdown", [])
         ]
         if any("eks" in name.lower() or "kubernetes" in name.lower() for name in resource_names):
             raise ValueError("unsupported resources for App Runner renderer")
@@ -2531,9 +2783,14 @@ class ProductService:
     ) -> dict[str, Any]:
         """Evaluate local guardrails before any future cloud action can be considered."""
         if not self._is_workspace_administrator(principal):
-            raise PermissionError("only a workspace administrator can run cloud-readiness preflight")
+            raise PermissionError(
+                "only a workspace administrator can run cloud-readiness preflight"
+            )
         revision, infrastructure_plan, _ = self._approved_customer_revision(principal, revision_id)
-        if revision.content_digest != content_digest or plan_hash(revision.content) != content_digest:
+        if (
+            revision.content_digest != content_digest
+            or plan_hash(revision.content) != content_digest
+        ):
             raise ValueError("stale cloud preflight request: approved digest changed")
         content = revision.content
         target = content.get("target") or {}
@@ -2565,7 +2822,11 @@ class ProductService:
         account_id = target.get("account_id")
         if not account_id and render:
             rendered_account = module_inputs.get("aws_account_id")
-            account_id = None if rendered_account == "customer-account-selected-at-apply-time" else rendered_account
+            account_id = (
+                None
+                if rendered_account == "customer-account-selected-at-apply-time"
+                else rendered_account
+            )
         checklist = [
             self._preflight_item(
                 "approved_digest",
@@ -2583,7 +2844,9 @@ class ProductService:
                 "terraform_contract",
                 "Generated Terraform contract",
                 bool(render and render.state == "PLAN_ONLY_NOT_APPLIED"),
-                "plan-only App Runner contract exists" if render else "no generated Terraform contract",
+                "plan-only App Runner contract exists"
+                if render
+                else "no generated Terraform contract",
             ),
             self._preflight_item(
                 "no_apply_command",
@@ -2612,20 +2875,24 @@ class ProductService:
             self._preflight_item(
                 "budget_ceiling",
                 "Budget ceiling",
-                budget_ceiling_usd is None or int(cost.get("monthly_high", 0)) <= budget_ceiling_usd,
+                budget_ceiling_usd is None
+                or int(cost.get("monthly_high", 0)) <= budget_ceiling_usd,
                 f"estimated high ${cost.get('monthly_high', 'unknown')}; ceiling ${budget_ceiling_usd or 'not supplied'}",
             ),
             self._preflight_item(
                 "reviewed_pr",
                 "Reviewed desired-state PR",
-                (not require_reviewed_pr) or bool(publication and publication.state in {"CHECKS_PASSED", "MERGED"}),
+                (not require_reviewed_pr)
+                or bool(publication and publication.state in {"CHECKS_PASSED", "MERGED"}),
                 f"state {publication.state if publication else 'not created'}",
             ),
             self._preflight_item(
                 "runtime_identity",
                 "davdeploy runtime identity",
                 runtime_identity_configured,
-                "not configured in local mode" if not runtime_identity_configured else "configured by operator",
+                "not configured in local mode"
+                if not runtime_identity_configured
+                else "configured by operator",
             ),
             self._preflight_item(
                 "execution_mode",
@@ -2732,9 +2999,14 @@ class ProductService:
         unless both the request and process environment explicitly opt in.
         """
         if not self._is_workspace_administrator(principal):
-            raise PermissionError("only a workspace administrator can request a Terraform plan review")
+            raise PermissionError(
+                "only a workspace administrator can request a Terraform plan review"
+            )
         revision, infrastructure_plan, _ = self._approved_customer_revision(principal, revision_id)
-        if revision.content_digest != content_digest or plan_hash(revision.content) != content_digest:
+        if (
+            revision.content_digest != content_digest
+            or plan_hash(revision.content) != content_digest
+        ):
             raise ValueError("stale Terraform plan review request: approved digest changed")
         render = self.db.scalar(
             select(TerraformPlanRender)
@@ -2777,7 +3049,9 @@ class ProductService:
         }
         if render is None:
             state = "BLOCKED_TERRAFORM_CONTRACT_REQUIRED"
-            blockers.append("Generate an App Runner Terraform contract for the approved digest first.")
+            blockers.append(
+                "Generate an App Runner Terraform contract for the approved digest first."
+            )
         else:
             render_inputs = render.render.get("module_inputs", {})
             region = render_inputs.get("aws_region")
@@ -2791,14 +3065,20 @@ class ProductService:
                     "terraform_render_id": render.id,
                     "terraform_root": render.terraform_root,
                     "module_path": render.module_path,
-                    "plan_digest_embedded": render_inputs.get("plan_digest") == revision.content_digest,
+                    "plan_digest_embedded": render_inputs.get("plan_digest")
+                    == revision.content_digest,
                     "aws_account_id": account_id,
                     "aws_region": region,
                 }
             )
-            if expected_account_id and account_id not in {expected_account_id, "customer-account-selected-at-apply-time"}:
+            if expected_account_id and account_id not in {
+                expected_account_id,
+                "customer-account-selected-at-apply-time",
+            }:
                 state = "BLOCKED_ACCOUNT_GUARD"
-                blockers.append(f"Expected AWS account {expected_account_id}; render targets {account_id}.")
+                blockers.append(
+                    f"Expected AWS account {expected_account_id}; render targets {account_id}."
+                )
             if expected_region and region != expected_region:
                 state = "BLOCKED_REGION_GUARD"
                 blockers.append(f"Expected AWS region {expected_region}; render targets {region}.")
@@ -2815,7 +3095,9 @@ class ProductService:
             env_allowed = os.getenv("ALLOW_CLOUD_PLAN", "").lower() == "true"
             if not allow_cloud_plan or not env_allowed:
                 state = "BLOCKED_CLOUD_PLAN_NOT_ALLOWED"
-                blockers.append("Authenticated Terraform plan requires request allow_cloud_plan=true and ALLOW_CLOUD_PLAN=true.")
+                blockers.append(
+                    "Authenticated Terraform plan requires request allow_cloud_plan=true and ALLOW_CLOUD_PLAN=true."
+                )
             command["executor"] = "authenticated-terraform-plan-gated"
             evidence["allow_cloud_plan_request"] = allow_cloud_plan
             evidence["allow_cloud_plan_env"] = env_allowed
@@ -2830,7 +3112,9 @@ class ProductService:
                 if mode == "AUTHENTICATED_TERRAFORM_PLAN"
                 else "LOCAL_CONTRACT_PLAN_REVIEWED"
             )
-            evidence["result"] = "ready for operator-authenticated terraform plan command outside automated tests"
+            evidence["result"] = (
+                "ready for operator-authenticated terraform plan command outside automated tests"
+            )
         evidence["blockers"] = blockers
         stored = TerraformPlanReview(
             organization_id=principal.organization_id,
@@ -2904,11 +3188,16 @@ class ProductService:
         if not self._is_workspace_administrator(principal):
             raise PermissionError("only a workspace administrator can request cloud execution")
         revision, infrastructure_plan, _ = self._approved_customer_revision(principal, revision_id)
-        if revision.content_digest != content_digest or plan_hash(revision.content) != content_digest:
+        if (
+            revision.content_digest != content_digest
+            or plan_hash(revision.content) != content_digest
+        ):
             raise ValueError("stale cloud execution request: approved digest changed")
         profile_name = revision.content.get("summary", {}).get("selected_profile")
         if profile_name != "aws-app-runner":
-            raise ValueError("cloud execution run currently supports approved aws-app-runner plans only")
+            raise ValueError(
+                "cloud execution run currently supports approved aws-app-runner plans only"
+            )
 
         render = self._latest_execution_dependency(
             TerraformPlanRender,
@@ -2959,7 +3248,9 @@ class ProductService:
             expected_account_id,
             "customer-account-selected-at-apply-time",
         }:
-            blockers.append(f"Expected AWS account {expected_account_id}; render targets {account_id}.")
+            blockers.append(
+                f"Expected AWS account {expected_account_id}; render targets {account_id}."
+            )
             state = "BLOCKED_ACCOUNT_GUARD"
         if expected_region and region != expected_region:
             blockers.append(f"Expected AWS region {expected_region}; render targets {region}.")
@@ -2979,7 +3270,9 @@ class ProductService:
             elif not blockers:
                 state = "READY_FOR_OPERATOR_APP_RUNNER_EXECUTION"
         elif not blockers:
-            blockers.append("Local/default mode records execution history only; cloud apply is disabled.")
+            blockers.append(
+                "Local/default mode records execution history only; cloud apply is disabled."
+            )
             state = "BLOCKED_CLOUD_EXECUTION_NOT_ENABLED"
 
         previous = self.db.scalar(
@@ -3193,9 +3486,7 @@ class ProductService:
             )
         ]
 
-    def cloud_execution_run_evidence(
-        self, principal: Principal, run_id: str
-    ) -> dict[str, Any]:
+    def cloud_execution_run_evidence(self, principal: Principal, run_id: str) -> dict[str, Any]:
         run = self.db.get(CloudExecutionRun, run_id)
         if not run or run.organization_id != principal.organization_id:
             raise PermissionError("cloud execution run not found in this organization")
@@ -3224,7 +3515,9 @@ class ProductService:
                 "digest": revision.content_digest,
                 "state": revision.state,
                 "submitted_by_subject": revision.submitted_by_subject,
-                "submitted_at": revision.submitted_at.isoformat() if revision.submitted_at else None,
+                "submitted_at": revision.submitted_at.isoformat()
+                if revision.submitted_at
+                else None,
             },
             "source": {
                 "repository": application.get("repository"),
@@ -3247,8 +3540,7 @@ class ProductService:
             "observed": {
                 "outputs": outputs,
                 "resources": outputs.get("resources_created", []),
-                "destroy_proof": outputs.get("destroy_proof")
-                or "not_executed_no_destroy_proof",
+                "destroy_proof": outputs.get("destroy_proof") or "not_executed_no_destroy_proof",
                 "failure_reason": "; ".join(blockers) if blockers else None,
             },
             "boundary": (
@@ -3261,7 +3553,9 @@ class ProductService:
         connection = self.db.get(CloudConnection, connection_id)
         if not connection or connection.organization_id != principal.organization_id:
             raise PermissionError("cloud connection not found in this organization")
-        return self.cloud_discovery.role_contract(connection.id).__dict__ | {"execution": "SIMULATED"}
+        return self.cloud_discovery.role_contract(connection.id).__dict__ | {
+            "execution": "SIMULATED"
+        }
 
     def _project(self, principal: Principal, project_id: str) -> Project:
         project = self.db.get(Project, project_id)
@@ -3368,9 +3662,7 @@ class ProductService:
         self.db.commit()
         return intent
 
-    def _record_model_usage(
-        self, principal: Principal, metadata: dict[str, Any] | None
-    ) -> None:
+    def _record_model_usage(self, principal: Principal, metadata: dict[str, Any] | None) -> None:
         if not metadata:
             return
         usage = metadata.get("usage") or {}
@@ -3869,7 +4161,10 @@ class ProductService:
         """Explain a bounded local Day-2 change; this does not mutate the environment."""
         with self._trace("davdeploy.day2.diagnose"):
             environment = self._environment(principal, environment_id)
-            if LifecycleState(environment.state) not in {LifecycleState.READY, LifecycleState.DEGRADED}:
+            if LifecycleState(environment.state) not in {
+                LifecycleState.READY,
+                LifecycleState.DEGRADED,
+            }:
                 raise ValueError("environment must be ready or degraded before it can be diagnosed")
             record = self._recommendation_record(principal, environment)
             return self._recommendation_response(record)
@@ -3891,7 +4186,10 @@ class ProductService:
                 )
                 if existing:
                     return existing
-            if LifecycleState(environment.state) not in {LifecycleState.READY, LifecycleState.DEGRADED}:
+            if LifecycleState(environment.state) not in {
+                LifecycleState.READY,
+                LifecycleState.DEGRADED,
+            }:
                 raise ValueError("environment cannot receive a change plan in its current state")
             record = self._recommendation_record(principal, environment)
             recommendation = record.recommendation
@@ -3912,7 +4210,9 @@ class ProductService:
                 "policy": {"result": decision.result, "reason": decision.reason},
             }
             digest = plan_hash(payload)
-            existing = self.db.scalar(select(DeploymentPlan).where(DeploymentPlan.plan_hash == digest))
+            existing = self.db.scalar(
+                select(DeploymentPlan).where(DeploymentPlan.plan_hash == digest)
+            )
             if existing:
                 return existing
             state = {
@@ -3937,7 +4237,9 @@ class ProductService:
                 record.state = "DENIED"
             else:
                 record.state = "PLANNED"
-                require_transition(LifecycleState(environment.state), LifecycleState.CHANGE_PROPOSED)
+                require_transition(
+                    LifecycleState(environment.state), LifecycleState.CHANGE_PROPOSED
+                )
                 environment.state = LifecycleState.CHANGE_PROPOSED
             self.audit(
                 principal,
@@ -4035,7 +4337,9 @@ class ProductService:
         self.db.add(incident)
         return incident
 
-    def _recommendation_record(self, principal: Principal, environment: Environment) -> Recommendation:
+    def _recommendation_record(
+        self, principal: Principal, environment: Environment
+    ) -> Recommendation:
         incident = self.db.scalar(
             select(Incident)
             .where(Incident.environment_id == environment.id, Incident.state == "OPEN")
@@ -4129,9 +4433,7 @@ class ProductService:
             "type": environment.environment_type,
             "state": environment.state,
             "execution_mode": environment.desired_state.get("execution_mode"),
-            "customer_plan_revision_id": environment.desired_state.get(
-                "customer_plan_revision_id"
-            ),
+            "customer_plan_revision_id": environment.desired_state.get("customer_plan_revision_id"),
             "cost_estimate": environment.desired_state.get("cost_estimate"),
             "desired_state": environment.desired_state,
             "observed_state": environment.observed_state,

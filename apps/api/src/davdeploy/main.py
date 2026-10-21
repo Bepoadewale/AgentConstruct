@@ -143,8 +143,17 @@ configure_frontend_cors(
 async def apply_api_guardrails(request: Request, call_next):
     """Apply bounded abuse protection, contract metadata and security headers."""
     client = request.client.host if request.client else "unknown"
-    if RATE_LIMIT.limit and not request.url.path.startswith("/healthz") and not RATE_LIMIT.allow(client):
-        return Response(status_code=429, content='{"detail":"rate limit exceeded"}', media_type="application/json", headers={"Retry-After": "60"})
+    if (
+        RATE_LIMIT.limit
+        and not request.url.path.startswith("/healthz")
+        and not RATE_LIMIT.allow(client)
+    ):
+        return Response(
+            status_code=429,
+            content='{"detail":"rate limit exceeded"}',
+            media_type="application/json",
+            headers={"Retry-After": "60"},
+        )
     public_paths = {"/", "/healthz", "/status", "/metrics", "/openapi.json"}
     if request.method != "OPTIONS" and request.url.path not in public_paths:
         try:
@@ -197,7 +206,11 @@ def healthz():
 @app.get("/status")
 def public_status():
     """Unauthenticated, provider-neutral status surface for demos/self-hosting."""
-    return {"status": "operational", "product": "davdeploy", "cloud_execution": "not enabled by default"}
+    return {
+        "status": "operational",
+        "product": "davdeploy",
+        "cloud_execution": "not enabled by default",
+    }
 
 
 @app.get("/metrics")
@@ -246,12 +259,19 @@ def onboard_current_identity(
 
 
 @app.get("/api/v1/workspace/members")
-def workspace_members(principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+def workspace_members(
+    principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)
+):
     return service.list_workspace_members(principal)
 
 
 @app.patch("/api/v1/workspace/members/{subject}")
-def change_workspace_member_role(subject: str, request: MembershipRoleRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+def change_workspace_member_role(
+    subject: str,
+    request: MembershipRoleRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
     try:
         return service.change_workspace_member_role(principal, subject, request.role)
     except (PermissionError, KeyError, ValueError) as error:
@@ -259,7 +279,11 @@ def change_workspace_member_role(subject: str, request: MembershipRoleRequest, p
 
 
 @app.post("/api/v1/workspace/invitations", status_code=201)
-def invite_workspace_member(request: InvitationRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+def invite_workspace_member(
+    request: InvitationRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
     try:
         return service.invite_workspace_member(principal, request.email, request.role)
     except (PermissionError, ValueError) as error:
@@ -267,17 +291,25 @@ def invite_workspace_member(request: InvitationRequest, principal: Principal = D
 
 
 @app.get("/api/v1/usage")
-def usage_summary(principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+def usage_summary(
+    principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)
+):
     return service.usage_summary(principal)
 
 
 @app.get("/api/v1/billing/subscription")
-def get_subscription(principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+def get_subscription(
+    principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)
+):
     return service.subscription(principal)
 
 
 @app.put("/api/v1/billing/subscription")
-def set_subscription(request: SubscriptionRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+def set_subscription(
+    request: SubscriptionRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
     try:
         return service.set_subscription(principal, request.plan_name, request.state, request.limits)
     except (PermissionError, ValueError) as error:
@@ -285,7 +317,11 @@ def set_subscription(request: SubscriptionRequest, principal: Principal = Depend
 
 
 @app.post("/api/v1/api-credentials", status_code=201)
-def create_api_credential(request: ApiCredentialRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+def create_api_credential(
+    request: ApiCredentialRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
     try:
         return service.create_api_credential(principal, request.name, request.scopes)
     except (PermissionError, ValueError) as error:
@@ -293,7 +329,11 @@ def create_api_credential(request: ApiCredentialRequest, principal: Principal = 
 
 
 @app.delete("/api/v1/api-credentials/{credential_id}", status_code=204)
-def revoke_api_credential(credential_id: str, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+def revoke_api_credential(
+    credential_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
     try:
         service.revoke_api_credential(principal, credential_id)
     except (PermissionError, KeyError, ValueError) as error:
@@ -302,13 +342,26 @@ def revoke_api_credential(credential_id: str, principal: Principal = Depends(ver
 
 
 @app.post("/api/v1/support/tickets", status_code=201)
-def create_support_ticket(request: SupportTicketRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+def create_support_ticket(
+    request: SupportTicketRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
     ticket = service.create_support_ticket(principal, request.subject, request.body)
-    return {"id": ticket.id, "subject": ticket.subject, "state": ticket.state, "created_at": ticket.created_at}
+    return {
+        "id": ticket.id,
+        "subject": ticket.subject,
+        "state": ticket.state,
+        "created_at": ticket.created_at,
+    }
 
 
 @app.post("/api/v1/data-lifecycle", status_code=202)
-def request_data_lifecycle(request: DataLifecycleRequestBody, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+def request_data_lifecycle(
+    request: DataLifecycleRequestBody,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
     try:
         return service.request_data_lifecycle(principal, request.request_type)
     except (PermissionError, ValueError) as error:
@@ -415,6 +468,19 @@ def github_repositories(
     REQUESTS.labels("github.repositories").inc()
     try:
         return service.github_repositories(principal, installation_id)
+    except (PermissionError, ValueError) as error:
+        translate(error)
+
+
+@app.get("/api/v1/github/public-repository")
+def public_github_repository(
+    repository_url: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    REQUESTS.labels("github.public_repository").inc()
+    try:
+        return service.public_github_repository(principal, repository_url)
     except (PermissionError, ValueError) as error:
         translate(error)
 
@@ -593,7 +659,11 @@ def record_cloud_inventory_snapshot(
         )
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
-    return {"id": stored.id, "connection_id": stored.cloud_connection_id, "captured_at": stored.captured_at}
+    return {
+        "id": stored.id,
+        "connection_id": stored.cloud_connection_id,
+        "captured_at": stored.captured_at,
+    }
 
 
 @app.get("/api/v1/cloud-connections/{connection_id}/inventory-snapshots")
@@ -948,7 +1018,9 @@ def execute_customer_plan_dry_run(
         translate(error)
     for environment in environments:
         EXECUTION_RESULTS.labels(environment.state).inc()
-    payloads = [service.environment_payload(principal, environment.id) for environment in environments]
+    payloads = [
+        service.environment_payload(principal, environment.id) for environment in environments
+    ]
     return {
         "execution": "LOCAL_DRY_RUN",
         "boundary": "Queued only against the bounded local fixture executor. No AWS resources are created.",
@@ -969,7 +1041,9 @@ def execute_customer_plan_dry_run(
     }
 
 
-@app.post("/api/v1/customer-plan-revisions/{revision_id}/environments/{environment_id}/destroy-dry-run")
+@app.post(
+    "/api/v1/customer-plan-revisions/{revision_id}/environments/{environment_id}/destroy-dry-run"
+)
 def destroy_customer_plan_dry_run(
     revision_id: str,
     environment_id: str,
@@ -1206,21 +1280,44 @@ def audit_events(
 
 
 @app.get("/api/v1/customer-plans/revisions/{revision_id}/comments")
-def list_plan_comments(revision_id: str, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+def list_plan_comments(
+    revision_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
     try:
         comments = service.plan_comments(principal, revision_id)
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
-    return [{"id": item.id, "body": item.body, "author_subject": item.author_subject, "state": item.state, "created_at": item.created_at} for item in comments]
+    return [
+        {
+            "id": item.id,
+            "body": item.body,
+            "author_subject": item.author_subject,
+            "state": item.state,
+            "created_at": item.created_at,
+        }
+        for item in comments
+    ]
 
 
 @app.post("/api/v1/customer-plans/revisions/{revision_id}/comments", status_code=201)
-def add_plan_comment(revision_id: str, request: PlanCommentRequest, principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)):
+def add_plan_comment(
+    revision_id: str,
+    request: PlanCommentRequest,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
     try:
         comment = service.add_plan_comment(principal, revision_id, request.body)
     except (PermissionError, ValueError, KeyError) as error:
         translate(error)
-    return {"id": comment.id, "body": comment.body, "state": comment.state, "created_at": comment.created_at}
+    return {
+        "id": comment.id,
+        "body": comment.body,
+        "state": comment.state,
+        "created_at": comment.created_at,
+    }
 
 
 @app.get("/api/v1/audit-evidence")

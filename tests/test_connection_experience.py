@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from davdeploy.db import make_engine, run_migrations
+from davdeploy.integrations import RepositoryAnalysis, RepositoryMetadata
 from davdeploy.main import app, product_service
 from davdeploy.models import GitHubWebhookDelivery
 from davdeploy.policy import PolicyClient
@@ -45,6 +46,21 @@ def test_project_persists_selected_repository_branch_for_safe_read_only_discover
     assert "Dockerfile" in discovered["analysis"]["manifests"]
 
 
+def test_seeded_example_repository_stays_on_the_deterministic_fixture():
+    service, _ = make_service()
+    project = service.create_project(
+        founder(),
+        "seeded-example",
+        "https://github.com/example/demo-draft-plan",
+        "main",
+    )
+
+    discovered = service.repository_discovery(founder(), project.id)
+
+    assert discovered["execution"] == "SIMULATED"
+    assert discovered["analysis"]["repository"] == "example/demo-draft-plan"
+
+
 def test_repository_analysis_is_persisted_and_feeds_intent_spec():
     service, _ = make_service()
     project = service.create_project(
@@ -70,9 +86,60 @@ def test_repository_analysis_is_persisted_and_feeds_intent_spec():
     assert intent.spec["stateful"] is True
 
 
+def test_public_repository_discovery_uses_real_read_only_evidence():
+    class PublicReader:
+        execution = "EXECUTED_PUBLIC_READ_ONLY"
+
+        def inspect_repository(self, repository_url):
+            assert repository_url == "https://github.com/Bepoadewale/ai-platform-control-plane"
+            return RepositoryMetadata(
+                "github_public",
+                "public-read-only",
+                "Bepoadewale/ai-platform-control-plane",
+                "main",
+            )
+
+        def branches(self, repository_url):
+            self.inspect_repository(repository_url)
+            return ["main"]
+
+        def analyze_repository(self, repository_url, ref=None):
+            self.inspect_repository(repository_url)
+            return RepositoryAnalysis(
+                provider="github_public",
+                repository="Bepoadewale/ai-platform-control-plane",
+                selected_branch=ref or "main",
+                default_branch="main",
+                manifests=("pyproject.toml", "Dockerfile"),
+                runtime_hints=("python", "containerized"),
+                framework_hints=("fastapi",),
+                database_hints=("postgresql",),
+                secret_hints=("environment variables",),
+                deployment_hints=("container image",),
+                confidence=0.82,
+                limitations=("Public read-only evidence.",),
+            )
+
+    service, _ = make_service()
+    service.public_github = PublicReader()
+    project = service.create_project(
+        founder(),
+        "public-repository",
+        "https://github.com/Bepoadewale/ai-platform-control-plane",
+        "main",
+    )
+    discovered = service.repository_discovery(founder(), project.id)
+
+    assert discovered["execution"] == "EXECUTED_PUBLIC_READ_ONLY"
+    assert discovered["analysis"]["repository"] == "Bepoadewale/ai-platform-control-plane"
+    assert discovered["analysis"]["manifests"] == ["pyproject.toml", "Dockerfile"]
+
+
 def test_aws_connection_detail_and_disconnect_are_tenant_scoped_and_credential_free():
     service, _ = make_service()
-    connection = service.create_cloud_connection(founder(), "Customer account", "aws", "byoc_role_contract")
+    connection = service.create_cloud_connection(
+        founder(), "Customer account", "aws", "byoc_role_contract"
+    )
     detail = service.cloud_connection_detail(founder(), connection.id)
     assert detail["credentials_stored"] is False
     assert detail["deployment_permission"] == "not granted"
@@ -147,8 +214,12 @@ def test_github_webhook_records_revoked_repository_and_branch_states():
         "delivery-repository-change",
         base | {"action": "removed"},
     )
-    branch_change = signed_fixture_webhook(service, "push", "delivery-push", base | {"ref": "refs/heads/main"})
-    revoked = signed_fixture_webhook(service, "installation", "delivery-revoked", base | {"action": "deleted"})
+    branch_change = signed_fixture_webhook(
+        service, "push", "delivery-push", base | {"ref": "refs/heads/main"}
+    )
+    revoked = signed_fixture_webhook(
+        service, "installation", "delivery-revoked", base | {"action": "deleted"}
+    )
 
     assert repo_change["state"] == "REPOSITORY_ACCESS_CHANGED"
     assert branch_change["state"] == "BRANCH_UPDATED"
@@ -168,7 +239,9 @@ def test_github_webhook_missing_permission_and_bad_signature_fail_closed():
         },
         "davdeploy": {"organization_id": founder().organization_id},
     }
-    processed = signed_fixture_webhook(service, "installation", "delivery-missing-permission", payload)
+    processed = signed_fixture_webhook(
+        service, "installation", "delivery-missing-permission", payload
+    )
     assert processed["state"] == "MISSING_PERMISSION"
 
     try:
@@ -210,4 +283,7 @@ def test_github_webhook_endpoint_records_signed_fixture_delivery(tmp_path):
 
     assert response.status_code == 200
     assert response.json()["status"] == "PROCESSED"
-    assert service.github_connection_status(founder())["installation_states"][0]["state"] == "CONNECTED"
+    assert (
+        service.github_connection_status(founder())["installation_states"][0]["state"]
+        == "CONNECTED"
+    )
