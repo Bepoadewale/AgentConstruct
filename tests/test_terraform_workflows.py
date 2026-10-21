@@ -77,8 +77,11 @@ def test_apply_invokes_and_verifies_release_migrations_after_saved_plan() -> Non
     apply = workflow("terraform-apply.yml")
 
     apply_position = apply.index("terraform apply -input=false tfplan")
+    refresh_position = apply.index("Refresh the short-lived apply session")
     migration_position = apply.index("Run and verify database migrations")
-    assert migration_position > apply_position
+    assert apply_position < refresh_position < migration_position
+    assert apply.count("uses: aws-actions/configure-aws-credentials@v4") == 2
+    assert "unset-current-credentials: true" in apply
     assert "terraform output -raw migration_function_name" in apply
     assert "aws lambda invoke" in apply
     assert "migrations-complete" in apply
