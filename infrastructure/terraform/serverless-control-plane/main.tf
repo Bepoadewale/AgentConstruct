@@ -349,6 +349,23 @@ resource "aws_lambda_function" "migrate" {
   tags = local.common_tags
 }
 
+data "aws_iam_role" "terraform_apply" {
+  name = "davdeploy-terraform-apply-github"
+}
+
+resource "aws_iam_role_policy" "terraform_apply_migrations" {
+  name = "invoke-davdeploy-release-migrations"
+  role = data.aws_iam_role.terraform_apply.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["lambda:InvokeFunction"]
+      Resource = aws_lambda_function.migrate.arn
+    }]
+  })
+}
+
 resource "aws_apigatewayv2_api" "control_plane" {
   name          = local.name
   protocol_type = "HTTP"

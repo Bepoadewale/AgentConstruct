@@ -73,6 +73,18 @@ def test_apply_verifies_exact_successful_saved_plan() -> None:
     assert "environment: terraform-apply" in apply
 
 
+def test_apply_invokes_and_verifies_release_migrations_after_saved_plan() -> None:
+    apply = workflow("terraform-apply.yml")
+
+    apply_position = apply.index("terraform apply -input=false tfplan")
+    migration_position = apply.index("Run and verify database migrations")
+    assert migration_position > apply_position
+    assert "terraform output -raw migration_function_name" in apply
+    assert "aws lambda invoke" in apply
+    assert "migrations-complete" in apply
+    assert "FunctionError" in apply
+
+
 def test_legacy_cloud_pilot_cannot_apply() -> None:
     pilot = workflow("cloud-pilot.yml")
 

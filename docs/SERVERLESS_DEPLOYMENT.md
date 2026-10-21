@@ -14,7 +14,7 @@ This is an implementation contract, not evidence of a live deployment. `terrafor
 4. Run `terraform plan` and review exact cost, IAM, deletion-protection, origin, region, and artifact inputs.
 5. Without changing `main`, apply only through the guarded operator workflow after explicit
    approval. The workflow resolves the newest successful plan for that exact commit automatically.
-6. Invoke the emitted migration Lambda once and require `migrations-complete` before routing customer traffic.
+6. The apply workflow invokes the emitted migration Lambda and requires `migrations-complete` before reporting success. A migration failure fails the release.
 7. Configure Google federation using the operator's local secret source. Do not pass the Google client secret through Terraform because it would be retained in Terraform state.
 8. Set `google_identity_provider_enabled = true`, plan, and apply the Cognito app-client update.
 9. Set the frontend's public Cognito and API variables in Cloudflare Pages and redeploy static assets.
