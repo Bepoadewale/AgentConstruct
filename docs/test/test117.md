@@ -3,7 +3,7 @@
 Date: 2026-10-21
 Execution type: Real authenticated production discovery followed by focused local regression tests
 Customer repository: `https://github.com/Bepoadewale/ai-platform-control-plane`
-Commit: Pending reviewed PR commit
+Commit: `5de137b`
 AWS account: Existing DavDeploy control-plane account
 AWS region: `us-east-1`
 
@@ -20,6 +20,7 @@ resources were created.
 - `make openapi-update`
 - `make openapi-check`
 - `git diff --check`
+- GitHub CI run `39690348598`.
 
 ## Observed result
 
@@ -36,6 +37,8 @@ The route now translates delivery unavailability to documented HTTP 503 while th
 test continues to prove the failed record remains visible. Planner copy no longer contains the
 stray dollar sign. Ruff, 49 focused tests, OpenAPI regeneration and parity, and diff validation
 passed locally.
+All seven required jobs in GitHub CI run `39690348598` passed, including independent local E2E,
+cloud-contract, policy, supply-chain, Python, documentation, and secret-scanning gates.
 
 ## Teardown
 

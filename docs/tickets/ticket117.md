@@ -40,13 +40,14 @@ deliberately disabled until SES is configured.
 
 ## Acceptance status
 
-Implementation and focused local validation are complete. Required GitHub CI and the reviewed
-production release remain pending.
+Implementation, focused local validation, and required GitHub CI are complete. The reviewed
+production release follows the merge because Lambda packages are released from `main`.
 
 ## Tests / validation performed
 
 Ruff, 49 focused tests, OpenAPI snapshot regeneration, OpenAPI parity, and `git diff --check`
-passed. See `docs/test/test117.md`.
+passed. All seven required jobs in GitHub CI run `39690348598` passed. See
+`docs/test/test117.md`.
 
 ## Evidence files produced
 
