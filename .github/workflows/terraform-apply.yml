@@ -106,6 +106,13 @@ jobs:
             -backend-config="encrypt=true"
           terraform apply -input=false tfplan
 
+      - name: Refresh the short-lived apply session
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_TERRAFORM_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          unset-current-credentials: true
+
       - name: Run and verify database migrations
         working-directory: infrastructure/terraform/serverless-control-plane
         shell: bash
