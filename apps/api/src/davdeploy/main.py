@@ -315,7 +315,11 @@ def change_workspace_member_role(
         translate(error)
 
 
-@app.post("/api/v1/workspace/invitations", status_code=201)
+@app.post(
+    "/api/v1/workspace/invitations",
+    status_code=201,
+    responses={503: {"description": "Invitation email delivery is unavailable"}},
+)
 def invite_workspace_member(
     request: InvitationRequest,
     principal: Principal = Depends(verify_token),
@@ -323,7 +327,7 @@ def invite_workspace_member(
 ):
     try:
         return service.invite_workspace_member(principal, request.email, request.role)
-    except (PermissionError, ValueError) as error:
+    except (PermissionError, ValueError, InvitationDeliveryUnavailable) as error:
         translate(error)
 
 

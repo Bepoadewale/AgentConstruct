@@ -76,9 +76,13 @@ class AwsV1Planner:
         ]
         explanation = self._explanation(selected, simpler_failed)
         evidence_refs = list(evidence.references) if evidence else []
-        evidence_limitations = list(evidence.limitations) if evidence else [
-            "No typed live evidence bundle supplied; inventory and pricing are fixture assumptions."
-        ]
+        evidence_limitations = (
+            list(evidence.limitations)
+            if evidence
+            else [
+                "No typed live evidence bundle supplied; inventory and pricing are fixture assumptions."
+            ]
+        )
         if evidence and evidence.pricing:
             evidence_limitations.append(
                 "Pricing is an estimate and actual_billing is false; customer billing must be queried separately."
@@ -101,11 +105,16 @@ class AwsV1Planner:
             estimated_at=selected.cost_estimate.estimated_at,
         )
         monitoring = MonitoringSpecification(
-            scrape_targets=["application /metrics endpoint", "selected AWS workload health metrics"],
+            scrape_targets=[
+                "application /metrics endpoint",
+                "selected AWS workload health metrics",
+            ],
             baseline_dashboard="davdeploy workload health: availability, request rate, latency, error rate, CPU and memory where exposed.",
             access_boundary="Grafana is private to the customer workspace; no public unauthenticated dashboard is planned.",
             coverage=["metrics", "deployment health", "baseline workload capacity"],
-            limitations=["Logs and distributed traces are not included in this V1 selected-plan monitoring scope."],
+            limitations=[
+                "Logs and distributed traces are not included in this V1 selected-plan monitoring scope."
+            ],
             cost_assumption="Estimated as a range, not an AWS bill. Retention, active series and viewer count materially affect cost.",
         )
         return ArchitecturePlan(
@@ -540,4 +549,7 @@ class AwsV1Planner:
             if failed
             else " No lower-complexity viable candidate was within the configured cheapest cost band."
         )
-        return f"{selected.display_name} is the lowest-complexity option within the cheapest viable cost band.${suffix}"
+        return (
+            f"{selected.display_name} is the lowest-complexity option within the cheapest viable "
+            f"cost band.{suffix}"
+        )
