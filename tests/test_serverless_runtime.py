@@ -250,6 +250,14 @@ def test_serverless_stack_uses_network_independent_bounded_fixture_executor():
     assert 'DAVDEPLOY_EXECUTOR_MODE            = "embedded_fixture"' in terraform
 
 
+def test_serverless_stack_scopes_invitation_email_to_the_verified_ses_identity():
+    terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
+    assert 'Action   = ["ses:SendEmail"]' in terraform
+    assert "Resource = var.ses_identity_arn" in terraform
+    assert 'DAVDEPLOY_EMAIL_PROVIDER           = var.ses_identity_arn == "" ? "disabled" : "ses"' in terraform
+    assert "DAVDEPLOY_FRONTEND_ORIGIN" in terraform
+
+
 def test_embedded_fixture_executor_is_stateless_and_bounded(monkeypatch):
     monkeypatch.setenv("DAVDEPLOY_EXECUTOR_MODE", "embedded_fixture")
     adapter = executor.configured_executor()

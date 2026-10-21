@@ -43,6 +43,11 @@ from davdeploy.integrations import (
     verify_github_webhook_signature,
 )
 from davdeploy.intent import IntentProvider, configured_intent_provider
+from davdeploy.invitation_email import (
+    InvitationDeliveryUnavailable,
+    InvitationEmailSender,
+    configured_invitation_sender,
+)
 from davdeploy.models import (
     ApiCredential,
     Approval,
@@ -104,6 +109,7 @@ class ProductService:
         github: GitHubConnection | None = None,
         public_github: PublicGitHubRepositoryReader | None = None,
         cloud_execution: CloudExecutionAdapter | None = None,
+        invitation_sender: InvitationEmailSender | None = None,
     ):
         self.db = db
         self.intent_provider = intent_provider or configured_intent_provider()
@@ -116,6 +122,7 @@ class ProductService:
         self.executor = executor or configured_executor()
         self.connection_secrets = connection_secrets or configured_connection_secret_store()
         self.cloud_execution = cloud_execution or configured_cloud_execution_adapter()
+        self.invitation_sender = invitation_sender or configured_invitation_sender()
 
     def _trace(self, name: str):
         return trace.get_tracer("davdeploy.product").start_as_current_span(name)
@@ -237,10 +244,22 @@ class ProductService:
         self, principal: Principal, email: str, role: str
     ) -> dict[str, Any]:
         self._require_workspace_admin(principal)
+        normalized_email = email.strip().lower()
+        if "@" not in normalized_email:
+            raise ValueError("a valid invitation email is required")
+        existing = self.db.scalar(
+            select(WorkspaceInvitation).where(
+                WorkspaceInvitation.organization_id == principal.organization_id,
+                WorkspaceInvitation.email == normalized_email,
+                WorkspaceInvitation.state == "PENDING",
+            )
+        )
+        if existing:
+            raise ValueError("a pending invitation already exists for this email")
         raw_token = secrets.token_urlsafe(24)
         invitation = WorkspaceInvitation(
             organization_id=principal.organization_id,
-            email=email.lower(),
+            email=normalized_email,
             role=role,
             token_digest=hashlib.sha256(raw_token.encode()).hexdigest(),
             expires_at=datetime.now(UTC) + timedelta(days=7),
@@ -256,14 +275,126 @@ class ProductService:
             {"email": invitation.email, "role": role},
         )
         self.db.commit()
+        return self._deliver_workspace_invitation(principal, invitation, raw_token)
+
+    @staticmethod
+    def _workspace_invitation_payload(invitation: WorkspaceInvitation) -> dict[str, Any]:
         return {
             "id": invitation.id,
             "email": invitation.email,
             "role": invitation.role,
             "state": invitation.state,
+            "delivery_state": invitation.delivery_state,
+            "delivery_provider": invitation.delivery_provider,
+            "send_count": invitation.send_count,
+            "last_sent_at": invitation.last_sent_at,
             "expires_at": invitation.expires_at,
-            "invite_token": raw_token,
         }
+
+    def _deliver_workspace_invitation(
+        self, principal: Principal, invitation: WorkspaceInvitation, raw_token: str
+    ) -> dict[str, Any]:
+        organization = self.db.get(Organization, principal.organization_id)
+        if not organization:
+            raise PermissionError("workspace not found")
+        try:
+            delivery = self.invitation_sender.send(
+                email=invitation.email,
+                role=invitation.role,
+                token=raw_token,
+                workspace_name=organization.name,
+                expires_at=invitation.expires_at,
+            )
+        except Exception as error:
+            invitation.delivery_state = "FAILED"
+            invitation.send_count += 1
+            self.audit(
+                principal,
+                "workspace.invitation_delivery_failed",
+                "workspace_invitation",
+                invitation.id,
+                {"provider": type(self.invitation_sender).__name__},
+            )
+            self.db.commit()
+            if isinstance(error, InvitationDeliveryUnavailable):
+                raise
+            raise InvitationDeliveryUnavailable(
+                "workspace invitation email delivery failed"
+            ) from error
+
+        invitation.delivery_state = "SENT"
+        invitation.delivery_provider = delivery.provider
+        invitation.provider_message_id = delivery.message_id
+        invitation.send_count += 1
+        invitation.last_sent_at = datetime.now(UTC)
+        self.audit(
+            principal,
+            "workspace.invitation_sent",
+            "workspace_invitation",
+            invitation.id,
+            {"provider": delivery.provider, "execution": delivery.execution},
+        )
+        self.db.commit()
+        payload = self._workspace_invitation_payload(invitation)
+        if delivery.execution == "SIMULATED":
+            payload["invite_token"] = raw_token
+        return payload
+
+    def list_workspace_invitations(self, principal: Principal) -> list[dict[str, Any]]:
+        self._require_workspace_admin(principal)
+        invitations = self.db.scalars(
+            select(WorkspaceInvitation)
+            .where(WorkspaceInvitation.organization_id == principal.organization_id)
+            .order_by(WorkspaceInvitation.created_at.desc())
+        ).all()
+        return [self._workspace_invitation_payload(invitation) for invitation in invitations]
+
+    def resend_workspace_invitation(
+        self, principal: Principal, invitation_id: str
+    ) -> dict[str, Any]:
+        self._require_workspace_admin(principal)
+        invitation = self.db.scalar(
+            select(WorkspaceInvitation).where(
+                WorkspaceInvitation.id == invitation_id,
+                WorkspaceInvitation.organization_id == principal.organization_id,
+            )
+        )
+        if not invitation:
+            raise KeyError("workspace invitation not found")
+        if invitation.state != "PENDING":
+            raise ValueError("only pending invitations can be resent")
+        raw_token = secrets.token_urlsafe(24)
+        invitation.token_digest = hashlib.sha256(raw_token.encode()).hexdigest()
+        invitation.expires_at = datetime.now(UTC) + timedelta(days=7)
+        invitation.delivery_state = "PENDING"
+        self.db.commit()
+        return self._deliver_workspace_invitation(principal, invitation, raw_token)
+
+    def cancel_workspace_invitation(
+        self, principal: Principal, invitation_id: str
+    ) -> dict[str, Any]:
+        self._require_workspace_admin(principal)
+        invitation = self.db.scalar(
+            select(WorkspaceInvitation).where(
+                WorkspaceInvitation.id == invitation_id,
+                WorkspaceInvitation.organization_id == principal.organization_id,
+            )
+        )
+        if not invitation:
+            raise KeyError("workspace invitation not found")
+        if invitation.state != "PENDING":
+            raise ValueError("only pending invitations can be cancelled")
+        invitation.state = "CANCELLED"
+        invitation.cancelled_at = datetime.now(UTC)
+        self.audit(
+            principal,
+            "workspace.invitation_cancelled",
+            "workspace_invitation",
+            invitation.id,
+            {"email": invitation.email},
+        )
+        self.db.commit()
+        return self._workspace_invitation_payload(invitation)
 
     def list_workspace_members(self, principal: Principal) -> list[dict[str, Any]]:
         self.workspace_profile(principal)

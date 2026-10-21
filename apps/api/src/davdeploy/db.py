@@ -144,7 +144,7 @@ def run_migrations(target: Engine | None = None) -> None:
         ).scalar_one()
         if version < 1:
             Base.metadata.create_all(bind=connection)
-            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (16)"))
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (20)"))
             return
         if version < 2:
             connection.execute(
@@ -237,6 +237,24 @@ def run_migrations(target: Engine | None = None) -> None:
         if version < 19:
             Base.metadata.create_all(bind=connection)
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (19)"))
+            version = 19
+        if version < 20:
+            columns = {
+                column["name"]
+                for column in inspect(connection).get_columns("workspace_invitations")
+            }
+            additions = {
+                "delivery_state": "ALTER TABLE workspace_invitations ADD COLUMN delivery_state VARCHAR(24) DEFAULT 'PENDING'",
+                "delivery_provider": "ALTER TABLE workspace_invitations ADD COLUMN delivery_provider VARCHAR(40)",
+                "provider_message_id": "ALTER TABLE workspace_invitations ADD COLUMN provider_message_id VARCHAR(255)",
+                "send_count": "ALTER TABLE workspace_invitations ADD COLUMN send_count INTEGER DEFAULT 0",
+                "last_sent_at": "ALTER TABLE workspace_invitations ADD COLUMN last_sent_at TIMESTAMP WITH TIME ZONE",
+                "cancelled_at": "ALTER TABLE workspace_invitations ADD COLUMN cancelled_at TIMESTAMP WITH TIME ZONE",
+            }
+            for name, statement in additions.items():
+                if name not in columns:
+                    connection.execute(text(statement))
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (20)"))
 
 
 def session() -> Generator[Session, None, None]:

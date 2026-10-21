@@ -15,7 +15,17 @@ from davdeploy.domain import (
 )
 from davdeploy.executor import ExecutionObservation
 from davdeploy.intent import DeterministicIntentProvider
-from davdeploy.models import Incident, Recommendation, RepositoryConnection, UsageRecord
+from davdeploy.invitation_email import (
+    DisabledInvitationEmailSender,
+    InvitationDeliveryUnavailable,
+)
+from davdeploy.models import (
+    Incident,
+    Recommendation,
+    RepositoryConnection,
+    UsageRecord,
+    WorkspaceInvitation,
+)
 from davdeploy.planner import AwsV1Planner
 from davdeploy.policy import PolicyClient
 from davdeploy.security import (
@@ -126,7 +136,7 @@ class LocalExecutor:
         )
 
 
-def make_service(intent_provider=None):
+def make_service(intent_provider=None, invitation_sender=None):
     engine = make_engine("sqlite+pysqlite:///:memory:")
     run_migrations(engine)
     db = sessionmaker(bind=engine, expire_on_commit=False)()
@@ -135,6 +145,7 @@ def make_service(intent_provider=None):
         policy=PolicyClient(fixture=True),
         executor=LocalExecutor(),
         intent_provider=intent_provider,
+        invitation_sender=invitation_sender,
     )
     service.seed_local_identity()
     return service, db
@@ -178,6 +189,57 @@ def test_verified_identity_can_accept_only_its_workspace_invitation():
     )
     assert profile["workspace"]["id"] == "org-demo"
     assert profile["user"]["role"] == "developer"
+
+
+def test_workspace_administrator_can_list_resend_and_cancel_invitations():
+    service, _ = make_service()
+    administrator = Principal("user-administrator", "org-demo", "administrator")
+    invitation = service.invite_workspace_member(administrator, "invitee@example.com", "developer")
+
+    listed = service.list_workspace_invitations(administrator)
+    assert listed[0]["id"] == invitation["id"]
+    assert listed[0]["delivery_state"] == "SENT"
+    assert listed[0]["send_count"] == 1
+    assert "invite_token" not in listed[0]
+
+    resent = service.resend_workspace_invitation(administrator, invitation["id"])
+    assert resent["send_count"] == 2
+    assert resent["invite_token"] != invitation["invite_token"]
+
+    cancelled = service.cancel_workspace_invitation(administrator, invitation["id"])
+    assert cancelled["state"] == "CANCELLED"
+    with pytest.raises(ValueError, match="pending"):
+        service.resend_workspace_invitation(administrator, invitation["id"])
+
+
+def test_workspace_invitation_controls_are_tenant_scoped_and_admin_only():
+    service, _ = make_service()
+    administrator = Principal("user-administrator", "org-demo", "administrator")
+    invitation = service.invite_workspace_member(administrator, "invitee@example.com", "developer")
+
+    with pytest.raises(PermissionError, match="administrator"):
+        service.list_workspace_invitations(founder())
+    with pytest.raises(KeyError, match="not found"):
+        service.cancel_workspace_invitation(
+            Principal("user-other", "org-other", "administrator"), invitation["id"]
+        )
+
+
+def test_failed_invitation_delivery_is_visible_and_recoverable():
+    service, db = make_service(invitation_sender=DisabledInvitationEmailSender())
+    administrator = Principal("user-administrator", "org-demo", "administrator")
+
+    with pytest.raises(InvitationDeliveryUnavailable, match="not configured"):
+        service.invite_workspace_member(administrator, "invitee@example.com", "developer")
+
+    invitation = db.scalar(
+        select(WorkspaceInvitation).where(WorkspaceInvitation.email == "invitee@example.com")
+    )
+    assert invitation is not None
+    assert invitation.state == "PENDING"
+    assert invitation.delivery_state == "FAILED"
+    assert invitation.send_count == 1
+    assert service.list_workspace_invitations(administrator)[0]["delivery_state"] == "FAILED"
 
 
 def operator() -> Principal:
