@@ -40,11 +40,13 @@ deliberately disabled until SES is configured.
 
 ## Acceptance status
 
-Pending implementation and validation.
+Implementation and focused local validation are complete. Required GitHub CI and the reviewed
+production release remain pending.
 
 ## Tests / validation performed
 
-Pending.
+Ruff, 49 focused tests, OpenAPI snapshot regeneration, OpenAPI parity, and `git diff --check`
+passed. See `docs/test/test117.md`.
 
 ## Evidence files produced
 

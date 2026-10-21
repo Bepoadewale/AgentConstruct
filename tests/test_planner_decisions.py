@@ -143,4 +143,5 @@ def test_kubernetes_requested_for_status_is_not_selected_without_need():
 def test_plan_explains_why_it_selected_the_simplest_viable_option():
     result = plan()
     assert "lowest-complexity" in (result.recommendation_reason or "")
+    assert "band.$" not in (result.recommendation_reason or "")
     assert result.candidates

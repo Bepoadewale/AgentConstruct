@@ -3,7 +3,7 @@
 Date: 2026-10-21
 Execution type: Real authenticated production discovery followed by focused local regression tests
 Customer repository: `https://github.com/Bepoadewale/ai-platform-control-plane`
-Commit: Pending
+Commit: Pending reviewed PR commit
 AWS account: Existing DavDeploy control-plane account
 AWS region: `us-east-1`
 
@@ -15,7 +15,11 @@ resources were created.
 
 ## Commands executed
 
-Pending focused regression commands.
+- `.venv/bin/ruff check apps/api/src/davdeploy/main.py apps/api/src/davdeploy/planner.py tests/test_product.py tests/test_planner_decisions.py`
+- `.venv/bin/python -m pytest tests/test_product.py tests/test_planner_decisions.py -q`
+- `make openapi-update`
+- `make openapi-check`
+- `git diff --check`
 
 ## Observed result
 
@@ -27,6 +31,11 @@ pricing. The review stayed `DRAFT` and `UNEXECUTED_REVIEW_ONLY`.
 
 Invitation creation while delivery was disabled persisted a `FAILED` delivery record but returned
 opaque HTTP 500. Cancellation then returned HTTP 200 and moved the test invitation to `CANCELLED`.
+
+The route now translates delivery unavailability to documented HTTP 503 while the existing service
+test continues to prove the failed record remains visible. Planner copy no longer contains the
+stray dollar sign. Ruff, 49 focused tests, OpenAPI regeneration and parity, and diff validation
+passed locally.
 
 ## Teardown
 
