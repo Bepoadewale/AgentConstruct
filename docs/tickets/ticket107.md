@@ -1,4 +1,7 @@
-# Ticket 107: Governed public GitHub repository planning
+# ticket107
+
+PR: #107
+Branch: `feat/106-public-github-planning`
 
 ## Problem / goal
 

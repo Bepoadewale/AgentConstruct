@@ -1,28 +1,41 @@
-# Test 107: Public GitHub repository planning
+# test107
+
+Date: 2026-10-21
+Execution type: Local clean-room and direct public GitHub read-only validation
+Customer repository: `https://github.com/Bepoadewale/ai-platform-control-plane`
+Commit: `4dc113a`
+AWS account: Not used
+AWS region: Not used
+
+## Resources created
+
+- Temporary local containers, PostgreSQL volume, test records, and Terraform validation directories.
+- Read-only public GitHub API requests for metadata and a fixed manifest allowlist.
+- Zero customer cloud resources.
 
 ## Commands executed
 
 - Targeted Ruff and pytest checks.
 - Direct bounded read-only analysis of `Bepoadewale/ai-platform-control-plane`.
-- One complete `make clean-room` validation cycle.
-- Controlled production customer journey after reviewed deployment.
+- One complete local clean-room validation cycle.
 
-## Result
+## Observed result
 
 Targeted checks passed 18 tests. Direct public analysis confirmed the real repository, `main`
 default branch, `docker-compose.yml`, `pyproject.toml`, and `.github/workflows` manifests, Python and
-FastAPI hints, and 0.82 evidence confidence. One complete clean-room cycle passed on 2026-10-21,
-including smoke, API contract, all demo variants, customer-plan E2E, seeded data, persistence,
-trace, Python verification, OPA, every Terraform root, and final cleanup. Production results require
-the reviewed code to be merged and deployed and will be recorded separately.
+FastAPI hints, and 0.82 evidence confidence.
 
-## Execution boundary
+The clean-room cycle passed smoke, API contract, all demo variants, customer-plan E2E, seeded data,
+persistence, trace, Python verification, OPA, and every Terraform root. The fixture regression test
+also confirms generated `example/*` demo repositories stay on the deterministic adapter.
 
-The direct and live repository checks use unauthenticated, read-only GitHub REST requests. The live
-customer journey creates only control-plane account, workspace, repository-evidence, intent, plan,
-and draft-review records. It never calls customer infrastructure execution or deployment APIs.
+## Teardown
 
-## Known limitations
+The clean-room cycle ended with `make clean-local`, removing its containers, network, volume,
+virtual environment, and generated local state. Public GitHub reads create no remote resources.
 
-Unauthenticated GitHub API rate limits apply. Private repositories require the existing GitHub App
-adapter and installation authorization.
+## Final boundary
+
+The validation reads public repository evidence and exercises only local control-plane fixtures. It
+does not call customer approval, execution, deployment, or teardown APIs. Private repositories still
+require an authorized GitHub App installation.
