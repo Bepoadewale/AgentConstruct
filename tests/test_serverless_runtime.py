@@ -258,6 +258,14 @@ def test_serverless_stack_scopes_invitation_email_to_the_verified_ses_identity()
     assert "DAVDEPLOY_FRONTEND_ORIGIN" in terraform
 
 
+def test_serverless_stack_scopes_release_migration_invocation():
+    terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
+    assert 'name = "davdeploy-terraform-apply-github"' in terraform
+    assert 'name = "invoke-davdeploy-release-migrations"' in terraform
+    assert 'Action   = ["lambda:InvokeFunction"]' in terraform
+    assert "Resource = aws_lambda_function.migrate.arn" in terraform
+
+
 def test_embedded_fixture_executor_is_stateless_and_bounded(monkeypatch):
     monkeypatch.setenv("DAVDEPLOY_EXECUTOR_MODE", "embedded_fixture")
     adapter = executor.configured_executor()

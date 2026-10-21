@@ -106,6 +106,30 @@ jobs:
             -backend-config="encrypt=true"
           terraform apply -input=false tfplan
 
+      - name: Run and verify database migrations
+        working-directory: infrastructure/terraform/serverless-control-plane
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration_function="$(terraform output -raw migration_function_name)"
+          test -n "${migration_function}" || { echo "Terraform returned no migration function" >&2; exit 1; }
+          invoke_result="$(aws lambda invoke \
+            --function-name "${migration_function}" \
+            --cli-binary-format raw-in-base64-out \
+            --payload '{}' \
+            migration-response.json)"
+          test -z "$(jq -r '.FunctionError // empty' <<<"${invoke_result}")" || {
+            echo "Migration Lambda reported a function error" >&2
+            jq . migration-response.json >&2
+            exit 1
+          }
+          jq -e '.status == "migrations-complete"' migration-response.json >/dev/null || {
+            echo "Migration Lambda did not confirm completion" >&2
+            jq . migration-response.json >&2
+            exit 1
+          }
+          echo "Database migrations completed successfully"
+
       - name: Record result
         if: always()
         shell: bash
