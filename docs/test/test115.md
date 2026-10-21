@@ -1,19 +1,24 @@
 # test115
 
 Date: 2026-10-21
-Execution type: Pending local validation and real control-plane migration retry
+Execution type: Local migration validation followed by a pending real control-plane migration retry
 Customer repository: `https://github.com/Bepoadewale/ai-platform-control-plane`
-Commit: Pending
+Commit: Pending reviewed PR commit
 AWS account: Existing DavDeploy control-plane account
 AWS region: `us-east-1`
 
 ## Resources created
 
-Pending. No customer resources are in scope.
+The clean-room cycle created temporary Compose containers, a PostgreSQL volume, and Terraform
+validation directories. Final cleanup removed them. No customer resources were created.
 
 ## Commands executed
 
-Pending.
+- `.venv/bin/ruff check apps/api/src/davdeploy/db.py tests/test_invitation_email.py`
+- `.venv/bin/python -m pytest tests/test_invitation_email.py tests/test_db_config.py -q`
+- One complete cycle: clean, bootstrap, smoke, API contract, customer-plan E2E, API restart,
+  persistence check, simple/complex/degraded/Day-2 demos, policy failure, readiness failure,
+  traces, verify, OPA, Terraform validation, Kubernetes rendering, MCP catalogue, clean.
 
 ## Observed result
 
@@ -22,9 +27,17 @@ migration Lambda using refreshed credentials. The Lambda failed closed with
 `UnsupportedResultException` because SQLAlchemy PostgreSQL reflection requested an unsupported
 `CHAR` result through Aurora Data API.
 
+The replacement uses PostgreSQL's idempotent `ADD COLUMN IF NOT EXISTS`, so it does not read the
+system catalogue through Data API. SQLite retains a reflected-column fallback. Focused validation
+passed 7 tests, including repeat migration idempotency. The clean-room cycle passed 255 tests,
+Ruff, OpenAPI parity, exact-origin CORS, customer-plan persistence after API restart, all planning
+and failure journeys, Tempo traces, OPA 3/3, every Terraform root, Kubernetes rendering, and the
+MCP authority boundary. Final cleanup completed.
+
 ## Teardown
 
-Pending local clean-room cleanup. The durable control-plane migration is not torn down.
+The clean-room cycle removed all temporary containers, networks, volumes, `.venv`, and `.local`
+state. The durable control-plane migration is not torn down.
 
 ## Final boundary
 

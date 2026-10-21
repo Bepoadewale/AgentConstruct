@@ -40,11 +40,14 @@ unconfirmed, so the invitation endpoint still fails safely.
 
 ## Acceptance status
 
-Pending implementation and validation.
+Implementation and local validation are complete. Required GitHub CI and the reviewed production
+retry remain pending.
 
 ## Tests / validation performed
 
-Pending.
+Focused migration tests passed 7 tests. One complete clean-room cycle passed 255 tests, all local
+customer journeys, failure paths, policy tests, contract checks, Terraform validations,
+Kubernetes rendering, MCP catalogue validation, and final cleanup. See `docs/test/test115.md`.
 
 ## Evidence files produced
 
@@ -57,4 +60,4 @@ operate customer infrastructure.
 
 ## Follow-up work
 
-None identified yet.
+Complete the reviewed production plan/apply and authenticated live checks after merge.
