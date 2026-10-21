@@ -47,6 +47,7 @@ from davdeploy.domain import (
     TerraformPlanRenderRequest,
     TerraformPlanReviewRequest,
 )
+from davdeploy.invitation_email import InvitationDeliveryUnavailable
 from davdeploy.model_gateway import ModelGatewayUnavailable
 from davdeploy.product_readiness import security_headers
 from davdeploy.rate_limit import SlidingWindowRateLimiter
@@ -185,6 +186,8 @@ def translate(error: Exception) -> None:
         raise HTTPException(409, str(error)) from error
     if isinstance(error, ModelGatewayUnavailable):
         raise HTTPException(503, str(error)) from error
+    if isinstance(error, InvitationDeliveryUnavailable):
+        raise HTTPException(503, str(error)) from error
     raise error
 
 
@@ -254,7 +257,41 @@ def onboard_current_identity(
             request.workspace_name,
             request.invitation_token,
         )
-    except (PermissionError, ValueError) as error:
+    except (PermissionError, ValueError, InvitationDeliveryUnavailable) as error:
+        translate(error)
+
+
+@app.get("/api/v1/workspace/invitations")
+def workspace_invitations(
+    principal: Principal = Depends(verify_token), service: ProductService = Depends(product_service)
+):
+    try:
+        return service.list_workspace_invitations(principal)
+    except PermissionError as error:
+        translate(error)
+
+
+@app.post("/api/v1/workspace/invitations/{invitation_id}/resend")
+def resend_workspace_invitation(
+    invitation_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    try:
+        return service.resend_workspace_invitation(principal, invitation_id)
+    except (PermissionError, KeyError, ValueError, InvitationDeliveryUnavailable) as error:
+        translate(error)
+
+
+@app.post("/api/v1/workspace/invitations/{invitation_id}/cancel")
+def cancel_workspace_invitation(
+    invitation_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    try:
+        return service.cancel_workspace_invitation(principal, invitation_id)
+    except (PermissionError, KeyError, ValueError) as error:
         translate(error)
 
 

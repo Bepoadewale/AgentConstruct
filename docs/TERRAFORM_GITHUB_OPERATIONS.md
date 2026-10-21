@@ -44,16 +44,21 @@ These are non-secret deployment identifiers. Keep them as GitHub environment var
 classification is honest. Public visitors cannot read repository Settings, but workflow variables
 are unencrypted and must never hold credentials. See `docs/CONFIGURATION_SECURITY.md`.
 
-Optional `terraform-plan` variables:
+Optional `terraform-plan` variable:
 
 - `GOOGLE_IDENTITY_PROVIDER_ENABLED`, default `false`
-- `SES_IDENTITY_ARN`
-- `SES_FROM_ADDRESS`
 
-Optional `terraform-plan` environment secret:
+Optional `terraform-plan` environment secrets:
 
 - `BUDGET_NOTIFICATION_EMAIL`; keep the notification address encrypted rather than exposing it as
   a public repository or environment variable
+- `SES_IDENTITY_ARN`; ARN of the verified Amazon SES email or domain identity used for invitations
+- `SES_FROM_ADDRESS`; verified sender address covered by `SES_IDENTITY_ARN`
+
+Workspace invitation delivery remains disabled when the two SES secrets are absent. Before setting
+them, verify the sender identity in the same AWS region as the control plane. Amazon SES accounts in
+the sandbox can send only to verified recipients, so delivery to arbitrary customer addresses also
+requires production sending access. The application never exposes either value in the browser.
 
 The state, plan, and release buckets must already exist. Enable versioning on the release bucket.
 Keep both plan and state buckets private. The plan bucket holds sensitive saved plans and must use
@@ -102,8 +107,9 @@ and one Cognito domain. Future development or staging environments require a sep
 design change rather than an operator choice in the current workflow.
 
 Google identity federation and SES sender configuration remain disabled until their provider setup
-exists. The budget notification address is supplied through the encrypted `terraform-plan`
-environment secret when configured.
+exists. SES delivery is enabled only by the two encrypted sender secrets described above. The budget
+notification address is supplied through the encrypted `terraform-plan` environment secret when
+configured.
 
 The static frontend is active at `https://davdeploy-frontend.pages.dev`. Its API base URL, OIDC
 authority, Cognito user-pool client ID, and public OIDC client ID remain unset because they are

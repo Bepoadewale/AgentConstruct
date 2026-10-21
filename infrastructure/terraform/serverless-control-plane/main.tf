@@ -164,7 +164,7 @@ resource "aws_iam_role_policy" "api" {
   role = aws_iam_role.api.id
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
+    Statement = concat([
       {
         Effect   = "Allow"
         Action   = ["rds-data:BatchExecuteStatement", "rds-data:BeginTransaction", "rds-data:CommitTransaction", "rds-data:ExecuteStatement", "rds-data:RollbackTransaction"]
@@ -188,7 +188,13 @@ resource "aws_iam_role_policy" "api" {
           "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${var.nova_model_id}"
         ]
       }
-    ]
+      ],
+      var.ses_identity_arn == "" ? [] : [{
+        Effect   = "Allow"
+        Action   = ["ses:SendEmail"]
+        Resource = var.ses_identity_arn
+      }]
+    )
   })
 }
 
@@ -301,6 +307,9 @@ locals {
     DAVDEPLOY_MODEL_PROVIDER           = "bedrock"
     DAVDEPLOY_BEDROCK_MODEL_ID         = var.nova_model_id
     DAVDEPLOY_EXECUTOR_MODE            = "embedded_fixture"
+    DAVDEPLOY_EMAIL_PROVIDER           = var.ses_identity_arn == "" ? "disabled" : "ses"
+    DAVDEPLOY_SES_FROM_ADDRESS         = var.ses_from_address
+    DAVDEPLOY_FRONTEND_ORIGIN          = var.frontend_origin
   }
 }
 

@@ -36,8 +36,8 @@ jobs:
       TF_VAR_artifact_bucket: ${{ vars.TF_RELEASE_BUCKET }}
       TF_VAR_cognito_domain_prefix: ${{ vars.COGNITO_DOMAIN_PREFIX }}
       TF_VAR_google_identity_provider_enabled: ${{ vars.GOOGLE_IDENTITY_PROVIDER_ENABLED || 'false' }}
-      TF_VAR_ses_identity_arn: ${{ vars.SES_IDENTITY_ARN }}
-      TF_VAR_ses_from_address: ${{ vars.SES_FROM_ADDRESS }}
+      TF_VAR_ses_identity_arn: ${{ secrets.SES_IDENTITY_ARN }}
+      TF_VAR_ses_from_address: ${{ secrets.SES_FROM_ADDRESS }}
       TF_VAR_budget_notification_email: ${{ secrets.BUDGET_NOTIFICATION_EMAIL }}
 
     steps:

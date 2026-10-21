@@ -15,8 +15,6 @@ The current Terraform environments use these non-secret variables:
 - `EXPECTED_AWS_ACCOUNT_ID`
 - `FRONTEND_ORIGIN`
 - `GOOGLE_IDENTITY_PROVIDER_ENABLED`
-- `SES_FROM_ADDRESS`
-- `SES_IDENTITY_ARN`
 - `TF_PLAN_BUCKET`
 - `TF_PLAN_KMS_KEY_ARN`
 - `TF_RELEASE_BUCKET`
@@ -28,9 +26,15 @@ These values identify deployment configuration. They do not authenticate a calle
 GitHub Actions variables. Bucket policies, IAM trust policies, KMS policies, branch restrictions,
 and environment protections provide authorization.
 
-The current sensitive environment value is:
+The current encrypted environment values are:
 
 - `BUDGET_NOTIFICATION_EMAIL`, stored as a `terraform-plan` environment secret.
+- `SES_IDENTITY_ARN` and `SES_FROM_ADDRESS`, stored as `terraform-plan` environment secrets.
+
+Workspace invitation delivery requires both SES secrets. The identity must be verified in the same
+AWS region as the control plane. The Lambda role receives only `ses:SendEmail` on that identity.
+The backend stores token digests, never raw invitation tokens, and hosted API responses never expose
+invitation links.
 
 Future passwords, tokens, private keys, webhook secrets, client secrets, and long-lived
 credentials must use GitHub Secrets or an external secret manager. AWS workflows continue to use
