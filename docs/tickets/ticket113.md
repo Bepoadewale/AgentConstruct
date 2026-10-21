@@ -41,12 +41,13 @@ still fails safely rather than claiming success.
 
 ## Acceptance status
 
-Implementation and local validation are complete. GitHub CI and the reviewed production retry
-remain pending.
+Implementation, local validation, and required GitHub CI are complete. The reviewed production
+retry follows the merge because the corrected workflow must run from `main`.
 
 ## Tests / validation performed
 
-Focused workflow tests and one complete clean-room cycle passed. See `docs/test/test113.md`.
+Focused workflow tests, one complete clean-room cycle, and all seven required jobs in GitHub CI
+run `39653642990` passed. See `docs/test/test113.md`.
 
 ## Evidence files produced
 

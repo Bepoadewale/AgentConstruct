@@ -3,7 +3,7 @@
 Date: 2026-10-21
 Execution type: Local workflow validation followed by a real control-plane migration retry
 Customer repository: `https://github.com/Bepoadewale/ai-platform-control-plane`
-Commit: Pending reviewed PR commit
+Commit: `e650bd7`
 AWS account: Existing DavDeploy control-plane account
 AWS region: `us-east-1`
 
@@ -20,7 +20,9 @@ validation directories. Final cleanup removed them. No customer resources are in
 - One complete cycle: clean, bootstrap, smoke, API contract, customer-plan E2E, API restart,
   persistence check, simple/complex/degraded/Day-2 demos, policy failure, readiness failure,
   traces, verify, OPA, Terraform validation, Kubernetes rendering, MCP catalogue, clean.
-- GitHub CI, manual Terraform plan/apply, and authenticated production API checks remain pending.
+- GitHub CI run `39653642990`.
+- Manual Terraform plan/apply and authenticated production API checks remain pending until the
+  corrected workflow is merged to `main`.
 
 ## Observed result
 
@@ -30,6 +32,8 @@ inherit the policy created during that same apply. Focused workflow tests passed
 clean-room cycle passed 254 tests, Ruff, OpenAPI parity, exact-origin CORS, customer-plan
 persistence after API restart, all planning and failure journeys, Tempo traces, OPA 3/3, every
 Terraform root, Kubernetes rendering, and the MCP authority boundary. Final cleanup completed.
+All seven required jobs in GitHub CI run `39653642990` passed, including the independent local E2E,
+cloud-contract, policy, supply-chain, Python, documentation, and secret-scanning gates.
 
 ## Teardown
 
