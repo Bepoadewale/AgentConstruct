@@ -3426,6 +3426,52 @@
         "summary": "Github Branches"
       }
     },
+    "/api/v1/github/public-repository": {
+      "get": {
+        "operationId": "public_github_repository_api_v1_github_public_repository_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "repository_url",
+            "required": true,
+            "schema": {
+              "title": "Repository Url",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Public Github Repository"
+      }
+    },
     "/api/v1/github/webhooks": {
       "post": {
         "operationId": "github_webhook_api_v1_github_webhooks_post",

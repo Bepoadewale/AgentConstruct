@@ -8,6 +8,7 @@ from davdeploy.integrations import (
     FixtureAwsDiscovery,
     FixtureGitHubConnection,
     GitHubAppReadOnlyConnection,
+    PublicGitHubRepositoryReader,
 )
 
 
@@ -24,7 +25,9 @@ def test_github_fixture_models_reviewed_desired_state_and_webhook_contracts():
 
 def test_live_github_adapter_parses_repository_and_refuses_writes():
     connection = GitHubAppReadOnlyConnection("123", "456", "/private/key.pem")
-    assert connection._repository_name("https://github.com/example/service.git") == "example/service"
+    assert (
+        connection._repository_name("https://github.com/example/service.git") == "example/service"
+    )
     with pytest.raises(PermissionError, match="disabled"):
         connection.publish_reviewed_desired_state(
             "456",
@@ -38,6 +41,64 @@ def test_live_github_adapter_parses_repository_and_refuses_writes():
         assert "disabled" in str(error)
     else:
         raise AssertionError("read-only GitHub App adapter allowed a write")
+
+
+def test_public_github_reader_accepts_only_canonical_public_repositories(monkeypatch):
+    calls: list[tuple[str, dict]] = []
+
+    class Response:
+        status_code = 200
+        text = '{"name":"davdeploy"}'
+
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+        def raise_for_status(self):
+            return None
+
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response(
+            {
+                "private": False,
+                "full_name": "Bepoadewale/ai-platform-control-plane",
+                "default_branch": "main",
+            }
+        )
+
+    monkeypatch.setattr("davdeploy.integrations.httpx.get", fake_get)
+    reader = PublicGitHubRepositoryReader()
+    metadata = reader.inspect_repository("https://github.com/Bepoadewale/ai-platform-control-plane")
+
+    assert metadata.provider == "github_public"
+    assert metadata.repository == "Bepoadewale/ai-platform-control-plane"
+    assert "Authorization" not in calls[0][1]["headers"]
+    with pytest.raises(ValueError, match="canonical"):
+        reader.inspect_repository("https://example.com/Bepoadewale/ai-platform-control-plane")
+
+
+def test_public_github_reader_rejects_private_repository_metadata(monkeypatch):
+    class Response:
+        status_code = 200
+
+        def json(self):
+            return {
+                "private": True,
+                "full_name": "Bepoadewale/private-repository",
+                "default_branch": "main",
+            }
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr("davdeploy.integrations.httpx.get", lambda *args, **kwargs: Response())
+    with pytest.raises(PermissionError, match="not publicly readable"):
+        PublicGitHubRepositoryReader().inspect_repository(
+            "https://github.com/Bepoadewale/private-repository"
+        )
 
 
 def test_live_github_adapter_publishes_reviewed_pr_when_explicitly_enabled(monkeypatch):

@@ -127,6 +127,124 @@ class GitHubConnection(Protocol):
     ) -> GitHubWebhookContract: ...
 
 
+class PublicGitHubRepositoryReader:
+    """Bounded, unauthenticated reader for repositories GitHub exposes as public."""
+
+    api_url = "https://api.github.com"
+    execution = "EXECUTED_PUBLIC_READ_ONLY"
+    _manifest_candidates = (
+        "Dockerfile",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+        "compose.yml",
+        "compose.yaml",
+        "requirements.txt",
+        "pyproject.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "yarn.lock",
+        "go.mod",
+        "Cargo.toml",
+        ".github/workflows",
+        "k8s",
+        "kubernetes",
+        "helm",
+        "charts",
+        "terraform",
+    )
+
+    @staticmethod
+    def repository_name(repository_url: str) -> str:
+        parsed = urlparse(repository_url)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "github.com"
+            or parsed.port is not None
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("public repository must use a canonical https://github.com URL")
+        candidate = parsed.path.strip("/").removesuffix(".git")
+        parts = candidate.split("/")
+        if len(parts) != 2 or not all(parts):
+            raise ValueError("public repository URL must identify one owner and repository")
+        return candidate
+
+    @staticmethod
+    def _headers(accept: str = "application/vnd.github+json") -> dict[str, str]:
+        return {
+            "Accept": accept,
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "davdeploy-public-repository-reader",
+        }
+
+    def inspect_repository(self, repository_url: str) -> RepositoryMetadata:
+        name = self.repository_name(repository_url)
+        response = httpx.get(f"{self.api_url}/repos/{name}", headers=self._headers(), timeout=10)
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("private") is not False:
+            raise PermissionError("repository is not publicly readable")
+        if payload.get("full_name", "").lower() != name.lower():
+            raise ValueError("GitHub returned unexpected repository metadata")
+        return RepositoryMetadata(
+            provider="github_public",
+            installation_id="public-read-only",
+            repository=str(payload["full_name"]),
+            default_branch=str(payload["default_branch"]),
+        )
+
+    def branches(self, repository_url: str) -> list[str]:
+        metadata = self.inspect_repository(repository_url)
+        response = httpx.get(
+            f"{self.api_url}/repos/{metadata.repository}/branches",
+            headers=self._headers(),
+            params={"per_page": 100},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return [str(item["name"]) for item in response.json()]
+
+    def analyze_repository(self, repository_url: str, ref: str | None = None) -> RepositoryAnalysis:
+        metadata = self.inspect_repository(repository_url)
+        selected = ref or metadata.default_branch
+        manifests = self._manifest_files(metadata.repository, selected)
+        return RepositoryAnalysis(
+            provider=metadata.provider,
+            repository=metadata.repository,
+            selected_branch=selected,
+            default_branch=metadata.default_branch,
+            manifests=tuple(manifests),
+            runtime_hints=tuple(GitHubAppReadOnlyConnection._runtime_hints(manifests)),
+            framework_hints=tuple(GitHubAppReadOnlyConnection._framework_hints(manifests)),
+            database_hints=tuple(GitHubAppReadOnlyConnection._database_hints(manifests)),
+            secret_hints=tuple(GitHubAppReadOnlyConnection._secret_hints(manifests)),
+            deployment_hints=tuple(GitHubAppReadOnlyConnection._deployment_hints(manifests)),
+            confidence=0.82 if manifests else 0.5,
+            limitations=(
+                "Public analysis reads repository metadata and selected manifest files only.",
+                "Source code, secrets, issue data, and repository writes are excluded.",
+            ),
+        )
+
+    def _manifest_files(self, repository: str, ref: str) -> dict[str, str]:
+        found: dict[str, str] = {}
+        for path in self._manifest_candidates:
+            response = httpx.get(
+                f"{self.api_url}/repos/{repository}/contents/{path}",
+                headers=self._headers("application/vnd.github.raw+json"),
+                params={"ref": ref},
+                timeout=10,
+            )
+            if response.status_code == 404:
+                continue
+            response.raise_for_status()
+            found[path] = response.text[:20_000]
+        return found
+
+
 class AwsCloudConnection(Protocol):
     """Future adapter: assumes a customer-scoped role with short-lived STS credentials."""
 
@@ -152,6 +270,8 @@ class SlackNotifier(Protocol):
 class FixtureGitHubConnection:
     """Local deterministic fixture; it cannot reach GitHub or write a repository."""
 
+    execution = "SIMULATED"
+
     def installations(self) -> list[GitHubInstallation]:
         return [GitHubInstallation("fixture-installation", "demo-ai-startup", "Organization")]
 
@@ -162,7 +282,9 @@ class FixtureGitHubConnection:
             GitHubRepository(
                 "example/support-rag-api", "https://github.com/example/support-rag-api", "main"
             ),
-            GitHubRepository("example/fastapi-ai-api", "https://github.com/example/fastapi-ai-api", "main"),
+            GitHubRepository(
+                "example/fastapi-ai-api", "https://github.com/example/fastapi-ai-api", "main"
+            ),
         ]
 
     def branches(self, installation_id: str, repository: str) -> list[str]:
@@ -456,7 +578,12 @@ class GitHubAppReadOnlyConnection:
     def _secret_hints(manifests: dict[str, str]) -> list[str]:
         joined = "\n".join(manifests.values()).lower()
         hints = []
-        if ".env" in joined or "secret" in joined or "api_key" in joined or "database_url" in joined:
+        if (
+            ".env" in joined
+            or "secret" in joined
+            or "api_key" in joined
+            or "database_url" in joined
+        ):
             hints.append("environment variables")
         return hints
 
@@ -587,7 +714,9 @@ class GitHubAppReadOnlyConnection:
         return package
 
     @staticmethod
-    def _desired_state_files(package: dict, fallback_path: str, fallback_content: str) -> list[dict[str, str]]:
+    def _desired_state_files(
+        package: dict, fallback_path: str, fallback_content: str
+    ) -> list[dict[str, str]]:
         import base64
 
         files = package.get("files")
@@ -693,7 +822,9 @@ class StsAwsDiscovery:
     def __init__(self, session: object | None = None):
         self.session = session or boto3.Session()
 
-    def verify(self, connection_id: str, role_arn: str, external_id: str, region: str) -> CloudInventorySnapshot:
+    def verify(
+        self, connection_id: str, role_arn: str, external_id: str, region: str
+    ) -> CloudInventorySnapshot:
         sts = self.session.client("sts", region_name=region)
         assumed = sts.assume_role(
             RoleArn=role_arn,
@@ -724,13 +855,56 @@ class StsAwsDiscovery:
         """Collect only counts and identifiers needed by the planner; never workload data."""
         discovered: list[str] = []
         checks = (
-            ("vpc", lambda: customer.client("ec2", region_name=region).describe_vpcs().get("Vpcs", [])),
-            ("ecr", lambda: customer.client("ecr", region_name=region).describe_repositories().get("repositories", [])),
-            ("eks", lambda: customer.client("eks", region_name=region).list_clusters().get("clusters", [])),
-            ("ecs", lambda: customer.client("ecs", region_name=region).list_clusters().get("clusterArns", [])),
-            ("rds", lambda: customer.client("rds", region_name=region).describe_db_instances().get("DBInstances", [])),
-            ("lambda", lambda: customer.client("lambda", region_name=region).list_functions().get("Functions", [])),
-            ("app-runner", lambda: customer.client("apprunner", region_name=region).list_services().get("ServiceSummaryList", [])),
+            (
+                "vpc",
+                lambda: customer.client("ec2", region_name=region).describe_vpcs().get("Vpcs", []),
+            ),
+            (
+                "ecr",
+                lambda: (
+                    customer.client("ecr", region_name=region)
+                    .describe_repositories()
+                    .get("repositories", [])
+                ),
+            ),
+            (
+                "eks",
+                lambda: (
+                    customer.client("eks", region_name=region).list_clusters().get("clusters", [])
+                ),
+            ),
+            (
+                "ecs",
+                lambda: (
+                    customer.client("ecs", region_name=region)
+                    .list_clusters()
+                    .get("clusterArns", [])
+                ),
+            ),
+            (
+                "rds",
+                lambda: (
+                    customer.client("rds", region_name=region)
+                    .describe_db_instances()
+                    .get("DBInstances", [])
+                ),
+            ),
+            (
+                "lambda",
+                lambda: (
+                    customer.client("lambda", region_name=region)
+                    .list_functions()
+                    .get("Functions", [])
+                ),
+            ),
+            (
+                "app-runner",
+                lambda: (
+                    customer.client("apprunner", region_name=region)
+                    .list_services()
+                    .get("ServiceSummaryList", [])
+                ),
+            ),
         )
         for name, query in checks:
             try:
