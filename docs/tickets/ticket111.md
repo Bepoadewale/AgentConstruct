@@ -41,12 +41,13 @@ sequence requires that result, but the workflow stops immediately after `terrafo
 
 ## Acceptance status
 
-All implementation and local acceptance criteria are met. GitHub CI and the reviewed production
-plan/apply release remain before the live acceptance checks can be marked complete.
+Implementation, local validation, and required GitHub CI are complete. The reviewed production
+plan/apply release remains before the live acceptance checks can be marked complete.
 
 ## Tests / validation performed
 
-Focused tests and one complete clean-room cycle passed. See `docs/test/test111.md`.
+Focused tests, one complete clean-room cycle, and all seven required GitHub checks passed. See
+`docs/test/test111.md`.
 
 ## Evidence files produced
 

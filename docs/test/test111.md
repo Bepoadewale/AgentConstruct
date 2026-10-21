@@ -21,8 +21,9 @@ run. No customer cloud resources are in scope.
 - One complete cycle: clean, bootstrap, smoke, API contract, customer-plan E2E, API restart,
   persistence check, simple/complex/degraded/Day-2 demos, policy failure, readiness failure,
   traces, verify, OPA, Terraform validation, Kubernetes rendering, MCP catalogue, clean.
-- GitHub CI, manual Terraform plan, manual Terraform apply, and authenticated production API
-  rechecks remain pending.
+- GitHub CI run `39649457668`.
+- Manual Terraform plan, manual Terraform apply, and authenticated production API rechecks remain
+  pending.
 
 ## Observed result
 
@@ -30,7 +31,8 @@ Focused validation passed 34 tests and every Terraform root. The clean-room cycl
 tests, Ruff, OpenAPI parity, exact-origin CORS, customer-plan persistence after API restart, all
 planning and failure journeys, Tempo traces, OPA 3/3, every Terraform root, Kubernetes rendering,
 and the MCP authority boundary. Final cleanup removed all project containers, the database volume,
-the virtual environment, and generated local state.
+the virtual environment, and generated local state. GitHub CI passed docs conventions, Python,
+secrets, policy, cloud contracts, supply-chain scanning, and local E2E.
 
 ## Teardown
 
