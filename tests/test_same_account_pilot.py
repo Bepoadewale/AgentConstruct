@@ -37,7 +37,9 @@ def test_customer_sandbox_has_a_dedicated_low_cost_vpc_boundary():
     assert 'egress_type       = "VPC"' in CUSTOMER_MAIN
     assert 'resource "aws_nat_gateway"' not in CUSTOMER_MAIN
     assert 'resource "aws_internet_gateway"' not in CUSTOMER_MAIN
-    assert "davdeploy-customer-sandbox-apprunner-runtime" in CUSTOMER_MAIN
+    assert "davdeploy-${var.connection_id}-workload" in CUSTOMER_MAIN
+    assert "app_runner_ecr_access_role_arn" in CUSTOMER_MAIN
+    assert "app_runner_runtime_role_arn" in CUSTOMER_MAIN
 
 
 def test_state_and_teardown_are_scope_specific_and_account_guarded():
@@ -46,7 +48,7 @@ def test_state_and_teardown_are_scope_specific_and_account_guarded():
     assert "EXPECTED_AWS_ACCOUNT_ID" in PLATFORM_SCRIPT
     assert "EXPECTED_AWS_ACCOUNT_ID" in CUSTOMER_SCRIPT
     assert "Customer sandbox VPC still exists" in CUSTOMER_SCRIPT
-    assert "Customer sandbox IAM role still exists" in CUSTOMER_SCRIPT
+    assert "Connection roles are retained" in CUSTOMER_SCRIPT
     combined = CUSTOMER_MAIN + CUSTOMER_SCRIPT + PLATFORM_MAIN + PLATFORM_SCRIPT
     assert "organizations create-account" not in combined
     assert "organizations invite-account" not in combined

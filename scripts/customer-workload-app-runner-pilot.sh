@@ -13,9 +13,13 @@ require EXPECTED_AWS_ACCOUNT_ID
 require TF_STATE_BUCKET
 require TF_LOCK_TABLE
 require AWS_REGION
+require DAVDEPLOY_CUSTOMER_CONNECTION_ID
+require DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN
+require DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN
 
-service_name="${DAVDEPLOY_CUSTOMER_SERVICE_NAME:-davdeploy-customer-sandbox-workload}"
-repository_name="${DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_NAME:-davdeploy-customer-sandbox-workload}"
+connection_id="${DAVDEPLOY_CUSTOMER_CONNECTION_ID}"
+service_name="${DAVDEPLOY_CUSTOMER_SERVICE_NAME:-davdeploy-${connection_id}-workload}"
+repository_name="${DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_NAME:-davdeploy-${connection_id}-workload}"
 deployment_scope="${DAVDEPLOY_CUSTOMER_DEPLOYMENT_SCOPE:-customer-sandbox}"
 customer_vpc_cidr="${DAVDEPLOY_CUSTOMER_VPC_CIDR:-10.84.0.0/16}"
 platform_vpc_cidr="${DAVDEPLOY_PLATFORM_VPC_CIDR:-10.42.0.0/16}"
@@ -39,6 +43,9 @@ tf_vars=(
   "-var=region=${AWS_REGION}"
   "-var=expected_account_id=${EXPECTED_AWS_ACCOUNT_ID}"
   "-var=deployment_scope=${deployment_scope}"
+  "-var=connection_id=${connection_id}"
+  "-var=app_runner_ecr_access_role_arn=${DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN}"
+  "-var=app_runner_runtime_role_arn=${DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN}"
   "-var=customer_vpc_cidr=${customer_vpc_cidr}"
   "-var=platform_vpc_cidr=${platform_vpc_cidr}"
   "-var=service_name=${service_name}"
@@ -152,13 +159,7 @@ case "$operation" in
       echo "Customer sandbox VPC still exists" >&2
       exit 1
     fi
-    for role_name in davdeploy-customer-sandbox-apprunner-ecr davdeploy-customer-sandbox-apprunner-runtime; do
-      if aws iam get-role "${aws_args[@]}" --role-name "$role_name" >/dev/null 2>&1; then
-        echo "Customer sandbox IAM role still exists: ${role_name}" >&2
-        exit 1
-      fi
-    done
-    echo "Customer workload AWS resources absent: service=${missing_service}, ecr_repository=deleted, vpc=deleted, roles=deleted"
+    echo "Customer workload AWS resources absent: service=${missing_service}, ecr_repository=deleted, vpc=deleted. Connection roles are retained for future approved workloads."
     ;;
   output)
     tf_init

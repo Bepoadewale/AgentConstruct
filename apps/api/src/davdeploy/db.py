@@ -273,6 +273,12 @@ def run_migrations(target: Engine | None = None) -> None:
                 },
             )
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (20)"))
+            version = 20
+        if version < 21:
+            _add_columns_if_missing(
+                connection, "cloud_connections", {"execution_role_arn": "TEXT"}
+            )
+            connection.execute(text("INSERT INTO schema_migrations(version) VALUES (21)"))
 
 
 def session() -> Generator[Session, None, None]:

@@ -3,7 +3,7 @@ from pathlib import Path
 ROOT = Path("infrastructure/terraform/customer-connection")
 
 
-def test_customer_discovery_role_has_only_read_actions_and_execution_role_has_no_policy():
+def test_customer_discovery_is_read_only_and_execution_is_profile_bounded():
     configuration = (ROOT / "main.tf").read_text()
     assert 'resource "aws_iam_role" "discovery"' in configuration
     assert 'resource "aws_iam_role" "execution_contract"' in configuration
@@ -27,15 +27,20 @@ def test_customer_connection_apply_and_destroy_require_explicit_confirmation():
     assert "davdeploy/customer-connections/${CUSTOMER_CONNECTION_ID}.tfstate" in script
 
 
-def test_quick_create_template_is_metadata_only_and_uses_external_id_trust():
+def test_quick_create_template_uses_external_id_trust_and_separate_bounded_execution_role():
     template = Path("infrastructure/cloudformation/customer-discovery-role.yaml").read_text()
     assert "AWS::IAM::Role" in template
     assert "sts:ExternalId" in template
     assert "secretsmanager:DescribeSecret" in template
     assert "secretsmanager:GetSecretValue" not in template
     assert "s3:GetObject" not in template
-    assert "iam:PassRole" not in template
-    assert ":Create" not in template
+    assert "ExecutionRole" in template
+    assert "AppRunnerEcrAccessRole" in template
+    assert "AppRunnerRuntimeRole" in template
+    assert "iam:PassRole" in template
+    assert "aws:RequestTag/ConnectionId" in template
+    assert "aws:ResourceTag/ConnectionId" in template
+    assert "GetSecretValue" not in template
 
 
 def test_public_template_host_allows_only_versioned_template_reads_and_is_confirmation_gated():

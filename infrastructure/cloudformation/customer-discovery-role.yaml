@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: davdeploy read-only AWS discovery connection. Creates no workload resources.
+Description: davdeploy AWS connection roles. Creates no workload resources.
 
 Parameters:
   davdeployControlPlaneRoleArn:
@@ -64,6 +64,7 @@ Resources:
                   - elasticache:Describe*
                   - kms:DescribeKey
                   - kms:ListAliases
+                  - pricing:GetProducts
                   - lambda:GetFunctionConfiguration
                   - lambda:ListFunctions
                   - rds:Describe*
@@ -76,9 +77,136 @@ Resources:
                   - tag:GetResources
                 Resource: "*"
 
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "davdeployExecution-${ConnectionId}"
+      Description: davdeploy bounded execution role. It has no policy until a reviewed deployment profile is explicitly enabled.
+      MaxSessionDuration: 3600
+      Tags:
+        - Key: ManagedBy
+          Value: davdeploy
+        - Key: ConnectionId
+          Value: !Ref ConnectionId
+        - Key: Access
+          Value: execution-profile-pending
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Ref davdeployControlPlaneRoleArn
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref ExternalId
+      Policies:
+        - PolicyName: davdeployBoundedAppRunnerExecution
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadOnlyVerification
+                Effect: Allow
+                Action:
+                  - apprunner:DescribeService
+                  - apprunner:DescribeVpcConnector
+                  - apprunner:ListServices
+                  - apprunner:ListVpcConnectors
+                  - ec2:Describe*
+                  - ecr:DescribeRepositories
+                  - ecr:ListImages
+                  - logs:DescribeLogGroups
+                  - logs:GetLogEvents
+                  - logs:FilterLogEvents
+                Resource: "*"
+              - Sid: CreateTaggedCustomerWorkloadResources
+                Effect: Allow
+                Action:
+                  - apprunner:CreateService
+                  - apprunner:CreateVpcConnector
+                  - apprunner:TagResource
+                  - apprunner:UntagResource
+                  - ec2:CreateVpc
+                  - ec2:CreateSubnet
+                  - ec2:CreateSecurityGroup
+                  - ec2:CreateTags
+                  - ec2:DeleteTags
+                  - ecr:CreateRepository
+                  - ecr:TagResource
+                  - ecr:UntagResource
+                  - logs:CreateLogGroup
+                  - logs:TagLogGroup
+                  - logs:UntagLogGroup
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:RequestTag/ManagedBy: davdeploy
+                    aws:RequestTag/ConnectionId: !Ref ConnectionId
+              - Sid: DeleteOnlyTaggedCustomerWorkloadResources
+                Effect: Allow
+                Action:
+                  - apprunner:DeleteService
+                  - apprunner:DeleteVpcConnector
+                  - ec2:DeleteVpc
+                  - ec2:DeleteSubnet
+                  - ec2:DeleteSecurityGroup
+                  - ecr:DeleteRepository
+                  - logs:DeleteLogGroup
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/ManagedBy: davdeploy
+                    aws:ResourceTag/ConnectionId: !Ref ConnectionId
+              - Sid: PassOnlyConnectionAppRunnerRoles
+                Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - !GetAtt AppRunnerEcrAccessRole.Arn
+                  - !GetAtt AppRunnerRuntimeRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService:
+                      - build.apprunner.amazonaws.com
+                      - tasks.apprunner.amazonaws.com
+
+  AppRunnerEcrAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "davdeployAppRunnerEcr-${ConnectionId}"
+      Description: Customer-owned App Runner ECR access role for the bounded DavDeploy workload profile.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: build.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+
+  AppRunnerRuntimeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "davdeployAppRunnerRuntime-${ConnectionId}"
+      Description: Customer-owned minimal App Runner runtime role for the bounded DavDeploy workload profile.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: tasks.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+
 Outputs:
   DiscoveryRoleArn:
     Description: Provide this output to davdeploy only if automatic verification is unavailable.
     Value: !GetAtt DiscoveryRole.Arn
+  ExecutionRoleArn:
+    Description: Bounded execution role. No permission policy is attached by this connection stack.
+    Value: !GetAtt ExecutionRole.Arn
+  AppRunnerEcrAccessRoleArn:
+    Value: !GetAtt AppRunnerEcrAccessRole.Arn
+  AppRunnerRuntimeRoleArn:
+    Value: !GetAtt AppRunnerRuntimeRole.Arn
   ConnectionId:
     Value: !Ref ConnectionId

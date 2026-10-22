@@ -24,6 +24,7 @@ from davdeploy.connection_secrets import (
 from davdeploy.contracts import TenantScope
 from davdeploy.day2 import FixtureDay2Advisor
 from davdeploy.domain import (
+    CloudInventorySnapshot,
     EnvironmentName,
     InfrastructurePlanDecision,
     InfrastructurePlanState,
@@ -1697,6 +1698,7 @@ class ProductService:
             "provider": connection.provider,
             "account_id": connection.account_id,
             "role_arn": connection.discovery_role_arn,
+            "execution_role_arn": connection.execution_role_arn,
             "setup_state": connection.setup_state,
             "authorized_regions": snapshot.get("approved_regions", []),
             "capabilities": [
@@ -1706,7 +1708,11 @@ class ProductService:
             "verified_at": latest.captured_at.isoformat() if latest else None,
             "verification_provenance": latest.provenance if latest else None,
             "credentials_stored": False,
-            "deployment_permission": "not granted",
+            "deployment_permission": (
+                "customer-approved execution role pending verification"
+                if connection.execution_role_arn
+                else "not granted"
+            ),
         }
 
     def disconnect_cloud_connection(self, principal: Principal, connection_id: str) -> None:
@@ -1747,6 +1753,7 @@ class ProductService:
         external_id = secrets.token_urlsafe(32)
         stack_name = f"davdeploy-Discovery-{connection.id[:8]}"
         discovery_role_arn = f"arn:aws:iam::{account_id}:role/davdeployDiscovery-{connection.id}"
+        execution_role_arn = f"arn:aws:iam::{account_id}:role/davdeployExecution-{connection.id}"
         parameters = {
             "davdeployControlPlaneRoleArn": control_plane_role_arn,
             "ExternalId": external_id,
@@ -1760,6 +1767,7 @@ class ProductService:
         )
         connection.account_id = account_id
         connection.discovery_role_arn = discovery_role_arn
+        connection.execution_role_arn = execution_role_arn
         connection.external_id_secret_ref = self.connection_secrets.put_external_id(
             principal.organization_id, connection.id, external_id
         )
@@ -1786,10 +1794,10 @@ class ProductService:
             "quick_create_url": quick_create_url,
             "customer_steps": [
                 "Open the AWS Quick Create link.",
-                "Review the one read-only IAM role and acknowledge IAM resource creation.",
+                "Review the separate read-only discovery and bounded execution IAM roles, then acknowledge IAM resource creation.",
                 "Create the stack, then return to davdeploy to verify the connection.",
             ],
-            "boundary": "This action only creates a setup link. davdeploy does not create customer AWS resources until the customer creates the stack in their own account.",
+            "boundary": "This action only creates a setup link. The execution role has no reusable credentials and is separate from discovery. davdeploy does not create a workload until an exact approved plan is applied.",
         }
 
     def queue_aws_connection_verification(
@@ -3850,7 +3858,7 @@ class ProductService:
             raise ValueError(f"missing material requirements: {', '.join(spec.unknowns)}")
         connection_id = str(intent.spec.get("cloud_connection_id") or "local-aws-fixture")
         requested_region = spec.region_constraints[0] if spec.region_constraints else "us-east-1"
-        inventory = self.cloud_discovery.inventory(connection_id, requested_region)
+        inventory = self._planning_inventory(principal, connection_id, requested_region)
         architecture = self.planner.plan(spec, inventory)
         stored = self.db.scalar(
             select(StoredArchitecturePlan).where(StoredArchitecturePlan.intent_id == intent.id)
@@ -3904,6 +3912,34 @@ class ProductService:
         )
         self.db.commit()
         return plan
+
+    def _planning_inventory(
+        self, principal: Principal, connection_id: str, requested_region: str
+    ) -> CloudInventorySnapshot:
+        """Use the freshest verified customer discovery evidence when a connection is selected.
+
+        The planner does not call AWS from a browser request. It consumes a durable,
+        tenant-scoped snapshot produced by the trusted discovery worker. Fixture
+        discovery remains the explicit fallback for local planning without a connection.
+        """
+        if connection_id == "local-aws-fixture":
+            return self.cloud_discovery.inventory(connection_id, requested_region)
+        connection = self._cloud_connection(principal, connection_id)
+        if connection.setup_state != "VERIFIED":
+            raise ValueError("selected cloud connection must be verified before planning")
+        snapshot = self.db.scalar(
+            select(StoredCloudInventorySnapshot)
+            .where(
+                StoredCloudInventorySnapshot.organization_id == principal.organization_id,
+                StoredCloudInventorySnapshot.cloud_connection_id == connection.id,
+                StoredCloudInventorySnapshot.region == requested_region,
+            )
+            .order_by(StoredCloudInventorySnapshot.captured_at.desc())
+            .limit(1)
+        )
+        if not snapshot:
+            raise ValueError("selected cloud connection has no verified inventory for this region")
+        return CloudInventorySnapshot.model_validate(snapshot.snapshot)
 
     def _plan(self, principal: Principal, plan_id: str) -> DeploymentPlan:
         plan = self.db.get(DeploymentPlan, plan_id)

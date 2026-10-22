@@ -58,6 +58,7 @@ data "aws_iam_policy_document" "discovery" {
       "elasticache:Describe*",
       "lambda:GetFunctionConfiguration",
       "lambda:ListFunctions",
+      "pricing:GetProducts",
       "rds:Describe*",
       "resource-groups:GetResources",
       "s3:GetBucketLocation",

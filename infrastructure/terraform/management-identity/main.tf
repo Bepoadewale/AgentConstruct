@@ -5,6 +5,10 @@ locals {
     "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/davdeploy-*-discovery",
     "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/davdeployDiscovery-*",
   ]
+  execution_arns = [
+    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/davdeploy-*-execution",
+    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/davdeployExecution-*",
+  ]
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -65,4 +69,18 @@ resource "aws_iam_role_policy" "discover_customer" {
   name   = "davdeploy-assume-customer-discovery"
   role   = aws_iam_role.control_plane.id
   policy = data.aws_iam_policy_document.discover_customer.json
+}
+
+data "aws_iam_policy_document" "execute_customer" {
+  statement {
+    effect    = "Allow"
+    actions   = ["sts:AssumeRole"]
+    resources = local.execution_arns
+  }
+}
+
+resource "aws_iam_role_policy" "execute_customer" {
+  name   = "davdeploy-assume-customer-execution"
+  role   = aws_iam_role.control_plane.id
+  policy = data.aws_iam_policy_document.execute_customer.json
 }

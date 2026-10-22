@@ -109,6 +109,69 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "render_customer_terraform",
+        "description": "Render a Terraform contract for an approved customer-plan digest. It cannot plan, apply, or destroy cloud resources.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["revision_id", "content_digest"],
+            "properties": {"revision_id": {"type": "string"}, "content_digest": {"type": "string"}},
+        },
+    },
+    {
+        "name": "preflight_customer_cloud",
+        "description": "Run the governed preflight for an approved digest. It only evaluates boundaries and never changes cloud resources.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["revision_id", "content_digest", "region"],
+            "properties": {
+                "revision_id": {"type": "string"}, "content_digest": {"type": "string"},
+                "region": {"type": "string"}, "expected_account_id": {"type": "string"},
+                "budget_ceiling_usd": {"type": "integer"}, "runtime_identity_configured": {"type": "boolean"},
+            },
+        },
+    },
+    {
+        "name": "review_customer_terraform_plan",
+        "description": "Record a Terraform plan review for an approved digest. Authenticated planning remains backend-gated and never applies infrastructure.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["revision_id", "content_digest", "region"],
+            "properties": {
+                "revision_id": {"type": "string"}, "content_digest": {"type": "string"},
+                "preflight_id": {"type": "string"}, "expected_account_id": {"type": "string"},
+                "region": {"type": "string"}, "authenticated": {"type": "boolean"},
+            },
+        },
+    },
+    {
+        "name": "create_customer_cloud_run",
+        "description": "Create an approval-gated cloud execution request. It cannot queue or apply without all backend guards and exact confirmation.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["revision_id", "content_digest", "region"],
+            "properties": {
+                "revision_id": {"type": "string"}, "content_digest": {"type": "string"},
+                "terraform_render_id": {"type": "string"}, "preflight_id": {"type": "string"},
+                "terraform_plan_review_id": {"type": "string"}, "expected_account_id": {"type": "string"},
+                "region": {"type": "string"}, "confirmation": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "queue_customer_cloud_run",
+        "description": "Queue an already-ready exact cloud execution request. The API independently verifies role, digest, policy, approval, and confirmation.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["run_id", "content_digest", "confirmation"],
+            "properties": {"run_id": {"type": "string"}, "content_digest": {"type": "string"}, "confirmation": {"type": "string"}},
+        },
+    },
+    {
+        "name": "get_customer_cloud_run_evidence",
+        "description": "Read tenant-scoped execution evidence, including observed outputs and destruction proof when available.",
+        "inputSchema": {"type": "object", "required": ["run_id"], "properties": {"run_id": {"type": "string"}}},
+    },
+    {
         "name": "execute_approved_plan",
         "description": "Ask the governed API to execute an already executable plan. API policy and exact-plan approval remain authoritative.",
         "inputSchema": {
@@ -221,6 +284,64 @@ class davdeployMcp:
             return self.client.request(
                 "POST", f"/api/v1/customer-plan-revisions/{arguments['revision_id']}/execute-dry-run"
             )
+        if name == "render_customer_terraform":
+            return self.client.request(
+                "POST",
+                f"/api/v1/customer-plan-revisions/{arguments['revision_id']}/terraform-plan-renders",
+                {"content_digest": arguments["content_digest"]},
+            )
+        if name == "preflight_customer_cloud":
+            return self.client.request(
+                "POST",
+                f"/api/v1/customer-plan-revisions/{arguments['revision_id']}/cloud-readiness-preflights",
+                {
+                    "content_digest": arguments["content_digest"],
+                    "expected_account_id": arguments.get("expected_account_id"),
+                    "allowed_regions": [arguments["region"]],
+                    "required_tags": {"ManagedBy": "davdeploy"},
+                    "budget_ceiling_usd": arguments.get("budget_ceiling_usd"),
+                    "execution_mode": "PLAN_ONLY",
+                    "require_reviewed_pr": False,
+                    "runtime_identity_configured": bool(arguments.get("runtime_identity_configured")),
+                },
+            )
+        if name == "review_customer_terraform_plan":
+            authenticated = bool(arguments.get("authenticated"))
+            return self.client.request(
+                "POST",
+                f"/api/v1/customer-plan-revisions/{arguments['revision_id']}/terraform-plan-reviews",
+                {
+                    "content_digest": arguments["content_digest"],
+                    "preflight_id": arguments.get("preflight_id"),
+                    "expected_account_id": arguments.get("expected_account_id"),
+                    "expected_region": arguments["region"],
+                    "mode": "AUTHENTICATED_TERRAFORM_PLAN" if authenticated else "LOCAL_CONTRACT_ONLY",
+                    "allow_cloud_plan": authenticated,
+                },
+            )
+        if name == "create_customer_cloud_run":
+            return self.client.request(
+                "POST",
+                f"/api/v1/customer-plan-revisions/{arguments['revision_id']}/cloud-execution-runs",
+                {
+                    "content_digest": arguments["content_digest"],
+                    "terraform_render_id": arguments.get("terraform_render_id"),
+                    "preflight_id": arguments.get("preflight_id"),
+                    "terraform_plan_review_id": arguments.get("terraform_plan_review_id"),
+                    "expected_account_id": arguments.get("expected_account_id"),
+                    "expected_region": arguments["region"],
+                    "mode": "AUTHENTICATED_APP_RUNNER_APPLY",
+                    "confirmation": arguments.get("confirmation"),
+                },
+            )
+        if name == "queue_customer_cloud_run":
+            return self.client.request(
+                "POST",
+                f"/api/v1/cloud-execution-runs/{arguments['run_id']}/execute",
+                {"content_digest": arguments["content_digest"], "confirmation": arguments["confirmation"]},
+            )
+        if name == "get_customer_cloud_run_evidence":
+            return self.client.request("GET", f"/api/v1/cloud-execution-runs/{arguments['run_id']}/evidence")
         if name == "execute_approved_plan":
             return self.client.request(
                 "POST", f"/api/v1/deployment-plans/{arguments['plan_id']}/execute"

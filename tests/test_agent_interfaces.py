@@ -44,6 +44,12 @@ def test_mcp_catalogue_exposes_governed_operations_but_no_approval_or_credential
         "get_customer_plan_review",
         "submit_customer_plan_review",
         "execute_approved_customer_dry_run",
+        "render_customer_terraform",
+        "preflight_customer_cloud",
+        "review_customer_terraform_plan",
+        "create_customer_cloud_run",
+        "queue_customer_cloud_run",
+        "get_customer_cloud_run_evidence",
         "recommend_optimization",
         "create_change_plan",
         "destroy_environment",
@@ -88,6 +94,49 @@ def test_mcp_customer_plan_tools_request_api_without_approval_or_credentials():
         ("GET", "/api/v1/customer-plan-revisions/revision-1", None),
         ("POST", "/api/v1/customer-plan-revisions/revision-1/submit", None),
         ("POST", "/api/v1/customer-plan-revisions/revision-1/execute-dry-run", None),
+    ]
+
+
+def test_mcp_cloud_lifecycle_tools_only_forward_governed_contracts():
+    client = RecordingClient()
+    server = davdeployMcp(client)
+    digest = "a" * 64
+    assert server.call_tool(
+        "render_customer_terraform", {"revision_id": "revision-1", "content_digest": digest}
+    ) == {"ok": True}
+    assert server.call_tool(
+        "preflight_customer_cloud",
+        {"revision_id": "revision-1", "content_digest": digest, "region": "us-east-1"},
+    ) == {"ok": True}
+    assert server.call_tool(
+        "queue_customer_cloud_run",
+        {"run_id": "run-1", "content_digest": digest, "confirmation": "bad"},
+    ) == {"ok": True}
+    assert client.calls == [
+        (
+            "POST",
+            "/api/v1/customer-plan-revisions/revision-1/terraform-plan-renders",
+            {"content_digest": digest},
+        ),
+        (
+            "POST",
+            "/api/v1/customer-plan-revisions/revision-1/cloud-readiness-preflights",
+            {
+                "content_digest": digest,
+                "expected_account_id": None,
+                "allowed_regions": ["us-east-1"],
+                "required_tags": {"ManagedBy": "davdeploy"},
+                "budget_ceiling_usd": None,
+                "execution_mode": "PLAN_ONLY",
+                "require_reviewed_pr": False,
+                "runtime_identity_configured": False,
+            },
+        ),
+        (
+            "POST",
+            "/api/v1/cloud-execution-runs/run-1/execute",
+            {"content_digest": digest, "confirmation": "bad"},
+        ),
     ]
 
 
@@ -156,6 +205,36 @@ def test_cli_customer_plan_commands_forward_to_governed_api():
         ("POST", "/api/v1/customer-plan-revisions/revision-1/submit", None),
         ("POST", "/api/v1/customer-plan-revisions/revision-1/execute-dry-run", None),
         ("GET", "/api/v1/admin/customer-plan-revisions?state=submitted", None),
+    ]
+
+
+def test_cli_cloud_lifecycle_commands_forward_exact_digests_only():
+    client = RecordingClient()
+    digest = "b" * 64
+    assert run(
+        Namespace(command="render-customer-terraform", revision_id="revision-1", content_digest=digest),
+        client,
+    ) == {"ok": True}
+    assert run(
+        Namespace(
+            command="queue-customer-cloud-run",
+            run_id="run-1",
+            content_digest=digest,
+            confirmation="EXECUTE_APP_RUNNER_WORKLOAD",
+        ),
+        client,
+    ) == {"ok": True}
+    assert client.calls == [
+        (
+            "POST",
+            "/api/v1/customer-plan-revisions/revision-1/terraform-plan-renders",
+            {"content_digest": digest},
+        ),
+        (
+            "POST",
+            "/api/v1/cloud-execution-runs/run-1/execute",
+            {"content_digest": digest, "confirmation": "EXECUTE_APP_RUNNER_WORKLOAD"},
+        ),
     ]
 
 
