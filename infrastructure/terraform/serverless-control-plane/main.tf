@@ -507,32 +507,6 @@ resource "aws_lambda_event_source_mapping" "worker" {
   depends_on = [aws_iam_role_policy.worker_queue]
 }
 
-resource "aws_cloudwatch_event_rule" "worker_tick" {
-  name                = "${local.name}-worker-tick"
-  schedule_expression = "rate(1 minute)"
-  tags                = local.common_tags
-}
-
-resource "aws_cloudwatch_event_target" "worker_tick" {
-  rule      = aws_cloudwatch_event_rule.worker_tick.name
-  target_id = "worker-queue"
-  arn       = aws_sqs_queue.worker.arn
-}
-
-resource "aws_sqs_queue_policy" "worker" {
-  queue_url = aws_sqs_queue.worker.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "events.amazonaws.com" }
-      Action    = "sqs:SendMessage"
-      Resource  = aws_sqs_queue.worker.arn
-      Condition = { ArnEquals = { "aws:SourceArn" = aws_cloudwatch_event_rule.worker_tick.arn } }
-    }]
-  })
-}
-
 resource "aws_budgets_budget" "monthly" {
   name         = "${local.name}-monthly"
   budget_type  = "COST"
