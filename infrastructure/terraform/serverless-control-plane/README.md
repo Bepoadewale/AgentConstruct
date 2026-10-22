@@ -11,6 +11,11 @@ This root defines the early hosted davdeploy control plane:
 
 The two Aurora subnets are database-only. The stack intentionally contains no NAT Gateway, Internet Gateway, VPC endpoint, or Lambda VPC attachment. Lambda calls Data API, Cognito, Bedrock, Secrets Manager, and external HTTPS services through AWS service endpoints or its default public networking.
 
+The worker is event-driven: application actions enqueue an attributable job in SQS, and the SQS
+event-source mapping invokes the worker. There is no periodic heartbeat. A future delayed retry or
+scheduled task must create an explicit job with its actor, tenant scope, policy result, and audit
+record; it must not reintroduce permanent polling.
+
 Terraform does not store the Google client secret. Configure the Google identity provider after the user pool exists, using the operator procedure in `docs/SERVERLESS_DEPLOYMENT.md`, then set `google_identity_provider_enabled = true`.
 
 This directory defines one production control plane. The GitHub workflow uses the fixed
