@@ -35,13 +35,14 @@ job exists, preventing Aurora Serverless v2 from reaching its configured idle au
 - Terraform contains no permanent worker tick rule or target. Met.
 - The SQS to Lambda event-source mapping remains enabled. Met.
 - Terraform formatting and validation pass. Met.
-- A reviewed Terraform plan shows only removal of the heartbeat resources. Pending.
+- The post-merge reviewed Terraform plan shows only removal of the heartbeat resources. Pending.
 - No Terraform apply is performed from this PR. Met.
 
 ## Acceptance status
 
 Implementation and local static validation are complete. The PR remains draft until required CI
-and a reviewed manual Terraform plan are complete. No apply has been run.
+is complete. The repository deliberately permits manual Terraform plans only from `main`, so the
+reviewed plan follows the merge. No apply has been run.
 
 ## Tests / validation performed
 
@@ -53,7 +54,7 @@ and a reviewed manual Terraform plan are complete. No apply has been run.
 ## Evidence files produced
 
 No customer workload run occurred. This ticket and the Terraform diff are the implementation
-evidence; the manually reviewed Terraform plan will be recorded before merge.
+evidence; the manually reviewed Terraform plan will be recorded after merge.
 
 ## Boundaries
 
