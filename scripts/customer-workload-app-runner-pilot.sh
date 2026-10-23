@@ -16,6 +16,8 @@ require AWS_REGION
 require DAVDEPLOY_CUSTOMER_CONNECTION_ID
 require DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN
 require DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN
+require DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN
+require DAVDEPLOY_EXTERNAL_ID_SECRET_ARN
 
 connection_id="${DAVDEPLOY_CUSTOMER_CONNECTION_ID}"
 service_name="${DAVDEPLOY_CUSTOMER_SERVICE_NAME:-davdeploy-${connection_id}-workload}"
@@ -34,8 +36,8 @@ if [[ -n "${AWS_PROFILE:-}" ]]; then
   aws_args+=(--profile "$AWS_PROFILE")
 fi
 
-account="$(aws sts get-caller-identity "${aws_args[@]}" --query Account --output text)"
-[[ "$account" == "$EXPECTED_AWS_ACCOUNT_ID" ]] || { echo "AWS account guard failed: got ${account}, expected ${EXPECTED_AWS_ACCOUNT_ID}" >&2; exit 3; }
+external_id="$(aws secretsmanager get-secret-value "${aws_args[@]}" --secret-id "$DAVDEPLOY_EXTERNAL_ID_SECRET_ARN" --query SecretString --output text)"
+[[ -n "$external_id" && "$external_id" != "None" ]] || { echo "Customer connection ExternalId is unavailable" >&2; exit 3; }
 [[ "$deployment_scope" == "customer-sandbox" ]] || { echo "Customer deployment scope guard failed" >&2; exit 3; }
 [[ "$customer_vpc_cidr" != "$platform_vpc_cidr" ]] || { echo "Customer and platform VPC CIDRs must differ" >&2; exit 3; }
 
@@ -46,6 +48,8 @@ tf_vars=(
   "-var=connection_id=${connection_id}"
   "-var=app_runner_ecr_access_role_arn=${DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN}"
   "-var=app_runner_runtime_role_arn=${DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN}"
+  "-var=customer_execution_role_arn=${DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN}"
+  "-var=customer_execution_external_id=${external_id}"
   "-var=customer_vpc_cidr=${customer_vpc_cidr}"
   "-var=platform_vpc_cidr=${platform_vpc_cidr}"
   "-var=service_name=${service_name}"
@@ -60,7 +64,7 @@ tf_vars=(
 tf_init() {
   terraform -chdir="$root" init -input=false -reconfigure \
     -backend-config="bucket=${TF_STATE_BUCKET}" \
-    -backend-config="key=davdeploy/customer-sandbox/workload-app-runner.tfstate" \
+    -backend-config="key=davdeploy/customer/${connection_id}/workload-app-runner.tfstate" \
     -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
     -backend-config="region=${AWS_REGION}"
 }

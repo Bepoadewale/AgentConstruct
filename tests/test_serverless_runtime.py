@@ -241,20 +241,20 @@ def test_serverless_stack_pins_an_orderable_aurora_postgresql_version():
 
 def test_serverless_stack_selects_the_implemented_bedrock_gateway():
     terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
-    assert 'DAVDEPLOY_MODEL_PROVIDER           = "bedrock"' in terraform
+    assert 'DAVDEPLOY_MODEL_PROVIDER="bedrock"' in terraform.replace(" ", "")
     assert "bedrock-nova" not in terraform
 
 
 def test_serverless_stack_uses_network_independent_bounded_fixture_executor():
     terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
-    assert 'DAVDEPLOY_EXECUTOR_MODE            = "embedded_fixture"' in terraform
+    assert 'DAVDEPLOY_EXECUTOR_MODE="embedded_fixture"' in terraform.replace(" ", "")
 
 
 def test_serverless_stack_scopes_invitation_email_to_the_verified_ses_identity():
     terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
     assert 'Action   = ["ses:SendEmail"]' in terraform
     assert "Resource = var.ses_identity_arn" in terraform
-    assert 'DAVDEPLOY_EMAIL_PROVIDER           = var.ses_identity_arn == "" ? "disabled" : "ses"' in terraform
+    assert 'DAVDEPLOY_EMAIL_PROVIDER=var.ses_identity_arn==""?"disabled":"ses"' in terraform.replace(" ", "")
     assert "DAVDEPLOY_FRONTEND_ORIGIN" in terraform
 
 

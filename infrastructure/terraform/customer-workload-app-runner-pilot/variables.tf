@@ -39,6 +39,17 @@ variable "app_runner_runtime_role_arn" {
   description = "Customer-created App Runner runtime role from the connection stack."
 }
 
+variable "customer_execution_role_arn" {
+  type        = string
+  description = "Customer-created bounded execution role assumed only by Terraform's AWS provider."
+}
+
+variable "customer_execution_external_id" {
+  type        = string
+  description = "Control-plane-held ExternalId for the bounded customer execution role."
+  sensitive   = true
+}
+
 variable "customer_vpc_cidr" {
   type        = string
   description = "Dedicated same-account customer-sandbox VPC CIDR."

@@ -34,6 +34,8 @@ jobs:
       TF_VAR_region: ${{ vars.AWS_REGION }}
       TF_VAR_frontend_origin: ${{ vars.FRONTEND_ORIGIN }}
       TF_VAR_artifact_bucket: ${{ vars.TF_RELEASE_BUCKET }}
+      TF_VAR_customer_execution_state_bucket: ${{ vars.TF_STATE_BUCKET }}
+      TF_VAR_customer_execution_lock_table: ${{ vars.TF_STATE_LOCK_TABLE }}
       TF_VAR_cognito_domain_prefix: ${{ vars.COGNITO_DOMAIN_PREFIX }}
       TF_VAR_google_identity_provider_enabled: ${{ vars.GOOGLE_IDENTITY_PROVIDER_ENABLED || 'false' }}
       TF_VAR_ses_identity_arn: ${{ secrets.SES_IDENTITY_ARN }}
@@ -69,7 +71,9 @@ jobs:
         run: |
           set -euo pipefail
           scripts/build_lambda_packages.sh dist/lambda
+          scripts/build_customer_executor_package.sh dist/customer-executor/davdeploy-customer-executor.zip
           artifact_key="releases/serverless-control-plane/${GITHUB_SHA}/davdeploy-control-plane.zip"
+          customer_execution_artifact_key="releases/serverless-control-plane/${GITHUB_SHA}/davdeploy-customer-executor.zip"
           aws s3api put-object \
             --bucket "${TF_RELEASE_BUCKET}" \
             --key "${artifact_key}" \
@@ -78,8 +82,15 @@ jobs:
             --ssekms-key-id "${TF_RELEASE_KMS_KEY_ARN}" >/tmp/release-result.json
           version_id="$(jq -r '.VersionId // empty' /tmp/release-result.json)"
           test -n "${version_id}" || { echo "The release bucket must have versioning enabled" >&2; exit 1; }
+          aws s3api put-object \
+            --bucket "${TF_RELEASE_BUCKET}" \
+            --key "${customer_execution_artifact_key}" \
+            --body dist/customer-executor/davdeploy-customer-executor.zip \
+            --server-side-encryption aws:kms \
+            --ssekms-key-id "${TF_RELEASE_KMS_KEY_ARN}" >/dev/null
           echo "artifact_key=${artifact_key}" >>"${GITHUB_OUTPUT}"
           echo "artifact_version=${version_id}" >>"${GITHUB_OUTPUT}"
+          echo "customer_execution_artifact_key=${customer_execution_artifact_key}" >>"${GITHUB_OUTPUT}"
 
       - name: Initialize and create saved plan
         id: plan
@@ -88,6 +99,7 @@ jobs:
         env:
           TF_VAR_artifact_key: ${{ steps.release.outputs.artifact_key }}
           TF_VAR_artifact_object_version: ${{ steps.release.outputs.artifact_version }}
+          TF_VAR_customer_execution_artifact_key: ${{ steps.release.outputs.customer_execution_artifact_key }}
         run: |
           set -euo pipefail
           terraform init -input=false -reconfigure \

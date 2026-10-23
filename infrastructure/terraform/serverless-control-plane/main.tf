@@ -181,6 +181,21 @@ resource "aws_iam_role_policy" "api" {
         Resource = aws_lambda_function.policy.arn
       },
       {
+        Effect   = "Allow"
+        Action   = ["sts:AssumeRole"]
+        Resource = ["arn:aws:iam::*:role/davdeployDiscovery-*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["codebuild:BatchGetBuilds", "codebuild:StartBuild"]
+        Resource = aws_codebuild_project.customer_executor.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:CreateSecret", "secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue", "secretsmanager:PutSecretValue"]
+        Resource = ["arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:davdeploy/customer-connections/*"]
+      },
+      {
         Effect = "Allow"
         Action = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
         Resource = [
@@ -196,6 +211,95 @@ resource "aws_iam_role_policy" "api" {
       }]
     )
   })
+}
+
+resource "aws_iam_role" "customer_executor" {
+  name = "${local.name}-customer-executor"
+  assume_role_policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [{ Effect = "Allow", Principal = { Service = "codebuild.amazonaws.com" }, Action = "sts:AssumeRole" }]
+  })
+  tags = merge(local.common_tags, { Purpose = "bounded-customer-terraform-execution" })
+}
+
+resource "aws_iam_role_policy" "customer_executor" {
+  name = "bounded-customer-terraform-execution"
+  role = aws_iam_role.customer_executor.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["arn:aws:s3:::${var.artifact_bucket}/*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"]
+        Resource = ["arn:aws:s3:::${var.customer_execution_state_bucket}", "arn:aws:s3:::${var.customer_execution_state_bucket}/davdeploy/customer/*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:DescribeTable"]
+        Resource = "arn:aws:dynamodb:${var.region}:${data.aws_caller_identity.current.account_id}:table/${var.customer_execution_lock_table}"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:davdeploy/customer-connections/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sts:AssumeRole"]
+        Resource = "arn:aws:iam::*:role/davdeployExecution-*"
+      }
+    ]
+  })
+}
+
+resource "aws_codebuild_project" "customer_executor" {
+  name           = "${local.name}-customer-executor"
+  description    = "Runs only reviewed DavDeploy customer Terraform runner archives."
+  service_role   = aws_iam_role.customer_executor.arn
+  build_timeout  = 60
+  queued_timeout = 30
+
+  artifacts { type = "NO_ARTIFACTS" }
+
+  environment {
+    compute_type                = "BUILD_GENERAL1_SMALL"
+    image                       = "aws/codebuild/standard:7.0"
+    type                        = "LINUX_CONTAINER"
+    privileged_mode             = true
+    image_pull_credentials_type = "CODEBUILD"
+  }
+
+  source {
+    type      = "NO_SOURCE"
+    buildspec = <<-EOT
+      version: 0.2
+      phases:
+        install:
+          commands:
+            - test -n "$DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI"
+            - mkdir -p /tmp/davdeploy-executor
+            - aws s3 cp "$DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI" /tmp/davdeploy-executor/archive.zip --only-show-errors
+            - unzip -q /tmp/davdeploy-executor/archive.zip -d /tmp/davdeploy-executor/source
+            - export PATH="$PATH:/usr/local/bin"
+            - terraform version || (curl -fsSL -o /tmp/terraform.zip https://releases.hashicorp.com/terraform/1.14.7/terraform_1.14.7_linux_amd64.zip && unzip -q /tmp/terraform.zip -d /usr/local/bin)
+        build:
+          commands:
+            - cd /tmp/davdeploy-executor/source
+            - bash scripts/customer-workload-app-runner-pilot.sh "$DAVDEPLOY_EXECUTION_OPERATION"
+    EOT
+  }
+
+  tags = merge(local.common_tags, { Purpose = "bounded-customer-terraform-execution" })
 }
 
 resource "aws_iam_role" "policy" {
@@ -294,22 +398,32 @@ resource "aws_lambda_permission" "cognito_link" {
 
 locals {
   runtime_environment = {
-    DAVDEPLOY_HOSTED_MODE              = "true"
-    DAVDEPLOY_AUTO_MIGRATE             = "false"
-    DAVDEPLOY_AURORA_CLUSTER_ARN       = aws_rds_cluster.control_plane.arn
-    DAVDEPLOY_DATABASE_SECRET_ARN      = aws_rds_cluster.control_plane.master_user_secret[0].secret_arn
-    DAVDEPLOY_DATABASE_NAME            = var.database_name
-    DAVDEPLOY_ALLOWED_FRONTEND_ORIGINS = var.frontend_origin
-    DAVDEPLOY_JWKS_URL                 = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.identity.id}/.well-known/jwks.json"
-    DAVDEPLOY_OIDC_ISSUER              = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.identity.id}"
-    DAVDEPLOY_OIDC_AUDIENCE            = aws_cognito_user_pool_client.frontend.id
-    DAVDEPLOY_POLICY_FUNCTION_ARN      = aws_lambda_function.policy.arn
-    DAVDEPLOY_MODEL_PROVIDER           = "bedrock"
-    DAVDEPLOY_BEDROCK_MODEL_ID         = var.nova_model_id
-    DAVDEPLOY_EXECUTOR_MODE            = "embedded_fixture"
-    DAVDEPLOY_EMAIL_PROVIDER           = var.ses_identity_arn == "" ? "disabled" : "ses"
-    DAVDEPLOY_SES_FROM_ADDRESS         = var.ses_from_address
-    DAVDEPLOY_FRONTEND_ORIGIN          = var.frontend_origin
+    DAVDEPLOY_HOSTED_MODE                        = "true"
+    DAVDEPLOY_AUTO_MIGRATE                       = "false"
+    DAVDEPLOY_AURORA_CLUSTER_ARN                 = aws_rds_cluster.control_plane.arn
+    DAVDEPLOY_DATABASE_SECRET_ARN                = aws_rds_cluster.control_plane.master_user_secret[0].secret_arn
+    DAVDEPLOY_DATABASE_NAME                      = var.database_name
+    DAVDEPLOY_ALLOWED_FRONTEND_ORIGINS           = var.frontend_origin
+    DAVDEPLOY_JWKS_URL                           = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.identity.id}/.well-known/jwks.json"
+    DAVDEPLOY_OIDC_ISSUER                        = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.identity.id}"
+    DAVDEPLOY_OIDC_AUDIENCE                      = aws_cognito_user_pool_client.frontend.id
+    DAVDEPLOY_POLICY_FUNCTION_ARN                = aws_lambda_function.policy.arn
+    DAVDEPLOY_MODEL_PROVIDER                     = "bedrock"
+    DAVDEPLOY_BEDROCK_MODEL_ID                   = var.nova_model_id
+    DAVDEPLOY_EXECUTOR_MODE                      = "embedded_fixture"
+    DAVDEPLOY_EMAIL_PROVIDER                     = var.ses_identity_arn == "" ? "disabled" : "ses"
+    DAVDEPLOY_SES_FROM_ADDRESS                   = var.ses_from_address
+    DAVDEPLOY_FRONTEND_ORIGIN                    = var.frontend_origin
+    DAVDEPLOY_CONNECTION_SECRET_BACKEND          = "aws_secrets_manager"
+    DAVDEPLOY_CONNECTION_SECRET_PREFIX           = "davdeploy/customer-connections"
+    DAVDEPLOY_AWS_LIVE_DISCOVERY_ENABLED         = "true"
+    DAVDEPLOY_DISCOVERY_BROKER_ROLE_ARN          = aws_iam_role.api.arn
+    DAVDEPLOY_EXECUTION_BROKER_ROLE_ARN          = aws_iam_role.customer_executor.arn
+    DAVDEPLOY_AWS_CONNECTION_TEMPLATE_URL        = var.aws_connection_template_url
+    DAVDEPLOY_CUSTOMER_EXECUTOR_PROJECT          = aws_codebuild_project.customer_executor.name
+    DAVDEPLOY_CUSTOMER_EXECUTION_ARTIFACT_S3_URI = "s3://${var.artifact_bucket}/${var.customer_execution_artifact_key}"
+    DAVDEPLOY_CUSTOMER_EXECUTION_STATE_BUCKET    = var.customer_execution_state_bucket
+    DAVDEPLOY_CUSTOMER_EXECUTION_LOCK_TABLE      = var.customer_execution_lock_table
   }
 }
 
