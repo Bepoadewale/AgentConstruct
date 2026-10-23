@@ -421,6 +421,7 @@ locals {
     DAVDEPLOY_EXECUTION_BROKER_ROLE_ARN          = aws_iam_role.customer_executor.arn
     DAVDEPLOY_AWS_CONNECTION_TEMPLATE_URL        = var.aws_connection_template_url
     DAVDEPLOY_CUSTOMER_EXECUTOR_PROJECT          = aws_codebuild_project.customer_executor.name
+    DAVDEPLOY_CLOUD_EXECUTION_BACKEND            = "codebuild"
     DAVDEPLOY_CUSTOMER_EXECUTION_ARTIFACT_S3_URI = "s3://${var.artifact_bucket}/${var.customer_execution_artifact_key}"
     DAVDEPLOY_CUSTOMER_EXECUTION_STATE_BUCKET    = var.customer_execution_state_bucket
     DAVDEPLOY_CUSTOMER_EXECUTION_LOCK_TABLE      = var.customer_execution_lock_table

@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+import boto3
+
 
 @dataclass(frozen=True)
 class CloudExecutionResult:
@@ -104,7 +106,69 @@ class AppRunnerCloudExecutionAdapter:
         )
 
 
+class CodeBuildCloudExecutionAdapter:
+    """Submit one bounded execution archive to the isolated CodeBuild runner."""
+
+    required_environment = frozenset(
+        {
+            "AWS_REGION",
+            "EXPECTED_AWS_ACCOUNT_ID",
+            "TF_STATE_BUCKET",
+            "TF_LOCK_TABLE",
+            "DAVDEPLOY_CUSTOMER_CONNECTION_ID",
+            "DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN",
+            "DAVDEPLOY_EXTERNAL_ID_SECRET_ARN",
+            "DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI",
+            "DAVDEPLOY_EXECUTION_OPERATION",
+        }
+    )
+
+    def __init__(self, project_name: str | None = None, client=None):
+        self.project_name = project_name or os.getenv("DAVDEPLOY_CUSTOMER_EXECUTOR_PROJECT")
+        self.client = client or boto3.client("codebuild")
+
+    def execute(self, context: dict[str, object]) -> CloudExecutionResult:
+        environment = context.get("environment") or {}
+        if not self.project_name:
+            return DisabledCloudExecutionAdapter().execute(context)
+        if not isinstance(environment, dict) or not self.required_environment.issubset(environment):
+            return CloudExecutionResult(
+                state="FAILED",
+                operations=(),
+                outputs={},
+                failure_reason="Cloud execution environment is incomplete.",
+            )
+        overrides = [
+            {"name": key, "value": str(value), "type": "PLAINTEXT"}
+            for key, value in sorted(environment.items())
+            if isinstance(key, str) and isinstance(value, str)
+        ]
+        response = self.client.start_build(
+            projectName=self.project_name,
+            environmentVariablesOverride=overrides,
+        )
+        build = response["build"]
+        build_id = str(build["id"])
+        return CloudExecutionResult(
+            state="SUBMITTED",
+            operations=(
+                {
+                    "operation": str(environment["DAVDEPLOY_EXECUTION_OPERATION"]),
+                    "state": "SUBMITTED",
+                    "executor": "codebuild",
+                    "build_id": build_id,
+                },
+            ),
+            outputs={"codebuild_build_id": build_id, "codebuild_build_arn": build.get("arn")},
+        )
+
+
 def configured_cloud_execution_adapter() -> CloudExecutionAdapter:
+    if (
+        os.getenv("DAVDEPLOY_CLOUD_EXECUTION_COMMAND_ENABLED", "false").lower() == "true"
+        and os.getenv("DAVDEPLOY_CLOUD_EXECUTION_BACKEND", "") == "codebuild"
+    ):
+        return CodeBuildCloudExecutionAdapter()
     if os.getenv("DAVDEPLOY_CLOUD_EXECUTION_COMMAND_ENABLED", "false").lower() == "true":
         return AppRunnerCloudExecutionAdapter()
     return DisabledCloudExecutionAdapter()

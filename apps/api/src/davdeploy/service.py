@@ -3427,6 +3427,39 @@ class ProductService:
                         "Terraform contract account does not match the verified customer connection."
                     )
                     state = "BLOCKED_ACCOUNT_GUARD"
+        execution_environment: dict[str, str] = {}
+        if connection and connection.execution_role_arn and connection.external_id_secret_ref:
+            execution_environment = {
+                "AWS_REGION": str(region or ""),
+                "EXPECTED_AWS_ACCOUNT_ID": str(account_id or ""),
+                "TF_STATE_BUCKET": os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_STATE_BUCKET", ""),
+                "TF_LOCK_TABLE": os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_LOCK_TABLE", ""),
+                "DAVDEPLOY_CUSTOMER_CONNECTION_ID": connection.id,
+                "DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN": connection.execution_role_arn,
+                "DAVDEPLOY_EXTERNAL_ID_SECRET_ARN": connection.external_id_secret_ref,
+                "DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN": (
+                    f"arn:aws:iam::{account_id}:role/davdeployAppRunnerEcr-{connection.id}"
+                ),
+                "DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN": (
+                    f"arn:aws:iam::{account_id}:role/davdeployAppRunnerRuntime-{connection.id}"
+                ),
+                "DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI": os.getenv(
+                    "DAVDEPLOY_CUSTOMER_EXECUTION_ARTIFACT_S3_URI", ""
+                ),
+                "DAVDEPLOY_EXECUTION_OPERATION": "apply-foundation",
+                "CONFIRM_CUSTOMER_WORKLOAD_FOUNDATION_APPLY": "APPLY_CUSTOMER_WORKLOAD_FOUNDATION",
+                "DAVDEPLOY_CUSTOMER_PLAN_DIGEST": revision.content_digest,
+            }
+            required_runner_values = (
+                "AWS_REGION",
+                "EXPECTED_AWS_ACCOUNT_ID",
+                "TF_STATE_BUCKET",
+                "TF_LOCK_TABLE",
+                "DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI",
+            )
+            if not all(execution_environment[key] for key in required_runner_values):
+                blockers.append("Customer execution runner configuration is incomplete.")
+                state = "BLOCKED_CLOUD_EXECUTION_RUNTIME_NOT_CONFIGURED"
         if mode == "AUTHENTICATED_APP_RUNNER_APPLY":
             if not cloud_apply_env or not runtime_enabled or not confirmation_ok:
                 blockers.append(
@@ -3485,6 +3518,7 @@ class ProductService:
             "confirmation_ok": confirmation_ok,
             "cloud_connection_id": connection_id or None,
             "execution_role_configured": bool(connection and connection.execution_role_arn),
+            "execution_environment": execution_environment,
             "blockers": blockers,
             "boundary": (
                 "This run records a guarded execution request. It does not deploy unless the "
