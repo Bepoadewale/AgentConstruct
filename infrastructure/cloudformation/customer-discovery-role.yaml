@@ -115,6 +115,7 @@ Resources:
                   - apprunner:DescribeVpcConnector
                   - apprunner:ListServices
                   - apprunner:ListVpcConnectors
+                  - apprunner:ListTagsForResource
                   - ec2:Describe*
                   - ecr:DescribeRepositories
                   - ecr:ListImages
@@ -122,6 +123,7 @@ Resources:
                   - logs:DescribeLogGroups
                   - logs:GetLogEvents
                   - logs:FilterLogEvents
+                  - logs:ListTagsForResource
                 Resource: "*"
               # Terraform's AWS provider creates these resources before issuing
               # its separate tag call. The trusted role and fixed runner keep
