@@ -118,6 +118,7 @@ Resources:
                   - ec2:Describe*
                   - ecr:DescribeRepositories
                   - ecr:ListImages
+                  - ecr:ListTagsForResource
                   - logs:DescribeLogGroups
                   - logs:GetLogEvents
                   - logs:FilterLogEvents
@@ -156,6 +157,16 @@ Resources:
                   StringEquals:
                     aws:RequestTag/ManagedBy: davdeploy
                     aws:RequestTag/ConnectionId: !Ref ConnectionId
+              - Sid: ReconcileOnlyTaggedCustomerWorkloadResources
+                Effect: Allow
+                Action:
+                  - ec2:ModifyVpcAttribute
+                  - logs:PutRetentionPolicy
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/ManagedBy: davdeploy
+                    aws:ResourceTag/ConnectionId: !Ref ConnectionId
               - Sid: DeleteOnlyTaggedCustomerWorkloadResources
                 Effect: Allow
                 Action:
