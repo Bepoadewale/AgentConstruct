@@ -163,6 +163,7 @@ Resources:
                 Effect: Allow
                 Action:
                   - ec2:ModifyVpcAttribute
+                  - ec2:RevokeSecurityGroupEgress
                   - logs:PutRetentionPolicy
                 Resource: "*"
                 Condition:
