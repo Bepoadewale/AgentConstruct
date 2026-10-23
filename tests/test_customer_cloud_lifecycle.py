@@ -67,6 +67,9 @@ def test_customer_cloudformation_contract_keeps_execution_separate_from_discover
     execution = template.split("  ExecutionRole:", 1)[1].split("  AppRunnerEcrAccessRole:", 1)[0]
     assert "davdeployBoundedAppRunnerExecution" in execution
     assert "iam:PassRole" in execution
+    assert "CreateBoundedCustomerWorkloadResources" in execution
+    assert "TagNewCustomerWorkloadResources" in execution
+    assert "aws:RequestedRegion: !Ref AWS::Region" in execution
     assert "aws:RequestTag/ConnectionId" in execution
     assert "aws:ResourceTag/ConnectionId" in execution
     assert "sts:ExternalId" in execution
