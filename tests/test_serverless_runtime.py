@@ -250,6 +250,12 @@ def test_serverless_stack_uses_network_independent_bounded_fixture_executor():
     assert 'DAVDEPLOY_EXECUTOR_MODE="embedded_fixture"' in terraform.replace(" ", "")
 
 
+def test_serverless_stack_delivers_minimal_worker_wakeups_through_sqs():
+    terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
+    assert "DAVDEPLOY_WORKER_QUEUE_URL" in terraform
+    assert '"sqs:SendMessage"' in terraform
+
+
 def test_serverless_stack_scopes_invitation_email_to_the_verified_ses_identity():
     terraform = (ROOT / "infrastructure/terraform/serverless-control-plane/main.tf").read_text()
     assert 'Action   = ["ses:SendEmail"]' in terraform
