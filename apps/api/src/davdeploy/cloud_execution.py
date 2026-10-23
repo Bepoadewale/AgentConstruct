@@ -120,6 +120,8 @@ class CodeBuildCloudExecutionAdapter:
             "DAVDEPLOY_EXTERNAL_ID_SECRET_ARN",
             "DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI",
             "DAVDEPLOY_EXECUTION_OPERATION",
+            "DAVDEPLOY_EXECUTION_RUN_ID",
+            "DAVDEPLOY_EXECUTION_RESULT_S3_URI",
         }
     )
 

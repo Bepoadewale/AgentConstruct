@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from httpx import HTTPError
 from opentelemetry import trace
 from sqlalchemy import select
@@ -2519,7 +2520,7 @@ class ProductService:
             {
                 "revision_id": revision.id,
                 "digest": revision.content_digest,
-                "state": state,
+                "state": publication.state,
                 "boundary": "local fixture PR/check state only; no GitHub write, merge or deployment",
             },
         )
@@ -3277,6 +3278,71 @@ class ProductService:
         )
         self.db.add(stored)
         self.db.flush()
+        if stored.state == "AUTHENTICATED_PLAN_ALLOWED_NOT_EXECUTED":
+            connection_id = str((revision.content.get("target") or {}).get("connection_id") or "")
+            connection = self._cloud_connection(principal, connection_id) if connection_id else None
+            runner_bucket = os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_STATE_BUCKET", "")
+            runner_artifact = os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_ARTIFACT_S3_URI", "")
+            runtime_enabled = (
+                os.getenv("DAVDEPLOY_ENABLE_APP_RUNNER_EXECUTION", "").lower() == "true"
+                and os.getenv("DAVDEPLOY_CLOUD_EXECUTION_COMMAND_ENABLED", "").lower() == "true"
+            )
+            if not connection or connection.setup_state != "VERIFIED" or not connection.execution_role_arn:
+                stored.state = "BLOCKED_CLOUD_CONNECTION_NOT_VERIFIED"
+                stored.evidence = {**stored.evidence, "blockers": ["Authenticated Terraform plan requires a verified customer connection with an execution role."]}
+            elif not connection.external_id_secret_ref or not runner_bucket or not runner_artifact or not runtime_enabled:
+                stored.state = "BLOCKED_CLOUD_EXECUTION_RUNTIME_NOT_CONFIGURED"
+                stored.evidence = {**stored.evidence, "blockers": ["Authenticated Terraform plan runner configuration is incomplete or disabled."]}
+            else:
+                plan_run = CloudExecutionRun(
+                    organization_id=principal.organization_id,
+                    revision_id=revision.id,
+                    project_id=infrastructure_plan.project_id,
+                    terraform_render_id=render.id if render else None,
+                    preflight_id=preflight.id if preflight else None,
+                    terraform_plan_review_id=stored.id,
+                    profile="aws-app-runner",
+                    state="SUBMITTING",
+                    mode="AUTHENTICATED_TERRAFORM_PLAN",
+                    command={"operation": "plan", "artifact_bound_apply": True},
+                    evidence={},
+                    outputs={"status": "submitting", "resources_created": []},
+                    content_digest=revision.content_digest,
+                    requested_by_subject=principal.subject,
+                )
+                self.db.add(plan_run)
+                self.db.flush()
+                execution_environment = {
+                    "AWS_REGION": str(region or connection.region),
+                    "EXPECTED_AWS_ACCOUNT_ID": str(connection.account_id),
+                    "TF_STATE_BUCKET": runner_bucket,
+                    "TF_LOCK_TABLE": os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_LOCK_TABLE", ""),
+                    "DAVDEPLOY_CUSTOMER_CONNECTION_ID": connection.id,
+                    "DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN": connection.execution_role_arn,
+                    "DAVDEPLOY_EXTERNAL_ID_SECRET_ARN": connection.external_id_secret_ref,
+                    "DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN": f"arn:aws:iam::{connection.account_id}:role/davdeployAppRunnerEcr-{connection.id}",
+                    "DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN": f"arn:aws:iam::{connection.account_id}:role/davdeployAppRunnerRuntime-{connection.id}",
+                    "DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI": runner_artifact,
+                    "DAVDEPLOY_EXECUTION_OPERATION": "plan",
+                    "DAVDEPLOY_EXECUTION_RUN_ID": plan_run.id,
+                    "DAVDEPLOY_EXECUTION_RESULT_S3_URI": f"s3://{runner_bucket}/davdeploy/customer/{connection.id}/runs/{plan_run.id}/result.json",
+                    "DAVDEPLOY_CUSTOMER_PLAN_DIGEST": revision.content_digest,
+                }
+                if not execution_environment["TF_LOCK_TABLE"]:
+                    stored.state = "BLOCKED_CLOUD_EXECUTION_RUNTIME_NOT_CONFIGURED"
+                    stored.evidence = {**stored.evidence, "blockers": ["Customer execution lock table is not configured."]}
+                    plan_run.state = "BLOCKED_CLOUD_EXECUTION_RUNTIME_NOT_CONFIGURED"
+                else:
+                    plan_run.evidence = {
+                        "execution_environment": execution_environment,
+                        "result_s3_uri": execution_environment["DAVDEPLOY_EXECUTION_RESULT_S3_URI"],
+                        "boundary": "A bounded runner may generate a Terraform plan artifact only. It cannot apply this request.",
+                    }
+                    result = self.cloud_execution.execute({"run_id": plan_run.id, "environment": execution_environment})
+                    plan_run.state = result.state
+                    plan_run.outputs = {**plan_run.outputs, **result.outputs, "operations": list(result.operations), "failure_reason": result.failure_reason}
+                    stored.state = "AUTHENTICATED_PLAN_SUBMITTED" if result.state == "SUBMITTED" else "BLOCKED_CLOUD_EXECUTION_RUNTIME_NOT_CONFIGURED"
+                    stored.evidence = {**stored.evidence, "execution_run_id": plan_run.id, "runner_state": result.state}
         self.audit(
             principal,
             "terraform.plan_only_review_recorded",
@@ -3384,10 +3450,7 @@ class ProductService:
         if plan_review is None:
             blockers.append("Record Terraform plan-only review first.")
             state = "BLOCKED_TERRAFORM_PLAN_REVIEW_REQUIRED"
-        elif plan_review.state not in {
-            "LOCAL_CONTRACT_PLAN_REVIEWED",
-            "AUTHENTICATED_PLAN_ALLOWED_NOT_EXECUTED",
-        }:
+        elif plan_review.state not in {"LOCAL_CONTRACT_PLAN_REVIEWED", "AUTHENTICATED_PLAN_REVIEWED"}:
             blockers.append(f"Terraform plan review is {plan_review.state}.")
             state = "BLOCKED_TERRAFORM_PLAN_REVIEW"
         if expected_account_id and account_id not in {
@@ -3428,6 +3491,10 @@ class ProductService:
                         "Terraform contract account does not match the verified customer connection."
                     )
                     state = "BLOCKED_ACCOUNT_GUARD"
+                real_plan_artifact = (plan_review.evidence or {}).get("real_plan_artifact") or {}
+                if not real_plan_artifact.get("saved_plan_s3_uri") or not real_plan_artifact.get("saved_plan_sha256"):
+                    blockers.append("Authenticated execution requires a reviewed saved Terraform plan artifact.")
+                    state = "BLOCKED_TERRAFORM_PLAN_ARTIFACT_REQUIRED"
         execution_environment: dict[str, str] = {}
         if connection and connection.execution_role_arn and connection.external_id_secret_ref:
             execution_environment = {
@@ -3447,8 +3514,9 @@ class ProductService:
                 "DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI": os.getenv(
                     "DAVDEPLOY_CUSTOMER_EXECUTION_ARTIFACT_S3_URI", ""
                 ),
-                "DAVDEPLOY_EXECUTION_OPERATION": "apply-foundation",
-                "CONFIRM_CUSTOMER_WORKLOAD_FOUNDATION_APPLY": "APPLY_CUSTOMER_WORKLOAD_FOUNDATION",
+                "DAVDEPLOY_EXECUTION_OPERATION": "apply-saved-plan",
+                "DAVDEPLOY_EXECUTION_SAVED_PLAN_S3_URI": str(real_plan_artifact.get("saved_plan_s3_uri") if mode == "AUTHENTICATED_APP_RUNNER_APPLY" else ""),
+                "DAVDEPLOY_EXECUTION_SAVED_PLAN_SHA256": str(real_plan_artifact.get("saved_plan_sha256") if mode == "AUTHENTICATED_APP_RUNNER_APPLY" else ""),
                 "DAVDEPLOY_CUSTOMER_PLAN_DIGEST": revision.content_digest,
             }
             required_runner_values = (
@@ -3546,6 +3614,13 @@ class ProductService:
         )
         self.db.add(run)
         self.db.flush()
+        if execution_environment:
+            execution_environment["DAVDEPLOY_EXECUTION_RUN_ID"] = run.id
+            execution_environment["DAVDEPLOY_EXECUTION_RESULT_S3_URI"] = (
+                f"s3://{execution_environment['TF_STATE_BUCKET']}/davdeploy/customer/"
+                f"{execution_environment['DAVDEPLOY_CUSTOMER_CONNECTION_ID']}/runs/{run.id}/result.json"
+            )
+            run.evidence = {**run.evidence, "execution_environment": execution_environment}
         self.audit(
             principal,
             "cloud_execution.run_requested",
@@ -3661,12 +3736,46 @@ class ProductService:
         status = str(build.get("buildStatus") or "IN_PROGRESS")
         if status in {"IN_PROGRESS", "QUEUED"}:
             return False
-        run.state = "SUCCEEDED_AWAITING_OBSERVATION" if status == "SUCCEEDED" else "FAILED"
+        artifact: dict[str, Any] = {}
+        artifact_error: str | None = None
+        result_uri = str((run.evidence or {}).get("result_s3_uri") or "")
+        if status == "SUCCEEDED":
+            try:
+                if not result_uri.startswith("s3://"):
+                    raise ValueError("runner result artifact URI is missing")
+                bucket, key = result_uri[5:].split("/", 1)
+                payload = boto3.client("s3").get_object(Bucket=bucket, Key=key)["Body"].read()
+                artifact = json.loads(payload.decode("utf-8"))
+                if artifact.get("run_id") != run.id or artifact.get("status") != "SUCCEEDED":
+                    raise ValueError("runner result artifact does not match the execution run")
+            except (BotoCoreError, ClientError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
+                # Artifact integrity failure must never become deployment success.
+                artifact_error = str(error)
+        if status != "SUCCEEDED" or artifact_error:
+            run.state = "FAILED"
+        elif run.mode == "AUTHENTICATED_TERRAFORM_PLAN":
+            review = self.db.get(TerraformPlanReview, run.terraform_plan_review_id)
+            detail = artifact.get("detail") or {}
+            if not review or not detail.get("saved_plan_s3_uri") or not detail.get("saved_plan_sha256"):
+                run.state = "FAILED"
+                artifact_error = "authenticated plan completion did not contain a saved plan artifact"
+            else:
+                review.state = "AUTHENTICATED_PLAN_REVIEWED"
+                review.evidence = {
+                    **(review.evidence or {}),
+                    "real_plan_artifact": detail,
+                    "runner_result_s3_uri": result_uri,
+                    "reviewed_at": datetime.now(UTC).isoformat(),
+                }
+                run.state = "AUTHENTICATED_PLAN_REVIEWED"
+        else:
+            run.state = "SUCCEEDED_AWAITING_OBSERVATION"
         run.outputs = {
             **(run.outputs or {}),
             "codebuild_status": status,
             "codebuild_completed_at": str(build.get("buildComplete") or ""),
-            "failure_reason": None if status == "SUCCEEDED" else "Bounded CodeBuild runner failed.",
+            "runner_artifact": artifact or None,
+            "failure_reason": artifact_error or (None if status == "SUCCEEDED" else "Bounded CodeBuild runner failed."),
         }
         self.audit(
             Principal("system-cloud-worker", run.organization_id, "operator"),

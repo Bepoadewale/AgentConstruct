@@ -45,6 +45,18 @@ variable "customer_execution_artifact_key" {
   description = "Immutable S3 key for the reviewed customer execution runner archive."
 }
 
+variable "customer_execution_kms_key_arns" {
+  type        = list(string)
+  description = "Customer-managed KMS keys the isolated runner needs to decrypt its reviewed release and result artifacts."
+  default     = []
+}
+
+variable "enable_customer_cloud_execution" {
+  type        = bool
+  description = "Explicitly enable bounded authenticated customer plan/apply submissions. Defaults to false."
+  default     = false
+}
+
 variable "aws_connection_template_url" {
   type        = string
   description = "HTTPS URL for the reviewed customer AWS connection CloudFormation template."

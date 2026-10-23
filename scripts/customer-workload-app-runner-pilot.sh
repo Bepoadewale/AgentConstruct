@@ -18,6 +18,8 @@ require DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN
 require DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN
 require DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN
 require DAVDEPLOY_EXTERNAL_ID_SECRET_ARN
+require DAVDEPLOY_EXECUTION_RUN_ID
+require DAVDEPLOY_EXECUTION_RESULT_S3_URI
 
 connection_id="${DAVDEPLOY_CUSTOMER_CONNECTION_ID}"
 service_name="${DAVDEPLOY_CUSTOMER_SERVICE_NAME:-davdeploy-${connection_id}-workload}"
@@ -30,6 +32,11 @@ source_commit="${DAVDEPLOY_CUSTOMER_SOURCE_COMMIT:-unknown}"
 plan_digest="${DAVDEPLOY_CUSTOMER_PLAN_DIGEST:-customer-workload-pilot-local-approval}"
 image_identifier="${DAVDEPLOY_CUSTOMER_IMAGE_IDENTIFIER:-placeholder.invalid/davdeploy-customer-workload:unset}"
 enable_service="${DAVDEPLOY_ENABLE_CUSTOMER_SERVICE:-false}"
+result_uri="${DAVDEPLOY_EXECUTION_RESULT_S3_URI}"
+saved_plan_uri="${DAVDEPLOY_EXECUTION_SAVED_PLAN_S3_URI:-${result_uri%/result.json}/terraform.tfplan}"
+saved_plan_sha256="${DAVDEPLOY_EXECUTION_SAVED_PLAN_SHA256:-}"
+result_file="/tmp/davdeploy-execution-result.json"
+saved_plan_file="/tmp/davdeploy-${DAVDEPLOY_EXECUTION_RUN_ID}.tfplan"
 
 aws_args=()
 if [[ -n "${AWS_PROFILE:-}" ]]; then
@@ -73,6 +80,27 @@ tf_output() {
   terraform -chdir="$root" output -json
 }
 
+write_result() {
+  local phase="$1"
+  local status="$2"
+  local detail_file="${3:-}"
+  local detail='{}'
+  if [[ -n "$detail_file" && -f "$detail_file" ]]; then
+    detail="$(cat "$detail_file")"
+  fi
+  jq -n \
+    --arg run_id "$DAVDEPLOY_EXECUTION_RUN_ID" \
+    --arg phase "$phase" \
+    --arg status "$status" \
+    --arg connection_id "$connection_id" \
+    --arg digest "$plan_digest" \
+    --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --argjson detail "$detail" \
+    '{schema_version:"davdeploy.customer_execution_result.v1",run_id:$run_id,phase:$phase,status:$status,connection_id:$connection_id,plan_digest:$digest,generated_at:$generated_at,detail:$detail}' \
+    >"$result_file"
+  aws s3 cp "$result_file" "$result_uri" --only-show-errors
+}
+
 service_arn() {
   terraform -chdir="$root" output -raw app_runner_service_arn
 }
@@ -84,14 +112,38 @@ service_url() {
 case "$operation" in
   plan)
     tf_init
-    terraform -chdir="$root" plan -input=false "${tf_vars[@]}"
+    terraform -chdir="$root" plan -input=false -out="$saved_plan_file" "${tf_vars[@]}"
+    plan_sha256="$(shasum -a 256 "$saved_plan_file" | awk '{print $1}')"
+    terraform -chdir="$root" show -json "$saved_plan_file" | jq '{
+      format_version,
+      terraform_version,
+      resource_changes: [(.resource_changes // [])[] | {
+        address,
+        mode,
+        type,
+        name,
+        provider_name,
+        actions: .change.actions
+      }]
+    }' >/tmp/davdeploy-plan-summary.json
+    aws s3 cp "$saved_plan_file" "$saved_plan_uri" --only-show-errors
+    jq -n --arg saved_plan_s3_uri "$saved_plan_uri" --arg saved_plan_sha256 "$plan_sha256" --slurpfile summary /tmp/davdeploy-plan-summary.json \
+      '{saved_plan_s3_uri:$saved_plan_s3_uri,saved_plan_sha256:$saved_plan_sha256,plan_summary:$summary[0]}' \
+      >/tmp/davdeploy-plan-result.json
+    write_result "plan" "SUCCEEDED" /tmp/davdeploy-plan-result.json
     ;;
-  apply-foundation)
-    [[ "${CONFIRM_CUSTOMER_WORKLOAD_FOUNDATION_APPLY:-}" == "APPLY_CUSTOMER_WORKLOAD_FOUNDATION" ]] || {
-      echo "Set CONFIRM_CUSTOMER_WORKLOAD_FOUNDATION_APPLY=APPLY_CUSTOMER_WORKLOAD_FOUNDATION after reviewing the plan" >&2; exit 2;
+  apply-saved-plan)
+    [[ -n "$saved_plan_sha256" ]] || {
+      echo "DAVDEPLOY_EXECUTION_SAVED_PLAN_SHA256 is required for an artifact-bound apply" >&2; exit 2;
     }
     tf_init
-    terraform -chdir="$root" apply -input=false -auto-approve "${tf_vars[@]}"
+    aws s3 cp "$saved_plan_uri" "$saved_plan_file" --only-show-errors
+    echo "${saved_plan_sha256}  ${saved_plan_file}" | shasum -a 256 --check --status || {
+      echo "Saved Terraform plan digest mismatch" >&2; exit 3;
+    }
+    terraform -chdir="$root" apply -input=false "$saved_plan_file"
+    tf_output >/tmp/davdeploy-apply-outputs.json
+    write_result "apply" "SUCCEEDED" /tmp/davdeploy-apply-outputs.json
     ;;
   build-push-image)
     require DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_URL
@@ -109,15 +161,6 @@ case "$operation" in
       -f "${DAVDEPLOY_CUSTOMER_SOURCE_DIR}/control-plane/Dockerfile" \
       "${DAVDEPLOY_CUSTOMER_SOURCE_DIR}"
     printf '%s:%s\n' "$repo" "$tag"
-    ;;
-  apply-service)
-    [[ "${enable_service}" == "true" ]] || { echo "Set DAVDEPLOY_ENABLE_CUSTOMER_SERVICE=true" >&2; exit 2; }
-    [[ "${image_identifier}" != "placeholder.invalid/davdeploy-customer-workload:unset" ]] || { echo "Set DAVDEPLOY_CUSTOMER_IMAGE_IDENTIFIER" >&2; exit 2; }
-    [[ "${CONFIRM_CUSTOMER_WORKLOAD_SERVICE_APPLY:-}" == "APPLY_CUSTOMER_WORKLOAD_SERVICE" ]] || {
-      echo "Set CONFIRM_CUSTOMER_WORKLOAD_SERVICE_APPLY=APPLY_CUSTOMER_WORKLOAD_SERVICE after reviewing the plan" >&2; exit 2;
-    }
-    tf_init
-    terraform -chdir="$root" apply -input=false -auto-approve "${tf_vars[@]}"
     ;;
   wait-ready)
     tf_init
@@ -170,7 +213,7 @@ case "$operation" in
     tf_output
     ;;
   *)
-    echo "usage: $0 {plan|apply-foundation|build-push-image|apply-service|wait-ready|smoke|destroy|verify-absent|output}" >&2
+    echo "usage: $0 {plan|apply-saved-plan|build-push-image|wait-ready|smoke|destroy|verify-absent|output}" >&2
     exit 2
     ;;
 esac

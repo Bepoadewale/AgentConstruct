@@ -192,6 +192,11 @@ resource "aws_iam_role_policy" "api" {
       },
       {
         Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["arn:aws:s3:::${var.customer_execution_state_bucket}/davdeploy/customer/*"]
+      },
+      {
+        Effect   = "Allow"
         Action   = ["secretsmanager:CreateSecret", "secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue", "secretsmanager:PutSecretValue"]
         Resource = ["arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:davdeploy/customer-connections/*"]
       },
@@ -257,6 +262,11 @@ resource "aws_iam_role_policy" "customer_executor" {
         Effect   = "Allow"
         Action   = ["sts:AssumeRole"]
         Resource = "arn:aws:iam::*:role/davdeployExecution-*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"]
+        Resource = var.customer_execution_kms_key_arns
       }
     ]
   })
@@ -422,6 +432,10 @@ locals {
     DAVDEPLOY_AWS_CONNECTION_TEMPLATE_URL        = var.aws_connection_template_url
     DAVDEPLOY_CUSTOMER_EXECUTOR_PROJECT          = aws_codebuild_project.customer_executor.name
     DAVDEPLOY_CLOUD_EXECUTION_BACKEND            = "codebuild"
+    DAVDEPLOY_CLOUD_EXECUTION_COMMAND_ENABLED    = tostring(var.enable_customer_cloud_execution)
+    DAVDEPLOY_ENABLE_APP_RUNNER_EXECUTION        = tostring(var.enable_customer_cloud_execution)
+    ALLOW_CLOUD_PLAN                             = tostring(var.enable_customer_cloud_execution)
+    ALLOW_CLOUD_APPLY                            = tostring(var.enable_customer_cloud_execution)
     DAVDEPLOY_CUSTOMER_EXECUTION_ARTIFACT_S3_URI = "s3://${var.artifact_bucket}/${var.customer_execution_artifact_key}"
     DAVDEPLOY_CUSTOMER_EXECUTION_STATE_BUCKET    = var.customer_execution_state_bucket
     DAVDEPLOY_CUSTOMER_EXECUTION_LOCK_TABLE      = var.customer_execution_lock_table
