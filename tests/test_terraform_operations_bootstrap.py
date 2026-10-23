@@ -62,4 +62,6 @@ def test_plan_workflow_uses_one_production_cognito_domain() -> None:
     )
 
     assert "TF_VAR_cognito_domain_prefix: ${{ vars.COGNITO_DOMAIN_PREFIX }}" in workflow
+    assert "TF_VAR_aws_connection_template_url: ${{ vars.AWS_CONNECTION_TEMPLATE_URL }}" in workflow
+    assert "TF_VAR_aws_connection_template_url; do" in workflow
     assert "inputs.environment" not in workflow

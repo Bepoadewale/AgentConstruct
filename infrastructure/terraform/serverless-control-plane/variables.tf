@@ -59,8 +59,7 @@ variable "enable_customer_cloud_execution" {
 
 variable "aws_connection_template_url" {
   type        = string
-  description = "HTTPS URL for the reviewed customer AWS connection CloudFormation template."
-  default     = "https://raw.githubusercontent.com/Bepoadewale/davdeploy/main/infrastructure/cloudformation/customer-discovery-role.yaml"
+  description = "Immutable public S3 HTTPS URL for the reviewed customer AWS connection CloudFormation template. Supplied only by the protected Terraform-plan environment."
 }
 
 variable "cognito_domain_prefix" {
