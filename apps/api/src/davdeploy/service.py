@@ -3178,11 +3178,17 @@ class ProductService:
         )
         state = "PLAN_REVIEW_READY"
         blockers: list[str] = []
+        authenticated_mode = mode in {
+            "AUTHENTICATED_TERRAFORM_PLAN",
+            "AUTHENTICATED_TERRAFORM_DESTROY_PLAN",
+        }
+        destroy_review = mode == "AUTHENTICATED_TERRAFORM_DESTROY_PLAN"
         evidence: dict[str, Any] = {
             "mode": mode,
             "profile": "aws-app-runner",
             "apply_available": False,
-            "requested_authenticated_plan": mode == "AUTHENTICATED_TERRAFORM_PLAN",
+            "requested_authenticated_plan": authenticated_mode,
+            "requested_destroy_plan": destroy_review,
             "execution_boundary": (
                 "Plan-only review evidence. Terraform apply/destroy is unavailable and no AWS "
                 "resource creation is reachable from this endpoint."
@@ -3238,7 +3244,7 @@ class ProductService:
             evidence["preflight"] = self._cloud_readiness_preflight_payload(preflight)
         else:
             evidence["preflight"] = self._cloud_readiness_preflight_payload(preflight)
-        if mode == "AUTHENTICATED_TERRAFORM_PLAN":
+        if authenticated_mode:
             env_allowed = os.getenv("ALLOW_CLOUD_PLAN", "").lower() == "true"
             if not allow_cloud_plan or not env_allowed:
                 state = "BLOCKED_CLOUD_PLAN_NOT_ALLOWED"
@@ -3255,8 +3261,8 @@ class ProductService:
             )
         if state == "PLAN_REVIEW_READY":
             state = (
-                "AUTHENTICATED_PLAN_ALLOWED_NOT_EXECUTED"
-                if mode == "AUTHENTICATED_TERRAFORM_PLAN"
+                ("AUTHENTICATED_DESTROY_PLAN_ALLOWED_NOT_EXECUTED" if destroy_review else "AUTHENTICATED_PLAN_ALLOWED_NOT_EXECUTED")
+                if authenticated_mode
                 else "LOCAL_CONTRACT_PLAN_REVIEWED"
             )
             evidence["result"] = (
@@ -3278,7 +3284,10 @@ class ProductService:
         )
         self.db.add(stored)
         self.db.flush()
-        if stored.state == "AUTHENTICATED_PLAN_ALLOWED_NOT_EXECUTED":
+        if stored.state in {
+            "AUTHENTICATED_PLAN_ALLOWED_NOT_EXECUTED",
+            "AUTHENTICATED_DESTROY_PLAN_ALLOWED_NOT_EXECUTED",
+        }:
             connection_id = str((revision.content.get("target") or {}).get("connection_id") or "")
             connection = self._cloud_connection(principal, connection_id) if connection_id else None
             runner_bucket = os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_STATE_BUCKET", "")
@@ -3303,8 +3312,11 @@ class ProductService:
                     terraform_plan_review_id=stored.id,
                     profile="aws-app-runner",
                     state="SUBMITTING",
-                    mode="AUTHENTICATED_TERRAFORM_PLAN",
-                    command={"operation": "plan", "artifact_bound_apply": True},
+                    mode=mode,
+                    command={
+                        "operation": "destroy-plan" if destroy_review else "plan",
+                        "artifact_bound_apply": True,
+                    },
                     evidence={},
                     outputs={"status": "submitting", "resources_created": []},
                     content_digest=revision.content_digest,
@@ -3323,7 +3335,7 @@ class ProductService:
                     "DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN": f"arn:aws:iam::{connection.account_id}:role/davdeployAppRunnerEcr-{connection.id}",
                     "DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN": f"arn:aws:iam::{connection.account_id}:role/davdeployAppRunnerRuntime-{connection.id}",
                     "DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI": runner_artifact,
-                    "DAVDEPLOY_EXECUTION_OPERATION": "plan",
+                    "DAVDEPLOY_EXECUTION_OPERATION": "destroy-plan" if destroy_review else "plan",
                     "DAVDEPLOY_EXECUTION_RUN_ID": plan_run.id,
                     "DAVDEPLOY_EXECUTION_RESULT_S3_URI": f"s3://{runner_bucket}/davdeploy/customer/{connection.id}/runs/{plan_run.id}/result.json",
                     "DAVDEPLOY_CUSTOMER_PLAN_DIGEST": revision.content_digest,
@@ -3341,7 +3353,13 @@ class ProductService:
                     result = self.cloud_execution.execute({"run_id": plan_run.id, "environment": execution_environment})
                     plan_run.state = result.state
                     plan_run.outputs = {**plan_run.outputs, **result.outputs, "operations": list(result.operations), "failure_reason": result.failure_reason}
-                    stored.state = "AUTHENTICATED_PLAN_SUBMITTED" if result.state == "SUBMITTED" else "BLOCKED_CLOUD_EXECUTION_RUNTIME_NOT_CONFIGURED"
+                    stored.state = (
+                        "AUTHENTICATED_DESTROY_PLAN_SUBMITTED"
+                        if destroy_review and result.state == "SUBMITTED"
+                        else "AUTHENTICATED_PLAN_SUBMITTED"
+                        if result.state == "SUBMITTED"
+                        else "BLOCKED_CLOUD_EXECUTION_RUNTIME_NOT_CONFIGURED"
+                    )
                     stored.evidence = {**stored.evidence, "execution_run_id": plan_run.id, "runner_state": result.state}
         self.audit(
             principal,
@@ -3447,10 +3465,14 @@ class ProductService:
         elif preflight.state != "READY_FOR_AUTHORIZED_CLOUD_PLAN":
             blockers.append(f"Cloud-readiness preflight is {preflight.state}.")
             state = "BLOCKED_PREFLIGHT"
+        destroy_mode = mode == "AUTHENTICATED_APP_RUNNER_DESTROY"
+        expected_review_state = (
+            "AUTHENTICATED_DESTROY_PLAN_REVIEWED" if destroy_mode else "AUTHENTICATED_PLAN_REVIEWED"
+        )
         if plan_review is None:
             blockers.append("Record Terraform plan-only review first.")
             state = "BLOCKED_TERRAFORM_PLAN_REVIEW_REQUIRED"
-        elif plan_review.state not in {"LOCAL_CONTRACT_PLAN_REVIEWED", "AUTHENTICATED_PLAN_REVIEWED"}:
+        elif plan_review.state not in ({expected_review_state} if destroy_mode else {"LOCAL_CONTRACT_PLAN_REVIEWED", "AUTHENTICATED_PLAN_REVIEWED"}):
             blockers.append(f"Terraform plan review is {plan_review.state}.")
             state = "BLOCKED_TERRAFORM_PLAN_REVIEW"
         if expected_account_id and account_id not in {
@@ -3467,10 +3489,12 @@ class ProductService:
 
         cloud_apply_env = os.getenv("ALLOW_CLOUD_APPLY", "").lower() == "true"
         runtime_enabled = os.getenv("DAVDEPLOY_ENABLE_APP_RUNNER_EXECUTION", "").lower() == "true"
-        confirmation_ok = confirmation == "EXECUTE_APP_RUNNER_WORKLOAD"
+        confirmation_ok = confirmation == (
+            "DESTROY_APP_RUNNER_WORKLOAD" if destroy_mode else "EXECUTE_APP_RUNNER_WORKLOAD"
+        )
         connection_id = str((revision.content.get("target") or {}).get("connection_id") or "")
         connection: CloudConnection | None = None
-        if mode == "AUTHENTICATED_APP_RUNNER_APPLY":
+        if mode in {"AUTHENTICATED_APP_RUNNER_APPLY", "AUTHENTICATED_APP_RUNNER_DESTROY"}:
             if not connection_id:
                 blockers.append(
                     "Authenticated execution requires a verified customer cloud connection."
@@ -3514,9 +3538,9 @@ class ProductService:
                 "DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI": os.getenv(
                     "DAVDEPLOY_CUSTOMER_EXECUTION_ARTIFACT_S3_URI", ""
                 ),
-                "DAVDEPLOY_EXECUTION_OPERATION": "apply-saved-plan",
-                "DAVDEPLOY_EXECUTION_SAVED_PLAN_S3_URI": str(real_plan_artifact.get("saved_plan_s3_uri") if mode == "AUTHENTICATED_APP_RUNNER_APPLY" else ""),
-                "DAVDEPLOY_EXECUTION_SAVED_PLAN_SHA256": str(real_plan_artifact.get("saved_plan_sha256") if mode == "AUTHENTICATED_APP_RUNNER_APPLY" else ""),
+                "DAVDEPLOY_EXECUTION_OPERATION": "destroy-saved-plan" if destroy_mode else "apply-saved-plan",
+                "DAVDEPLOY_EXECUTION_SAVED_PLAN_S3_URI": str(real_plan_artifact.get("saved_plan_s3_uri") if mode in {"AUTHENTICATED_APP_RUNNER_APPLY", "AUTHENTICATED_APP_RUNNER_DESTROY"} else ""),
+                "DAVDEPLOY_EXECUTION_SAVED_PLAN_SHA256": str(real_plan_artifact.get("saved_plan_sha256") if mode in {"AUTHENTICATED_APP_RUNNER_APPLY", "AUTHENTICATED_APP_RUNNER_DESTROY"} else ""),
                 "DAVDEPLOY_CUSTOMER_PLAN_DIGEST": revision.content_digest,
             }
             required_runner_values = (
@@ -3529,12 +3553,11 @@ class ProductService:
             if not all(execution_environment[key] for key in required_runner_values):
                 blockers.append("Customer execution runner configuration is incomplete.")
                 state = "BLOCKED_CLOUD_EXECUTION_RUNTIME_NOT_CONFIGURED"
-        if mode == "AUTHENTICATED_APP_RUNNER_APPLY":
+        if mode in {"AUTHENTICATED_APP_RUNNER_APPLY", "AUTHENTICATED_APP_RUNNER_DESTROY"}:
             if not cloud_apply_env or not runtime_enabled or not confirmation_ok:
                 blockers.append(
                     "Authenticated App Runner execution requires ALLOW_CLOUD_APPLY=true, "
-                    "DAVDEPLOY_ENABLE_APP_RUNNER_EXECUTION=true and confirmation "
-                    "EXECUTE_APP_RUNNER_WORKLOAD."
+                    "DAVDEPLOY_ENABLE_APP_RUNNER_EXECUTION=true and the exact operation confirmation."
                 )
                 state = "BLOCKED_CLOUD_EXECUTION_NOT_ENABLED"
             elif not blockers:
@@ -3569,7 +3592,8 @@ class ProductService:
                 "destroy",
                 "verify-absent",
             ],
-            "apply_command_available": state == "READY_FOR_OPERATOR_APP_RUNNER_EXECUTION",
+            "apply_command_available": state == "READY_FOR_OPERATOR_APP_RUNNER_EXECUTION" and not destroy_mode,
+            "destroy_command_available": state == "READY_FOR_OPERATOR_APP_RUNNER_EXECUTION" and destroy_mode,
             "destroy_required": True,
         }
         evidence = {
@@ -3585,6 +3609,7 @@ class ProductService:
             "runtime_enabled": runtime_enabled,
             "allow_cloud_apply_env": cloud_apply_env,
             "confirmation_ok": confirmation_ok,
+            "operation": "destroy" if destroy_mode else "apply",
             "cloud_connection_id": connection_id or None,
             "execution_role_configured": bool(connection and connection.execution_role_arn),
             "execution_environment": execution_environment,
@@ -3654,13 +3679,18 @@ class ProductService:
             raise ValueError("stale cloud execution run digest")
         if run.state != "READY_FOR_OPERATOR_APP_RUNNER_EXECUTION":
             raise ValueError(f"cloud execution run is not ready: {run.state}")
-        if confirmation != "EXECUTE_APP_RUNNER_WORKLOAD":
-            raise ValueError("explicit App Runner execution confirmation is required")
+        expected_confirmation = (
+            "DESTROY_APP_RUNNER_WORKLOAD"
+            if run.mode == "AUTHENTICATED_APP_RUNNER_DESTROY"
+            else "EXECUTE_APP_RUNNER_WORKLOAD"
+        )
+        if confirmation != expected_confirmation:
+            raise ValueError("explicit App Runner operation confirmation is required")
         run.state = "QUEUED"
         run.evidence = {
             **(run.evidence or {}),
             "queued_by_subject": principal.subject,
-            "queue_confirmation": "EXECUTE_APP_RUNNER_WORKLOAD",
+            "queue_confirmation": expected_confirmation,
             "boundary": "Queued for the trusted App Runner adapter; no user-supplied command is accepted.",
         }
         self.audit(
@@ -3753,28 +3783,41 @@ class ProductService:
                 artifact_error = str(error)
         if status != "SUCCEEDED" or artifact_error:
             run.state = "FAILED"
-        elif run.mode == "AUTHENTICATED_TERRAFORM_PLAN":
+        elif run.mode in {
+            "AUTHENTICATED_TERRAFORM_PLAN",
+            "AUTHENTICATED_TERRAFORM_DESTROY_PLAN",
+        }:
             review = self.db.get(TerraformPlanReview, run.terraform_plan_review_id)
             detail = artifact.get("detail") or {}
             if not review or not detail.get("saved_plan_s3_uri") or not detail.get("saved_plan_sha256"):
                 run.state = "FAILED"
                 artifact_error = "authenticated plan completion did not contain a saved plan artifact"
             else:
-                review.state = "AUTHENTICATED_PLAN_REVIEWED"
+                review.state = (
+                    "AUTHENTICATED_DESTROY_PLAN_REVIEWED"
+                    if run.mode == "AUTHENTICATED_TERRAFORM_DESTROY_PLAN"
+                    else "AUTHENTICATED_PLAN_REVIEWED"
+                )
                 review.evidence = {
                     **(review.evidence or {}),
                     "real_plan_artifact": detail,
                     "runner_result_s3_uri": result_uri,
                     "reviewed_at": datetime.now(UTC).isoformat(),
                 }
-                run.state = "AUTHENTICATED_PLAN_REVIEWED"
+                run.state = review.state
         else:
-            run.state = "SUCCEEDED_AWAITING_OBSERVATION"
+            detail = artifact.get("detail") or {}
+            if run.mode == "AUTHENTICATED_APP_RUNNER_DESTROY":
+                run.state = "DESTROYED_VERIFIED" if detail.get("destroy_proof") == "confirmed_absent" else "FAILED"
+            else:
+                run.state = "SUCCEEDED_AWAITING_OBSERVATION"
         run.outputs = {
             **(run.outputs or {}),
             "codebuild_status": status,
             "codebuild_completed_at": str(build.get("buildComplete") or ""),
             "runner_artifact": artifact or None,
+            "terraform_outputs": (artifact.get("detail") or {}) if run.mode == "AUTHENTICATED_APP_RUNNER_APPLY" else None,
+            "destroy_proof": (artifact.get("detail") or {}).get("destroy_proof"),
             "failure_reason": artifact_error or (None if status == "SUCCEEDED" else "Bounded CodeBuild runner failed."),
         }
         self.audit(

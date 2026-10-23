@@ -317,7 +317,7 @@ class TerraformPlanReviewRequest(BaseModel):
     expected_region: str | None = Field(default=None, pattern=r"^[a-z]{2}-[a-z]+-\d$")
     mode: str = Field(
         default="LOCAL_CONTRACT_ONLY",
-        pattern=r"^(LOCAL_CONTRACT_ONLY|AUTHENTICATED_TERRAFORM_PLAN)$",
+        pattern=r"^(LOCAL_CONTRACT_ONLY|AUTHENTICATED_TERRAFORM_PLAN|AUTHENTICATED_TERRAFORM_DESTROY_PLAN)$",
     )
     allow_cloud_plan: bool = False
 
@@ -331,7 +331,7 @@ class CloudExecutionRunRequest(BaseModel):
     expected_region: str | None = Field(default=None, pattern=r"^[a-z]{2}-[a-z]+-\d$")
     mode: str = Field(
         default="GUARDED_CLOUD_EXECUTION",
-        pattern=r"^(GUARDED_CLOUD_EXECUTION|AUTHENTICATED_APP_RUNNER_APPLY)$",
+        pattern=r"^(GUARDED_CLOUD_EXECUTION|AUTHENTICATED_APP_RUNNER_APPLY|AUTHENTICATED_APP_RUNNER_DESTROY)$",
     )
     confirmation: str | None = None
 

@@ -159,7 +159,7 @@
           },
           "mode": {
             "default": "GUARDED_CLOUD_EXECUTION",
-            "pattern": "^(GUARDED_CLOUD_EXECUTION|AUTHENTICATED_APP_RUNNER_APPLY)$",
+            "pattern": "^(GUARDED_CLOUD_EXECUTION|AUTHENTICATED_APP_RUNNER_APPLY|AUTHENTICATED_APP_RUNNER_DESTROY)$",
             "title": "Mode",
             "type": "string"
           },
@@ -829,7 +829,7 @@
           },
           "mode": {
             "default": "LOCAL_CONTRACT_ONLY",
-            "pattern": "^(LOCAL_CONTRACT_ONLY|AUTHENTICATED_TERRAFORM_PLAN)$",
+            "pattern": "^(LOCAL_CONTRACT_ONLY|AUTHENTICATED_TERRAFORM_PLAN|AUTHENTICATED_TERRAFORM_DESTROY_PLAN)$",
             "title": "Mode",
             "type": "string"
           },

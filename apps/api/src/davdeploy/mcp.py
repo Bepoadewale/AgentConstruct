@@ -140,6 +140,7 @@ TOOL_DEFINITIONS = [
                 "revision_id": {"type": "string"}, "content_digest": {"type": "string"},
                 "preflight_id": {"type": "string"}, "expected_account_id": {"type": "string"},
                 "region": {"type": "string"}, "authenticated": {"type": "boolean"},
+                "destroy": {"type": "boolean", "description": "Generate a reviewed Terraform destroy plan only."},
             },
         },
     },
@@ -154,6 +155,7 @@ TOOL_DEFINITIONS = [
                 "terraform_render_id": {"type": "string"}, "preflight_id": {"type": "string"},
                 "terraform_plan_review_id": {"type": "string"}, "expected_account_id": {"type": "string"},
                 "region": {"type": "string"}, "confirmation": {"type": "string"},
+                "destroy": {"type": "boolean", "description": "Execute only a reviewed saved Terraform destroy plan."},
             },
         },
     },
@@ -315,7 +317,13 @@ class davdeployMcp:
                     "preflight_id": arguments.get("preflight_id"),
                     "expected_account_id": arguments.get("expected_account_id"),
                     "expected_region": arguments["region"],
-                    "mode": "AUTHENTICATED_TERRAFORM_PLAN" if authenticated else "LOCAL_CONTRACT_ONLY",
+                    "mode": (
+                        "AUTHENTICATED_TERRAFORM_DESTROY_PLAN"
+                        if authenticated and bool(arguments.get("destroy"))
+                        else "AUTHENTICATED_TERRAFORM_PLAN"
+                        if authenticated
+                        else "LOCAL_CONTRACT_ONLY"
+                    ),
                     "allow_cloud_plan": authenticated,
                 },
             )
@@ -330,7 +338,7 @@ class davdeployMcp:
                     "terraform_plan_review_id": arguments.get("terraform_plan_review_id"),
                     "expected_account_id": arguments.get("expected_account_id"),
                     "expected_region": arguments["region"],
-                    "mode": "AUTHENTICATED_APP_RUNNER_APPLY",
+                    "mode": "AUTHENTICATED_APP_RUNNER_DESTROY" if bool(arguments.get("destroy")) else "AUTHENTICATED_APP_RUNNER_APPLY",
                     "confirmation": arguments.get("confirmation"),
                 },
             )

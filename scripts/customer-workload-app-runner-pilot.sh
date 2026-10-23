@@ -110,9 +110,11 @@ service_url() {
 }
 
 case "$operation" in
-  plan)
+  plan|destroy-plan)
     tf_init
-    terraform -chdir="$root" plan -input=false -out="$saved_plan_file" "${tf_vars[@]}"
+    plan_args=(-input=false -out="$saved_plan_file")
+    [[ "$operation" == "destroy-plan" ]] && plan_args+=(-destroy)
+    terraform -chdir="$root" plan "${plan_args[@]}" "${tf_vars[@]}"
     plan_sha256="$(shasum -a 256 "$saved_plan_file" | awk '{print $1}')"
     terraform -chdir="$root" show -json "$saved_plan_file" | jq '{
       format_version,
@@ -130,7 +132,7 @@ case "$operation" in
     jq -n --arg saved_plan_s3_uri "$saved_plan_uri" --arg saved_plan_sha256 "$plan_sha256" --slurpfile summary /tmp/davdeploy-plan-summary.json \
       '{saved_plan_s3_uri:$saved_plan_s3_uri,saved_plan_sha256:$saved_plan_sha256,plan_summary:$summary[0]}' \
       >/tmp/davdeploy-plan-result.json
-    write_result "plan" "SUCCEEDED" /tmp/davdeploy-plan-result.json
+    write_result "$operation" "SUCCEEDED" /tmp/davdeploy-plan-result.json
     ;;
   apply-saved-plan)
     [[ -n "$saved_plan_sha256" ]] || {
@@ -144,6 +146,30 @@ case "$operation" in
     terraform -chdir="$root" apply -input=false "$saved_plan_file"
     tf_output >/tmp/davdeploy-apply-outputs.json
     write_result "apply" "SUCCEEDED" /tmp/davdeploy-apply-outputs.json
+    ;;
+  destroy-saved-plan)
+    [[ -n "$saved_plan_sha256" ]] || {
+      echo "DAVDEPLOY_EXECUTION_SAVED_PLAN_SHA256 is required for an artifact-bound destroy" >&2; exit 2;
+    }
+    tf_init
+    aws s3 cp "$saved_plan_uri" "$saved_plan_file" --only-show-errors
+    echo "${saved_plan_sha256}  ${saved_plan_file}" | shasum -a 256 --check --status || {
+      echo "Saved Terraform destroy plan digest mismatch" >&2; exit 3;
+    }
+    terraform -chdir="$root" apply -input=false "$saved_plan_file"
+    if aws apprunner list-services "${aws_args[@]}" --query "ServiceSummaryList[?ServiceName=='${service_name}'].ServiceArn | [0]" --output text | grep -qv '^None$'; then
+      echo "App Runner service still exists: ${service_name}" >&2; exit 1
+    fi
+    if aws ecr describe-repositories "${aws_args[@]}" --repository-names "$repository_name" >/dev/null 2>&1; then
+      echo "ECR repository still exists: ${repository_name}" >&2; exit 1
+    fi
+    if aws ec2 describe-vpcs "${aws_args[@]}" --region "$AWS_REGION" --filters "Name=tag:Scope,Values=customer-sandbox" --query 'Vpcs[0].VpcId' --output text | grep -qv '^None$'; then
+      echo "Customer sandbox VPC still exists" >&2; exit 1
+    fi
+    jq -n --arg proof "confirmed_absent" --arg scope "$deployment_scope" \
+      '{destroy_proof:$proof, deployment_scope:$scope, connection_roles_retained:true}' \
+      >/tmp/davdeploy-destroy-result.json
+    write_result "destroy" "SUCCEEDED" /tmp/davdeploy-destroy-result.json
     ;;
   build-push-image)
     require DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_URL
@@ -213,7 +239,7 @@ case "$operation" in
     tf_output
     ;;
   *)
-    echo "usage: $0 {plan|apply-saved-plan|build-push-image|wait-ready|smoke|destroy|verify-absent|output}" >&2
+    echo "usage: $0 {plan|destroy-plan|apply-saved-plan|destroy-saved-plan|build-push-image|wait-ready|smoke|destroy|verify-absent|output}" >&2
     exit 2
     ;;
 esac
