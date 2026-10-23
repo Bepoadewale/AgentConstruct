@@ -122,22 +122,33 @@ Resources:
                   - logs:GetLogEvents
                   - logs:FilterLogEvents
                 Resource: "*"
-              - Sid: CreateTaggedCustomerWorkloadResources
+              # Terraform's AWS provider creates these resources before issuing
+              # its separate tag call. The trusted role and fixed runner keep
+              # the command boundary narrow; ownership tags then gate every
+              # subsequent mutation and deletion.
+              - Sid: CreateBoundedCustomerWorkloadResources
                 Effect: Allow
                 Action:
                   - apprunner:CreateService
                   - apprunner:CreateVpcConnector
-                  - apprunner:TagResource
-                  - apprunner:UntagResource
                   - ec2:CreateVpc
                   - ec2:CreateSubnet
                   - ec2:CreateSecurityGroup
+                  - ecr:CreateRepository
+                  - logs:CreateLogGroup
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion: !Ref AWS::Region
+              - Sid: TagNewCustomerWorkloadResources
+                Effect: Allow
+                Action:
+                  - apprunner:TagResource
+                  - apprunner:UntagResource
                   - ec2:CreateTags
                   - ec2:DeleteTags
-                  - ecr:CreateRepository
                   - ecr:TagResource
                   - ecr:UntagResource
-                  - logs:CreateLogGroup
                   - logs:TagLogGroup
                   - logs:UntagLogGroup
                 Resource: "*"
