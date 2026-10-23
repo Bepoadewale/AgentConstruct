@@ -5,6 +5,7 @@ from davdeploy.cloud_execution import (
     CodeBuildCloudExecutionAdapter,
     DisabledCloudExecutionAdapter,
 )
+from davdeploy.models import CloudExecutionRun
 from test_customer_plan_review import approved_app_runner_customer_review
 from test_product import founder, make_service, operator
 
@@ -50,6 +51,39 @@ def test_codebuild_adapter_submits_only_the_fixed_execution_environment():
     assert result.outputs["codebuild_build_id"] == "davdeploy:build-1"
     assert calls[0]["projectName"] == "davdeploy-customer-executor"
     assert all(item["name"] != "COMMAND" for item in calls[0]["environmentVariablesOverride"])
+
+
+def test_codebuild_completion_accepts_the_eventbridge_build_arn(monkeypatch):
+    service, _ = make_service()
+    short_id = "davdeploy-customer-executor:build-1"
+    build_arn = f"arn:aws:codebuild:us-east-1:111122223333:build/{short_id}"
+    run = CloudExecutionRun(
+        organization_id=founder().organization_id,
+        revision_id="revision-1",
+        project_id="project-1",
+        profile="aws-app-runner",
+        state="SUBMITTED",
+        mode="AUTHENTICATED_TERRAFORM_PLAN",
+        attempt=1,
+        command={},
+        evidence={"result_s3_uri": "not-an-s3-uri"},
+        outputs={"codebuild_build_id": short_id, "codebuild_build_arn": build_arn},
+        content_digest="a" * 64,
+        requested_by_subject=founder().subject,
+    )
+    service.db.add(run)
+    service.db.commit()
+    calls = []
+
+    class CodeBuild:
+        def batch_get_builds(self, *, ids):
+            calls.append(ids)
+            return {"builds": [{"buildStatus": "FAILED"}]}
+
+    monkeypatch.setattr("davdeploy.service.boto3.client", lambda service_name: CodeBuild())
+
+    assert service.reconcile_cloud_execution_build(build_arn) is True
+    assert calls == [[short_id]]
 
 
 def test_ready_cloud_run_is_queued_and_observed_by_trusted_worker():

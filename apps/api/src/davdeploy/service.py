@@ -3768,19 +3768,21 @@ class ProductService:
 
     def reconcile_cloud_execution_build(self, build_id: str) -> bool:
         """Persist one CodeBuild completion received through the SQS event bridge."""
+        normalized_build_id = build_id.rsplit("/", 1)[-1]
         run = next(
             (
                 item
                 for item in self.db.scalars(
                     select(CloudExecutionRun).where(CloudExecutionRun.state == "SUBMITTED")
                 )
-                if (item.outputs or {}).get("codebuild_build_id") == build_id
+                if normalized_build_id == (item.outputs or {}).get("codebuild_build_id")
+                or build_id == (item.outputs or {}).get("codebuild_build_arn")
             ),
             None,
         )
         if not run:
             return False
-        response = boto3.client("codebuild").batch_get_builds(ids=[build_id])
+        response = boto3.client("codebuild").batch_get_builds(ids=[normalized_build_id])
         builds = response.get("builds") or []
         if not builds:
             return False
