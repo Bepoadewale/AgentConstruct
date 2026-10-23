@@ -69,6 +69,10 @@ def test_customer_cloudformation_contract_keeps_execution_separate_from_discover
     assert "iam:PassRole" in execution
     assert "CreateBoundedCustomerWorkloadResources" in execution
     assert "TagNewCustomerWorkloadResources" in execution
+    assert "ec2:ModifyVpcAttribute" in execution
+    assert "ecr:ListTagsForResource" in execution
+    assert "ReconcileOnlyTaggedCustomerWorkloadResources" in execution
+    assert "logs:PutRetentionPolicy" in execution
     assert "aws:RequestedRegion: !Ref AWS::Region" in execution
     assert "aws:RequestTag/ConnectionId" in execution
     assert "aws:ResourceTag/ConnectionId" in execution
