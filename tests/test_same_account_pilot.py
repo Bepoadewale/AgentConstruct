@@ -47,6 +47,15 @@ def test_customer_sandbox_has_a_dedicated_low_cost_vpc_boundary():
     assert "customer_execution_external_id" in CUSTOMER_VERSIONS
 
 
+def test_customer_workload_tags_match_the_bounded_connection_role_contract():
+    template = Path("infrastructure/cloudformation/customer-discovery-role.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert 'ManagedBy             = "davdeploy"' in CUSTOMER_MAIN
+    assert "aws:RequestTag/ManagedBy: davdeploy" in template
+    assert "aws:RequestTag/ConnectionId: !Ref ConnectionId" in template
+
+
 def test_state_and_teardown_are_scope_specific_and_account_guarded():
     assert "davdeploy/platform/app-runner-runtime.tfstate" in PLATFORM_SCRIPT
     assert "davdeploy/customer/${connection_id}/workload-app-runner.tfstate" in CUSTOMER_SCRIPT

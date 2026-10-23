@@ -12,7 +12,7 @@ locals {
   ecr_repository_name = var.ecr_repository_name != "" ? var.ecr_repository_name : "davdeploy-${var.connection_id}-workload"
   tags = {
     Project               = "davdeploy"
-    ManagedBy             = "terraform"
+    ManagedBy             = "davdeploy"
     Scope                 = var.deployment_scope
     Placement             = "customer-sandbox"
     AccountBoundary       = "same-account-pilot"
