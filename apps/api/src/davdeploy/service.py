@@ -3661,11 +3661,17 @@ class ProductService:
         self.db.add(run)
         self.db.flush()
         if execution_environment:
-            execution_environment["DAVDEPLOY_EXECUTION_RUN_ID"] = run.id
-            execution_environment["DAVDEPLOY_EXECUTION_RESULT_S3_URI"] = (
-                f"s3://{execution_environment['TF_STATE_BUCKET']}/davdeploy/customer/"
-                f"{execution_environment['DAVDEPLOY_CUSTOMER_CONNECTION_ID']}/runs/{run.id}/result.json"
-            )
+            # Do not mutate the JSON value already assigned to the ORM row in
+            # place. SQLAlchemy may not mark a nested JSON mutation dirty, and
+            # the worker must receive these generated values after a restart.
+            execution_environment = {
+                **execution_environment,
+                "DAVDEPLOY_EXECUTION_RUN_ID": run.id,
+                "DAVDEPLOY_EXECUTION_RESULT_S3_URI": (
+                    f"s3://{execution_environment['TF_STATE_BUCKET']}/davdeploy/customer/"
+                    f"{execution_environment['DAVDEPLOY_CUSTOMER_CONNECTION_ID']}/runs/{run.id}/result.json"
+                ),
+            }
             run.evidence = {**run.evidence, "execution_environment": execution_environment}
         self.audit(
             principal,

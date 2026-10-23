@@ -183,6 +183,38 @@ def test_queueing_a_ready_cloud_run_wakes_the_worker(monkeypatch):
     assert wakeups == [("cloud_execution", run.id)]
 
 
+def test_reassigned_execution_context_is_durably_persisted():
+    """Nested JSON context must be replaced, rather than mutated in place."""
+    service, _ = make_service()
+    run = CloudExecutionRun(
+        organization_id=founder().organization_id,
+        revision_id="revision-context",
+        project_id="project-context",
+        profile="aws-app-runner",
+        state="READY_FOR_OPERATOR_APP_RUNNER_EXECUTION",
+        mode="AUTHENTICATED_APP_RUNNER_APPLY",
+        attempt=1,
+        command={},
+        evidence={"execution_environment": {"TF_STATE_BUCKET": "customer-state"}},
+        outputs={},
+        content_digest="c" * 64,
+        requested_by_subject=founder().subject,
+    )
+    service.db.add(run)
+    service.db.flush()
+    environment = {
+        **run.evidence["execution_environment"],
+        "DAVDEPLOY_EXECUTION_RUN_ID": run.id,
+        "DAVDEPLOY_EXECUTION_RESULT_S3_URI": f"s3://customer-state/runs/{run.id}/result.json",
+    }
+    run.evidence = {**run.evidence, "execution_environment": environment}
+    service.db.commit()
+    service.db.expire_all()
+
+    persisted = service.db.get(CloudExecutionRun, run.id)
+    assert persisted.evidence["execution_environment"] == environment
+
+
 def test_authenticated_cloud_run_requires_verified_connection_and_execution_role(monkeypatch):
     """A fixture/local plan may be reviewed, but never becomes an AWS apply request."""
     service, _ = make_service()
