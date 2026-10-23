@@ -1804,7 +1804,7 @@ class ProductService:
                 "Review the separate read-only discovery and bounded execution IAM roles, then acknowledge IAM resource creation.",
                 "Create the stack, then return to davdeploy to verify the connection.",
             ],
-            "boundary": "This action only creates a setup link. The execution role has no reusable credentials and is separate from discovery. davdeploy does not create a workload until an exact approved plan is applied.",
+            "boundary": "This action only creates a setup link and does not create customer AWS resources. The execution role has no reusable credentials and is separate from discovery. davdeploy does not create a workload until an exact approved plan is applied.",
         }
 
     def queue_aws_connection_verification(
