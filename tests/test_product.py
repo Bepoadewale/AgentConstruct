@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, datetime
 
@@ -543,6 +544,40 @@ def test_aws_verification_is_durable_and_tenant_scoped(monkeypatch):
         pass
     else:
         raise AssertionError("cross-tenant verification job access was accepted")
+
+
+def test_worker_wakeup_is_minimal_and_uses_the_configured_queue(monkeypatch):
+    sent = []
+
+    class Queue:
+        def send_message(self, **kwargs):
+            sent.append(kwargs)
+
+    monkeypatch.setenv("DAVDEPLOY_WORKER_QUEUE_URL", "https://sqs.example/worker")
+    monkeypatch.setattr("davdeploy.service.boto3.client", lambda service: Queue())
+    service, _ = make_service()
+
+    service._wake_worker("cloud_execution", "job-123")
+
+    assert sent[0]["QueueUrl"] == "https://sqs.example/worker"
+    assert json.loads(sent[0]["MessageBody"]) == {
+        "version": 1,
+        "kind": "cloud_execution",
+        "job_id": "job-123",
+    }
+
+
+def test_hosted_worker_wakeup_fails_closed_without_a_queue(monkeypatch):
+    monkeypatch.setenv("DAVDEPLOY_HOSTED_MODE", "true")
+    monkeypatch.delenv("DAVDEPLOY_WORKER_QUEUE_URL", raising=False)
+    service, _ = make_service()
+
+    try:
+        service._wake_worker("cloud_execution", "job-123")
+    except RuntimeError as error:
+        assert "queue" in str(error)
+    else:
+        raise AssertionError("hosted worker wake-up accepted a missing queue")
 
 
 def test_stale_and_replayed_approval_are_rejected():

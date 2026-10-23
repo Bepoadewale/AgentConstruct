@@ -127,6 +127,26 @@ class ProductService:
         self.cloud_execution = cloud_execution or configured_cloud_execution_adapter()
         self.invitation_sender = invitation_sender or configured_invitation_sender()
 
+    def _wake_worker(self, kind: str, job_id: str) -> None:
+        """Send a non-sensitive wake-up after durable work has committed.
+
+        PostgreSQL remains the source of truth. The SQS message is deliberately
+        minimal: the worker claims the next scoped durable record itself and no
+        tenant data, credentials, commands, or plan material travels in it.
+        """
+        queue_url = os.getenv("DAVDEPLOY_WORKER_QUEUE_URL", "").strip()
+        if not queue_url:
+            if os.getenv("DAVDEPLOY_HOSTED_MODE", "false").lower() == "true":
+                raise RuntimeError("hosted worker wake-up queue is not configured")
+            return
+        try:
+            boto3.client("sqs").send_message(
+                QueueUrl=queue_url,
+                MessageBody=json.dumps({"version": 1, "kind": kind, "job_id": job_id}),
+            )
+        except (BotoCoreError, ClientError) as error:
+            raise RuntimeError("worker wake-up could not be queued") from error
+
     def _trace(self, name: str):
         return trace.get_tracer("davdeploy.product").start_as_current_span(name)
 
@@ -1840,6 +1860,7 @@ class ProductService:
             {"connection_id": connection.id, "region": region},
         )
         self.db.commit()
+        self._wake_worker("aws_connection_verification", job.id)
         return job
 
     def cloud_discovery_job(
@@ -3660,6 +3681,7 @@ class ProductService:
             },
         )
         self.db.commit()
+        self._wake_worker("cloud_execution", run.id)
         return self._cloud_execution_run_payload(run)
 
     def queue_cloud_execution_run(
