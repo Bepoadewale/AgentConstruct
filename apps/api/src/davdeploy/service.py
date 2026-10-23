@@ -3398,6 +3398,29 @@ class ProductService:
         cloud_apply_env = os.getenv("ALLOW_CLOUD_APPLY", "").lower() == "true"
         runtime_enabled = os.getenv("DAVDEPLOY_ENABLE_APP_RUNNER_EXECUTION", "").lower() == "true"
         confirmation_ok = confirmation == "EXECUTE_APP_RUNNER_WORKLOAD"
+        connection_id = str((revision.content.get("target") or {}).get("connection_id") or "")
+        connection: CloudConnection | None = None
+        if mode == "AUTHENTICATED_APP_RUNNER_APPLY":
+            if not connection_id:
+                blockers.append(
+                    "Authenticated execution requires a verified customer cloud connection."
+                )
+                state = "BLOCKED_CLOUD_CONNECTION_REQUIRED"
+            else:
+                connection = self._cloud_connection(principal, connection_id)
+                if connection.setup_state != "VERIFIED":
+                    blockers.append("Selected customer cloud connection is not verified.")
+                    state = "BLOCKED_CLOUD_CONNECTION_NOT_VERIFIED"
+                if not connection.execution_role_arn:
+                    blockers.append("Selected customer cloud connection has no bounded execution role.")
+                    state = "BLOCKED_CLOUD_EXECUTION_ROLE_REQUIRED"
+                if account_id in {None, "customer-account-selected-at-apply-time"}:
+                    account_id = connection.account_id
+                if connection.account_id and account_id != connection.account_id:
+                    blockers.append(
+                        "Terraform contract account does not match the verified customer connection."
+                    )
+                    state = "BLOCKED_ACCOUNT_GUARD"
         if mode == "AUTHENTICATED_APP_RUNNER_APPLY":
             if not cloud_apply_env or not runtime_enabled or not confirmation_ok:
                 blockers.append(
@@ -3454,6 +3477,8 @@ class ProductService:
             "runtime_enabled": runtime_enabled,
             "allow_cloud_apply_env": cloud_apply_env,
             "confirmation_ok": confirmation_ok,
+            "cloud_connection_id": connection_id or None,
+            "execution_role_configured": bool(connection and connection.execution_role_arn),
             "blockers": blockers,
             "boundary": (
                 "This run records a guarded execution request. It does not deploy unless the "

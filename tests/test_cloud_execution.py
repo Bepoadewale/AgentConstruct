@@ -92,3 +92,27 @@ def test_cloud_run_queue_requires_admin_and_exact_confirmation():
         pass
     else:
         raise AssertionError("developer could queue cloud execution")
+
+
+def test_authenticated_cloud_run_requires_verified_connection_and_execution_role(monkeypatch):
+    """A fixture/local plan may be reviewed, but never becomes an AWS apply request."""
+    service, _ = make_service()
+    approved = approved_app_runner_customer_review(service)
+    monkeypatch.setenv("ALLOW_CLOUD_APPLY", "true")
+    monkeypatch.setenv("DAVDEPLOY_ENABLE_APP_RUNNER_EXECUTION", "true")
+
+    run = service.create_cloud_execution_run_for_revision(
+        operator(),
+        approved.id,
+        content_digest=approved.content_digest,
+        terraform_render_id=None,
+        preflight_id=None,
+        terraform_plan_review_id=None,
+        expected_account_id=None,
+        expected_region="us-east-1",
+        mode="AUTHENTICATED_APP_RUNNER_APPLY",
+        confirmation="EXECUTE_APP_RUNNER_WORKLOAD",
+    )
+
+    assert run["state"] != "READY_FOR_OPERATOR_APP_RUNNER_EXECUTION"
+    assert "verified customer cloud connection" in " ".join(run["evidence"]["blockers"])

@@ -8,6 +8,8 @@ Implement one tenant-scoped, approval-gated customer cloud lifecycle that the we
 
 DavDeploy has a customer AWS connection contract, approval controls, an event-driven worker, and fixture execution. The live customer workload execution path, live pricing evidence, observed outputs, and governed deletion proof need to be made complete and truthfully exposed.
 
+The first implementation slice is complete on this branch: verified connection inventory, catalog and Cost Explorer provenance, separate discovery/execution roles, and API/CLI/MCP lifecycle request contracts exist. Authenticated apply now additionally requires the exact approved revision to name a verified customer connection with a bounded execution role. A fixture or an unverified connection cannot become an apply request merely by enabling process flags.
+
 ## Work
 
 - Inspect and extend existing provider, policy, execution, API, CLI, and MCP boundaries.

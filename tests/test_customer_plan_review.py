@@ -45,6 +45,20 @@ def test_simple_fastapi_customer_review_selects_one_non_eks_aws_plan_with_monito
     connection = service.create_cloud_connection(
         founder(), "Local AWS fixture", "aws", "byoc_role_contract"
     )
+    # A selected connection is treated as customer evidence, even in this
+    # deterministic test. Populate the same verified snapshot boundary the
+    # browser workflow requires instead of bypassing tenancy/verification.
+    connection.setup_state = "VERIFIED"
+    service.db.commit()
+    snapshot = service.cloud_discovery.inventory("local-aws-fixture", "us-east-1")
+    service.record_cloud_inventory_snapshot(
+        founder(),
+        connection.id,
+        "us-east-1",
+        snapshot.provenance,
+        snapshot.discovered_at,
+        snapshot.model_dump(mode="json"),
+    )
     intent = service.create_intent(
         founder(),
         project.id,
