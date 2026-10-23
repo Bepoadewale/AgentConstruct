@@ -1,17 +1,26 @@
-# Ticket 135: Retry migration after Aurora wake-up
+# ticket135: Retry migration after Aurora wake-up
 
-## Goal
+PR: #135
+Branch: fix/terraform-migration-wakeup-retry
+
+## Problem / goal
 
 Make the guarded Terraform apply workflow tolerate Aurora Serverless resuming from
 auto-pause before it verifies database migrations.
 
-## Current state
+## Current repo state
 
 Terraform apply run `40011947189` applied the saved infrastructure plan, then the
 migration Lambda returned Aurora's `DatabaseResumingException`. A manually retried,
 idempotent migration invocation succeeded once Aurora was available.
 
-## Work
+## Research / references used
+
+- The failed migration verification log from workflow run `40011947189`.
+- The successful bounded manual migration verification after Aurora resumed.
+- The existing workflow's post-apply migration contract.
+
+## Work planned for the PR
 
 - Retry only the post-apply migration verification up to six times.
 - Wait ten seconds between unsuccessful attempts.
@@ -24,11 +33,26 @@ idempotent migration invocation succeeded once Aurora was available.
 - [x] A real migration failure still fails the workflow and prints the final response.
 - [ ] Focused validation and required CI pass.
 
-## Validation
+## Acceptance status
 
-- Pending: workflow syntax and repository CI.
+Implementation is complete. Focused validation and GitHub CI remain pending.
 
-## Boundaries and follow-up
+## Tests / validation performed
 
-- This does not retry Terraform apply or change any customer workload action.
-- The workflow will still fail after six unsuccessful migration attempts.
+- Pending: YAML parse, documentation conventions, diff check, and CI.
+
+## Evidence files produced
+
+- `docs/tickets/ticket135.md`
+- Existing real customer workload evidence remains in `docs/test/test130.md`.
+
+## Boundaries
+
+This does not retry Terraform apply or change any customer workload action. The
+workflow still fails after six unsuccessful migration attempts.
+
+## Follow-up work
+
+- Run the next guarded Terraform apply through this bounded verification.
+- Continue the fresh customer Terraform plan, apply, observation, destroy, and
+  absence-verification cycle.
