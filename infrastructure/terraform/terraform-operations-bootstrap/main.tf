@@ -391,6 +391,35 @@ resource "aws_iam_role_policy" "apply_control_plane" {
 
 data "aws_iam_policy_document" "apply_control_plane" {
   statement {
+    sid    = "CustomerExecutorCreate"
+    effect = "Allow"
+    actions = [
+      "codebuild:CreateProject"
+    ]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/Product"
+      values   = ["davdeploy"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/ManagedBy"
+      values   = ["Terraform"]
+    }
+  }
+  statement {
+    sid    = "CustomerExecutorLifecycle"
+    effect = "Allow"
+    actions = [
+      "codebuild:UpdateProject",
+      "codebuild:DeleteProject",
+      "codebuild:TagResource",
+      "codebuild:UntagResource"
+    ]
+    resources = ["arn:${data.aws_partition.current.partition}:codebuild:${var.region}:${data.aws_caller_identity.current.account_id}:project/davdeploy-customer-executor"]
+  }
+  statement {
     sid    = "Networking"
     effect = "Allow"
     actions = [
