@@ -2,9 +2,12 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: davdeploy AWS connection roles. Creates no workload resources.
 
 Parameters:
-  davdeployControlPlaneRoleArn:
+  davdeployDiscoveryBrokerRoleArn:
     Type: String
-    Description: davdeploy role allowed to assume this read-only customer role.
+    Description: davdeploy read-only discovery worker role allowed to assume the customer discovery role.
+  davdeployExecutionBrokerRoleArn:
+    Type: String
+    Description: davdeploy isolated execution-runner role allowed to assume the bounded customer execution role.
   ExternalId:
     Type: String
     NoEcho: true
@@ -33,7 +36,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Ref davdeployControlPlaneRoleArn
+              AWS: !Ref davdeployDiscoveryBrokerRoleArn
             Action: sts:AssumeRole
             Condition:
               StringEquals:
@@ -95,7 +98,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Ref davdeployControlPlaneRoleArn
+              AWS: !Ref davdeployExecutionBrokerRoleArn
             Action: sts:AssumeRole
             Condition:
               StringEquals:

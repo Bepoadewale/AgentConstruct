@@ -62,6 +62,8 @@ def test_customer_cloudformation_contract_keeps_execution_separate_from_discover
 
     assert "davdeployDiscovery-${ConnectionId}" in template
     assert "davdeployExecution-${ConnectionId}" in template
+    assert "davdeployDiscoveryBrokerRoleArn" in template
+    assert "davdeployExecutionBrokerRoleArn" in template
     execution = template.split("  ExecutionRole:", 1)[1].split("  AppRunnerEcrAccessRole:", 1)[0]
     assert "davdeployBoundedAppRunnerExecution" in execution
     assert "iam:PassRole" in execution
