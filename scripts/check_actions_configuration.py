@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 
 ALLOWED_VARIABLES = {
+    "AWS_CONNECTION_TEMPLATE_URL",
     "AWS_REGION",
     "AWS_TERRAFORM_APPLY_ROLE_ARN",
     "AWS_TERRAFORM_PLAN_ROLE_ARN",
