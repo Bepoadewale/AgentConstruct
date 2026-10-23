@@ -583,6 +583,35 @@ resource "aws_sqs_queue" "worker" {
   tags = local.common_tags
 }
 
+resource "aws_sqs_queue_policy" "worker_events" {
+  queue_url = aws_sqs_queue.worker.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "events.amazonaws.com" }
+      Action    = "sqs:SendMessage"
+      Resource  = aws_sqs_queue.worker.arn
+    }]
+  })
+}
+
+resource "aws_cloudwatch_event_rule" "customer_executor_completion" {
+  name = "${local.name}-customer-executor-completion"
+  event_pattern = jsonencode({
+    source        = ["aws.codebuild"]
+    "detail-type" = ["CodeBuild Build State Change"]
+    detail        = { "project-name" = [aws_codebuild_project.customer_executor.name] }
+  })
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_event_target" "customer_executor_completion" {
+  rule       = aws_cloudwatch_event_rule.customer_executor_completion.name
+  arn        = aws_sqs_queue.worker.arn
+  depends_on = [aws_sqs_queue_policy.worker_events]
+}
+
 resource "aws_iam_role_policy" "worker_queue" {
   name = "worker-queue"
   role = aws_iam_role.api.id

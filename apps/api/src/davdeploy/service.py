@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
+import boto3
 from httpx import HTTPError
 from opentelemetry import trace
 from sqlalchemy import select
@@ -3634,6 +3635,45 @@ class ProductService:
             "cloud_execution_run",
             run.id,
             {"state": result.state, "failure_reason": result.failure_reason},
+        )
+        self.db.commit()
+        return True
+
+    def reconcile_cloud_execution_build(self, build_id: str) -> bool:
+        """Persist one CodeBuild completion received through the SQS event bridge."""
+        run = next(
+            (
+                item
+                for item in self.db.scalars(
+                    select(CloudExecutionRun).where(CloudExecutionRun.state == "SUBMITTED")
+                )
+                if (item.outputs or {}).get("codebuild_build_id") == build_id
+            ),
+            None,
+        )
+        if not run:
+            return False
+        response = boto3.client("codebuild").batch_get_builds(ids=[build_id])
+        builds = response.get("builds") or []
+        if not builds:
+            return False
+        build = builds[0]
+        status = str(build.get("buildStatus") or "IN_PROGRESS")
+        if status in {"IN_PROGRESS", "QUEUED"}:
+            return False
+        run.state = "SUCCEEDED_AWAITING_OBSERVATION" if status == "SUCCEEDED" else "FAILED"
+        run.outputs = {
+            **(run.outputs or {}),
+            "codebuild_status": status,
+            "codebuild_completed_at": str(build.get("buildComplete") or ""),
+            "failure_reason": None if status == "SUCCEEDED" else "Bounded CodeBuild runner failed.",
+        }
+        self.audit(
+            Principal("system-cloud-worker", run.organization_id, "operator"),
+            "cloud_execution.codebuild_completed",
+            "cloud_execution_run",
+            run.id,
+            {"build_id": build_id, "status": status},
         )
         self.db.commit()
         return True
