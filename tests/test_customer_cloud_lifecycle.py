@@ -70,6 +70,7 @@ def test_customer_cloudformation_contract_keeps_execution_separate_from_discover
     assert "CreateBoundedCustomerWorkloadResources" in execution
     assert "TagNewCustomerWorkloadResources" in execution
     assert "ec2:ModifyVpcAttribute" in execution
+    assert "ec2:RevokeSecurityGroupEgress" in execution
     assert "ecr:ListTagsForResource" in execution
     assert "apprunner:ListTagsForResource" in execution
     assert "logs:ListTagsForResource" in execution
