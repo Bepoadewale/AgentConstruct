@@ -154,6 +154,35 @@ def test_cloud_run_queue_requires_admin_and_exact_confirmation():
         raise AssertionError("developer could queue cloud execution")
 
 
+def test_queueing_a_ready_cloud_run_wakes_the_worker(monkeypatch):
+    service, _ = make_service()
+    run = CloudExecutionRun(
+        organization_id=founder().organization_id,
+        revision_id="revision-queued",
+        project_id="project-queued",
+        profile="aws-app-runner",
+        state="READY_FOR_OPERATOR_APP_RUNNER_EXECUTION",
+        mode="AUTHENTICATED_APP_RUNNER_APPLY",
+        attempt=1,
+        command={},
+        evidence={},
+        outputs={},
+        content_digest="b" * 64,
+        requested_by_subject=founder().subject,
+    )
+    service.db.add(run)
+    service.db.commit()
+    wakeups = []
+    monkeypatch.setattr(service, "_wake_worker", lambda kind, job_id: wakeups.append((kind, job_id)))
+
+    queued = service.queue_cloud_execution_run(
+        operator(), run.id, run.content_digest, "EXECUTE_APP_RUNNER_WORKLOAD"
+    )
+
+    assert queued["state"] == "QUEUED"
+    assert wakeups == [("cloud_execution", run.id)]
+
+
 def test_authenticated_cloud_run_requires_verified_connection_and_execution_role(monkeypatch):
     """A fixture/local plan may be reviewed, but never becomes an AWS apply request."""
     service, _ = make_service()

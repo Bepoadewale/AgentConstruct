@@ -3723,6 +3723,10 @@ class ProductService:
             {"digest": run.content_digest, "profile": run.profile},
         )
         self.db.commit()
+        # A run is created before an administrator gives the final execution
+        # confirmation. Wake again only after that durable state transition so
+        # the bounded worker can claim the newly queued run without polling.
+        self._wake_worker("cloud_execution", run.id)
         return self._cloud_execution_run_payload(run)
 
     def run_next_cloud_execution(self) -> bool:
