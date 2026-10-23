@@ -11,6 +11,12 @@ The authenticated runner could produce a reviewed apply plan and execute its sav
 
 The isolated CodeBuild executor is provisioned and the live control plane has explicit cloud plan/apply gates enabled. No customer workload is created by this PR.
 
+## Research / references used
+
+- Existing authenticated plan-artifact implementation in `ProductService`.
+- Existing bounded customer Terraform runner script.
+- Existing CLI and MCP v1 transport contracts.
+
 ## Work planned for the PR
 
 - Add authenticated Terraform destroy-plan review mode.
@@ -25,9 +31,25 @@ The isolated CodeBuild executor is provisioned and the live control plane has ex
 - [x] Destroy completion is successful only with an absence proof artifact.
 - [x] CLI and MCP use the same backend-governed API contract.
 
+## Acceptance status
+
+Implemented and focused locally validated. Merge, control-plane deployment, and the explicit live customer pilot remain pending.
+
 ## Validation
 
 See `docs/test/test125.md`.
+
+## Tests / validation performed
+
+- Focused customer-review and cloud-execution pytest suite.
+- Ruff checks for changed API, CLI, MCP, and test modules.
+- Shell syntax validation for the bounded runner.
+
+## Evidence files produced
+
+- `docs/tickets/ticket125.md`
+- `docs/test/test125.md`
+- Updated `contracts/openapi-v1.json`
 
 ## Boundaries
 
