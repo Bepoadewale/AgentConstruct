@@ -902,6 +902,27 @@ def test_authenticated_terraform_plan_review_requires_explicit_operator_flag(mon
     assert review["apply_available"] is False
 
 
+def test_authenticated_destroy_plan_review_requires_the_same_explicit_plan_gate(monkeypatch):
+    service, db = make_service()
+    approved = approved_app_runner_customer_review(service)
+    preflight = ready_app_runner_preflight(service, db, approved)
+    monkeypatch.delenv("ALLOW_CLOUD_PLAN", raising=False)
+
+    review = service.create_terraform_plan_review_for_revision(
+        operator(),
+        approved.id,
+        content_digest=approved.content_digest,
+        preflight_id=preflight["id"],
+        expected_account_id=None,
+        expected_region="us-east-1",
+        mode="AUTHENTICATED_TERRAFORM_DESTROY_PLAN",
+        allow_cloud_plan=False,
+    )
+
+    assert review["state"] == "BLOCKED_CLOUD_PLAN_NOT_ALLOWED"
+    assert review["evidence"]["requested_destroy_plan"] is True
+
+
 def test_terraform_plan_review_rejects_stale_digest():
     service, db = make_service()
     approved = approved_app_runner_customer_review(service)

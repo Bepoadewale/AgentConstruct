@@ -90,6 +90,7 @@ def _parser() -> argparse.ArgumentParser:
     terraform_review.add_argument("--expected-account-id")
     terraform_review.add_argument("--region", required=True)
     terraform_review.add_argument("--authenticated", action="store_true")
+    terraform_review.add_argument("--destroy", action="store_true")
 
     cloud_run = subparsers.add_parser("create-customer-cloud-run")
     cloud_run.add_argument("--revision-id", required=True)
@@ -100,6 +101,7 @@ def _parser() -> argparse.ArgumentParser:
     cloud_run.add_argument("--expected-account-id")
     cloud_run.add_argument("--region", required=True)
     cloud_run.add_argument("--confirmation", required=True)
+    cloud_run.add_argument("--destroy", action="store_true")
 
     queue_cloud_run = subparsers.add_parser("queue-customer-cloud-run")
     queue_cloud_run.add_argument("--run-id", required=True)
@@ -197,7 +199,13 @@ def run(
                 "preflight_id": args.preflight_id,
                 "expected_account_id": args.expected_account_id,
                 "expected_region": args.region,
-                "mode": "AUTHENTICATED_TERRAFORM_PLAN" if args.authenticated else "LOCAL_CONTRACT_ONLY",
+                "mode": (
+                    "AUTHENTICATED_TERRAFORM_DESTROY_PLAN"
+                    if args.authenticated and args.destroy
+                    else "AUTHENTICATED_TERRAFORM_PLAN"
+                    if args.authenticated
+                    else "LOCAL_CONTRACT_ONLY"
+                ),
                 "allow_cloud_plan": args.authenticated,
             },
         )
@@ -212,7 +220,7 @@ def run(
                 "terraform_plan_review_id": args.terraform_plan_review_id,
                 "expected_account_id": args.expected_account_id,
                 "expected_region": args.region,
-                "mode": "AUTHENTICATED_APP_RUNNER_APPLY",
+                "mode": "AUTHENTICATED_APP_RUNNER_DESTROY" if args.destroy else "AUTHENTICATED_APP_RUNNER_APPLY",
                 "confirmation": args.confirmation,
             },
         )
