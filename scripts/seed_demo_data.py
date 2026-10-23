@@ -46,7 +46,7 @@ def create_review(
     client: httpx.Client,
     actor: str,
     label: str,
-    cloud_connection_id: str,
+    cloud_connection_id: str | None,
     prompt: str = PROMPT,
 ) -> dict[str, Any]:
     suffix = f"{label}-{uuid.uuid4().hex[:7]}"
@@ -234,18 +234,18 @@ def seed(run_dry_run: bool) -> dict[str, Any]:
             201,
         )
 
-        draft = create_review(client, developer, "demo-draft-plan", cloud["id"])
-        submitted = submit(client, developer, create_review(client, developer, "demo-submitted-plan", cloud["id"]))
+        draft = create_review(client, developer, "demo-draft-plan", None)
+        submitted = submit(client, developer, create_review(client, developer, "demo-submitted-plan", None))
         approved = decide(
             client,
             administrator,
-            submit(client, developer, create_review(client, developer, "demo-approved-plan", cloud["id"])),
+            submit(client, developer, create_review(client, developer, "demo-approved-plan", None)),
             "APPROVED",
         )
         rejected = decide(
             client,
             administrator,
-            submit(client, developer, create_review(client, developer, "demo-rejected-plan", cloud["id"])),
+            submit(client, developer, create_review(client, developer, "demo-rejected-plan", None)),
             "REJECTED",
             "Seeded rejection: tighten the data-store assumption before resubmitting.",
         )
@@ -255,7 +255,7 @@ def seed(run_dry_run: bool) -> dict[str, Any]:
             submit(
                 client,
                 administrator,
-                create_review(client, administrator, "demo-admin-self-approved", cloud["id"]),
+                create_review(client, administrator, "demo-admin-self-approved", None),
             ),
             "APPROVED",
         )

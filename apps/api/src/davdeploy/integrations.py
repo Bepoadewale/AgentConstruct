@@ -841,6 +841,7 @@ class StsAwsDiscovery:
         account = customer.client("sts").get_caller_identity()["Account"]
         resources = [f"aws-account:{account}"]
         resources.extend(self._inventory(customer, region))
+        pricing_evidence = self._pricing_evidence(customer, region)
         return CloudInventorySnapshot(
             provider="aws",
             region=region,
@@ -848,7 +849,75 @@ class StsAwsDiscovery:
             approved_regions=[region],
             discovered_at=datetime.now(UTC),
             provenance="live-read-only-sts-discovery",
+            pricing_evidence=pricing_evidence,
         )
+
+    @staticmethod
+    def _pricing_evidence(customer: object, region: str) -> dict[str, object]:
+        """Collect bounded pricing evidence without reading workload data.
+
+        Cost Explorer is customer-account evidence. The AWS Pricing API is a
+        public catalog lookup that may be unavailable to a tightly scoped role,
+        so failures are retained as limitations rather than silently replaced
+        with fixture pricing.
+        """
+        captured_at = datetime.now(UTC)
+        evidence: dict[str, object] = {
+            "kind": "aws_pricing_evidence.v1",
+            "captured_at": captured_at.isoformat(),
+            "region": region,
+            "catalog": {"state": "NOT_QUERIED"},
+            "cost_explorer": {"state": "NOT_QUERIED"},
+            "limitations": [],
+        }
+        try:
+            catalog = customer.client("pricing", region_name="us-east-1")
+            response = catalog.get_products(
+                ServiceCode="AmazonEC2",
+                Filters=[
+                    {"Type": "TERM_MATCH", "Field": "location", "Value": "US East (N. Virginia)"},
+                    {"Type": "TERM_MATCH", "Field": "instanceType", "Value": "t4g.small"},
+                    {"Type": "TERM_MATCH", "Field": "operatingSystem", "Value": "Linux"},
+                    {"Type": "TERM_MATCH", "Field": "tenancy", "Value": "Shared"},
+                ],
+                MaxResults=1,
+            )
+            evidence["catalog"] = {
+                "state": "EXECUTED",
+                "service_code": "AmazonEC2",
+                "query": "t4g.small Linux shared in US East (N. Virginia)",
+                "product_count": len(response.get("PriceList", [])),
+                "catalog_version": captured_at.date().isoformat(),
+            }
+        except (BotoCoreError, ClientError) as error:
+            evidence["catalog"] = {"state": "UNAVAILABLE", "reason": type(error).__name__}
+            cast_limitations = evidence["limitations"]
+            assert isinstance(cast_limitations, list)
+            cast_limitations.append("AWS Pricing catalog was unavailable to the customer discovery role.")
+        try:
+            end = captured_at.date()
+            start = end - timedelta(days=1)
+            response = customer.client("ce", region_name="us-east-1").get_cost_and_usage(
+                TimePeriod={"Start": start.isoformat(), "End": end.isoformat()},
+                Granularity="DAILY",
+                Metrics=["UnblendedCost"],
+            )
+            amounts = [
+                group.get("Total", {}).get("UnblendedCost", {}).get("Amount", "0")
+                for group in response.get("ResultsByTime", [])
+            ]
+            evidence["cost_explorer"] = {
+                "state": "EXECUTED",
+                "period_start": start.isoformat(),
+                "period_end": end.isoformat(),
+                "daily_unblended_cost_usd": amounts,
+            }
+        except (BotoCoreError, ClientError) as error:
+            evidence["cost_explorer"] = {"state": "UNAVAILABLE", "reason": type(error).__name__}
+            cast_limitations = evidence["limitations"]
+            assert isinstance(cast_limitations, list)
+            cast_limitations.append("AWS Cost Explorer was unavailable to the customer discovery role.")
+        return evidence
 
     @staticmethod
     def _inventory(customer: object, region: str) -> list[str]:

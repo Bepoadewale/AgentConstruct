@@ -679,6 +679,17 @@ def test_intent_rejects_another_tenants_cloud_connection_and_plan_binds_its_targ
     service, _ = make_service()
     project = service.create_project(founder(), "cloud-bound", "https://github.com/example/rag")
     connection = service.create_cloud_connection(founder(), "Demo AWS", "aws", "byoc_role_contract")
+    connection.setup_state = "VERIFIED"
+    service.db.commit()
+    snapshot = service.cloud_discovery.inventory("local-aws-fixture", "us-east-1")
+    service.record_cloud_inventory_snapshot(
+        founder(),
+        connection.id,
+        "us-east-1",
+        snapshot.provenance,
+        snapshot.discovered_at,
+        snapshot.model_dump(mode="json"),
+    )
     intent = service.create_intent(
         founder(), project.id, complete_prompt(), None, connection.id, "idem-cloud-bound"
     )

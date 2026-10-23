@@ -75,7 +75,12 @@ class CandidateClass(StrEnum):
 
 
 class CloudInventorySnapshot(BaseModel):
-    """Approved customer context supplied by discovery; fixture-only in local V1."""
+    """Approved customer context supplied by discovery.
+
+    ``pricing_evidence`` is read-only catalog or Cost Explorer evidence. It is
+    intentionally separate from the planner's estimate so the product never
+    presents historical spend or a catalog lookup as a guaranteed AWS bill.
+    """
 
     provider: str = "aws"
     region: str = "us-east-1"
@@ -83,6 +88,7 @@ class CloudInventorySnapshot(BaseModel):
     approved_regions: list[str] = Field(default_factory=lambda: ["us-east-1", "eu-west-1"])
     discovered_at: datetime
     provenance: str = "fixture"
+    pricing_evidence: dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkloadSpec(BaseModel):

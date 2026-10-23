@@ -30,6 +30,39 @@ variable "artifact_object_version" {
   default     = null
 }
 
+variable "customer_execution_state_bucket" {
+  type        = string
+  description = "Versioned control-plane bucket used only for per-connection customer Terraform state."
+}
+
+variable "customer_execution_lock_table" {
+  type        = string
+  description = "Control-plane DynamoDB lock table used for per-connection customer Terraform state."
+}
+
+variable "customer_execution_artifact_key" {
+  type        = string
+  description = "Immutable S3 key for the reviewed customer execution runner archive."
+}
+
+variable "customer_execution_kms_key_arns" {
+  type        = list(string)
+  description = "Customer-managed KMS keys the isolated runner needs to decrypt its reviewed release and result artifacts."
+  default     = []
+}
+
+variable "enable_customer_cloud_execution" {
+  type        = bool
+  description = "Explicitly enable bounded authenticated customer plan/apply submissions. Defaults to false."
+  default     = false
+}
+
+variable "aws_connection_template_url" {
+  type        = string
+  description = "HTTPS URL for the reviewed customer AWS connection CloudFormation template."
+  default     = "https://raw.githubusercontent.com/Bepoadewale/davdeploy/main/infrastructure/cloudformation/customer-discovery-role.yaml"
+}
+
 variable "cognito_domain_prefix" {
   type        = string
   description = "Globally unique Cognito managed-login domain prefix."

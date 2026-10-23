@@ -7,7 +7,9 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  azs = slice(data.aws_availability_zones.available.names, 0, 2)
+  azs                 = slice(data.aws_availability_zones.available.names, 0, 2)
+  service_name        = var.service_name != "" ? var.service_name : "davdeploy-${var.connection_id}-workload"
+  ecr_repository_name = var.ecr_repository_name != "" ? var.ecr_repository_name : "davdeploy-${var.connection_id}-workload"
   tags = {
     Project               = "davdeploy"
     ManagedBy             = "terraform"
@@ -16,6 +18,7 @@ locals {
     AccountBoundary       = "same-account-pilot"
     Cell                  = "customer-sandbox-1"
     Purpose               = "real-app-runner-create-validate-destroy"
+    ConnectionId          = var.connection_id
     davdeployPlanDigest   = var.plan_digest
     davdeploySourceRepo   = "Bepoadewale/ai-platform-control-plane"
     davdeploySourceCommit = substr(var.source_commit, 0, 12)
@@ -83,7 +86,7 @@ resource "aws_apprunner_vpc_connector" "customer_sandbox" {
 }
 
 resource "aws_ecr_repository" "customer_workload" {
-  name                 = var.ecr_repository_name
+  name                 = local.ecr_repository_name
   image_tag_mutability = "MUTABLE"
   force_delete         = true
 
@@ -98,69 +101,22 @@ resource "aws_ecr_repository" "customer_workload" {
   tags = local.tags
 }
 
-data "aws_iam_policy_document" "apprunner_ecr_trust" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["build.apprunner.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role" "apprunner_ecr_access" {
-  name                 = "davdeploy-customer-sandbox-apprunner-ecr"
-  description          = "Allows App Runner to pull the davdeploy customer workload pilot image from ECR."
-  assume_role_policy   = data.aws_iam_policy_document.apprunner_ecr_trust.json
-  max_session_duration = 3600
-  tags                 = local.tags
-
-  depends_on = [terraform_data.account_guard]
-}
-
-resource "aws_iam_role_policy_attachment" "apprunner_ecr_access" {
-  role       = aws_iam_role.apprunner_ecr_access.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess"
-}
-
-data "aws_iam_policy_document" "runtime_trust" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["tasks.apprunner.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role" "runtime" {
-  name                 = "davdeploy-customer-sandbox-apprunner-runtime"
-  description          = "Minimal App Runner runtime role for the davdeploy customer workload pilot."
-  assume_role_policy   = data.aws_iam_policy_document.runtime_trust.json
-  max_session_duration = 3600
-  tags                 = local.tags
-
-  depends_on = [terraform_data.account_guard]
-}
-
 resource "aws_cloudwatch_log_group" "customer_workload" {
-  name              = "/aws/apprunner/${var.service_name}"
+  name              = "/aws/apprunner/${local.service_name}"
   retention_in_days = 3
   tags              = local.tags
 }
 
 resource "aws_apprunner_service" "customer_workload" {
   count        = var.enable_service ? 1 : 0
-  service_name = var.service_name
+  service_name = local.service_name
   tags         = local.tags
 
   source_configuration {
     auto_deployments_enabled = false
 
     authentication_configuration {
-      access_role_arn = aws_iam_role.apprunner_ecr_access.arn
+      access_role_arn = var.app_runner_ecr_access_role_arn
     }
 
     image_repository {
@@ -185,7 +141,7 @@ resource "aws_apprunner_service" "customer_workload" {
   instance_configuration {
     cpu               = var.cpu
     memory            = var.memory
-    instance_role_arn = aws_iam_role.runtime.arn
+    instance_role_arn = var.app_runner_runtime_role_arn
   }
 
   network_configuration {
@@ -207,7 +163,6 @@ resource "aws_apprunner_service" "customer_workload" {
   depends_on = [
     terraform_data.account_guard,
     aws_cloudwatch_log_group.customer_workload,
-    aws_iam_role_policy_attachment.apprunner_ecr_access,
     aws_apprunner_vpc_connector.customer_sandbox,
   ]
 }

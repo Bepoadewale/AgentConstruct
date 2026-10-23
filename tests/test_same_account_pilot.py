@@ -6,6 +6,9 @@ CUSTOMER_MAIN = Path(
 CUSTOMER_VARIABLES = Path(
     "infrastructure/terraform/customer-workload-app-runner-pilot/variables.tf"
 ).read_text(encoding="utf-8")
+CUSTOMER_VERSIONS = Path(
+    "infrastructure/terraform/customer-workload-app-runner-pilot/versions.tf"
+).read_text(encoding="utf-8")
 CUSTOMER_OUTPUTS = Path(
     "infrastructure/terraform/customer-workload-app-runner-pilot/outputs.tf"
 ).read_text(encoding="utf-8")
@@ -37,16 +40,20 @@ def test_customer_sandbox_has_a_dedicated_low_cost_vpc_boundary():
     assert 'egress_type       = "VPC"' in CUSTOMER_MAIN
     assert 'resource "aws_nat_gateway"' not in CUSTOMER_MAIN
     assert 'resource "aws_internet_gateway"' not in CUSTOMER_MAIN
-    assert "davdeploy-customer-sandbox-apprunner-runtime" in CUSTOMER_MAIN
+    assert "davdeploy-${var.connection_id}-workload" in CUSTOMER_MAIN
+    assert "app_runner_ecr_access_role_arn" in CUSTOMER_MAIN
+    assert "app_runner_runtime_role_arn" in CUSTOMER_MAIN
+    assert "customer_execution_role_arn" in CUSTOMER_VERSIONS
+    assert "customer_execution_external_id" in CUSTOMER_VERSIONS
 
 
 def test_state_and_teardown_are_scope_specific_and_account_guarded():
     assert "davdeploy/platform/app-runner-runtime.tfstate" in PLATFORM_SCRIPT
-    assert "davdeploy/customer-sandbox/workload-app-runner.tfstate" in CUSTOMER_SCRIPT
+    assert "davdeploy/customer/${connection_id}/workload-app-runner.tfstate" in CUSTOMER_SCRIPT
     assert "EXPECTED_AWS_ACCOUNT_ID" in PLATFORM_SCRIPT
     assert "EXPECTED_AWS_ACCOUNT_ID" in CUSTOMER_SCRIPT
     assert "Customer sandbox VPC still exists" in CUSTOMER_SCRIPT
-    assert "Customer sandbox IAM role still exists" in CUSTOMER_SCRIPT
+    assert "Connection roles are retained" in CUSTOMER_SCRIPT
     combined = CUSTOMER_MAIN + CUSTOMER_SCRIPT + PLATFORM_MAIN + PLATFORM_SCRIPT
     assert "organizations create-account" not in combined
     assert "organizations invite-account" not in combined

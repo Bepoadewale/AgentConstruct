@@ -71,6 +71,44 @@ def _parser() -> argparse.ArgumentParser:
     customer_execute = subparsers.add_parser("execute-customer-dry-run")
     customer_execute.add_argument("--revision-id", required=True)
 
+    terraform_render = subparsers.add_parser("render-customer-terraform")
+    terraform_render.add_argument("--revision-id", required=True)
+    terraform_render.add_argument("--content-digest", required=True)
+
+    cloud_preflight = subparsers.add_parser("preflight-customer-cloud")
+    cloud_preflight.add_argument("--revision-id", required=True)
+    cloud_preflight.add_argument("--content-digest", required=True)
+    cloud_preflight.add_argument("--expected-account-id")
+    cloud_preflight.add_argument("--region", required=True)
+    cloud_preflight.add_argument("--budget-ceiling-usd", type=int)
+    cloud_preflight.add_argument("--runtime-identity-configured", action="store_true")
+
+    terraform_review = subparsers.add_parser("review-customer-terraform-plan")
+    terraform_review.add_argument("--revision-id", required=True)
+    terraform_review.add_argument("--content-digest", required=True)
+    terraform_review.add_argument("--preflight-id")
+    terraform_review.add_argument("--expected-account-id")
+    terraform_review.add_argument("--region", required=True)
+    terraform_review.add_argument("--authenticated", action="store_true")
+
+    cloud_run = subparsers.add_parser("create-customer-cloud-run")
+    cloud_run.add_argument("--revision-id", required=True)
+    cloud_run.add_argument("--content-digest", required=True)
+    cloud_run.add_argument("--terraform-render-id")
+    cloud_run.add_argument("--preflight-id")
+    cloud_run.add_argument("--terraform-plan-review-id")
+    cloud_run.add_argument("--expected-account-id")
+    cloud_run.add_argument("--region", required=True)
+    cloud_run.add_argument("--confirmation", required=True)
+
+    queue_cloud_run = subparsers.add_parser("queue-customer-cloud-run")
+    queue_cloud_run.add_argument("--run-id", required=True)
+    queue_cloud_run.add_argument("--content-digest", required=True)
+    queue_cloud_run.add_argument("--confirmation", required=True)
+
+    cloud_evidence = subparsers.add_parser("get-customer-cloud-run-evidence")
+    cloud_evidence.add_argument("--run-id", required=True)
+
     customer_queue = subparsers.add_parser("list-customer-reviews")
     customer_queue.add_argument("--state")
 
@@ -129,6 +167,63 @@ def run(
         return client.request(
             "POST", f"/api/v1/customer-plan-revisions/{args.revision_id}/execute-dry-run"
         )
+    if args.command == "render-customer-terraform":
+        return client.request(
+            "POST",
+            f"/api/v1/customer-plan-revisions/{args.revision_id}/terraform-plan-renders",
+            {"content_digest": args.content_digest},
+        )
+    if args.command == "preflight-customer-cloud":
+        return client.request(
+            "POST",
+            f"/api/v1/customer-plan-revisions/{args.revision_id}/cloud-readiness-preflights",
+            {
+                "content_digest": args.content_digest,
+                "expected_account_id": args.expected_account_id,
+                "allowed_regions": [args.region],
+                "required_tags": {"ManagedBy": "davdeploy"},
+                "budget_ceiling_usd": args.budget_ceiling_usd,
+                "execution_mode": "PLAN_ONLY",
+                "require_reviewed_pr": False,
+                "runtime_identity_configured": args.runtime_identity_configured,
+            },
+        )
+    if args.command == "review-customer-terraform-plan":
+        return client.request(
+            "POST",
+            f"/api/v1/customer-plan-revisions/{args.revision_id}/terraform-plan-reviews",
+            {
+                "content_digest": args.content_digest,
+                "preflight_id": args.preflight_id,
+                "expected_account_id": args.expected_account_id,
+                "expected_region": args.region,
+                "mode": "AUTHENTICATED_TERRAFORM_PLAN" if args.authenticated else "LOCAL_CONTRACT_ONLY",
+                "allow_cloud_plan": args.authenticated,
+            },
+        )
+    if args.command == "create-customer-cloud-run":
+        return client.request(
+            "POST",
+            f"/api/v1/customer-plan-revisions/{args.revision_id}/cloud-execution-runs",
+            {
+                "content_digest": args.content_digest,
+                "terraform_render_id": args.terraform_render_id,
+                "preflight_id": args.preflight_id,
+                "terraform_plan_review_id": args.terraform_plan_review_id,
+                "expected_account_id": args.expected_account_id,
+                "expected_region": args.region,
+                "mode": "AUTHENTICATED_APP_RUNNER_APPLY",
+                "confirmation": args.confirmation,
+            },
+        )
+    if args.command == "queue-customer-cloud-run":
+        return client.request(
+            "POST",
+            f"/api/v1/cloud-execution-runs/{args.run_id}/execute",
+            {"content_digest": args.content_digest, "confirmation": args.confirmation},
+        )
+    if args.command == "get-customer-cloud-run-evidence":
+        return client.request("GET", f"/api/v1/cloud-execution-runs/{args.run_id}/evidence")
     if args.command == "list-customer-reviews":
         suffix = f"?state={args.state}" if args.state else ""
         return client.request("GET", f"/api/v1/admin/customer-plan-revisions{suffix}")

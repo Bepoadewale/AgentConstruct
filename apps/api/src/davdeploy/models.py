@@ -205,6 +205,8 @@ class CloudConnection(Base):
     connection_mode: Mapped[str] = mapped_column(String(64), default="byoc_role_contract")
     account_id: Mapped[str | None] = mapped_column(String(12), nullable=True)
     discovery_role_arn: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # A separate customer-approved role. Discovery never receives these permissions.
+    execution_role_arn: Mapped[str | None] = mapped_column(Text, nullable=True)
     # A reference to a control-plane secret. Never persist the customer's ExternalId here.
     external_id_secret_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
     external_id: Mapped[str | None] = mapped_column(Text, nullable=True)

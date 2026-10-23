@@ -13,9 +13,17 @@ require EXPECTED_AWS_ACCOUNT_ID
 require TF_STATE_BUCKET
 require TF_LOCK_TABLE
 require AWS_REGION
+require DAVDEPLOY_CUSTOMER_CONNECTION_ID
+require DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN
+require DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN
+require DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN
+require DAVDEPLOY_EXTERNAL_ID_SECRET_ARN
+require DAVDEPLOY_EXECUTION_RUN_ID
+require DAVDEPLOY_EXECUTION_RESULT_S3_URI
 
-service_name="${DAVDEPLOY_CUSTOMER_SERVICE_NAME:-davdeploy-customer-sandbox-workload}"
-repository_name="${DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_NAME:-davdeploy-customer-sandbox-workload}"
+connection_id="${DAVDEPLOY_CUSTOMER_CONNECTION_ID}"
+service_name="${DAVDEPLOY_CUSTOMER_SERVICE_NAME:-davdeploy-${connection_id}-workload}"
+repository_name="${DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_NAME:-davdeploy-${connection_id}-workload}"
 deployment_scope="${DAVDEPLOY_CUSTOMER_DEPLOYMENT_SCOPE:-customer-sandbox}"
 customer_vpc_cidr="${DAVDEPLOY_CUSTOMER_VPC_CIDR:-10.84.0.0/16}"
 platform_vpc_cidr="${DAVDEPLOY_PLATFORM_VPC_CIDR:-10.42.0.0/16}"
@@ -24,14 +32,19 @@ source_commit="${DAVDEPLOY_CUSTOMER_SOURCE_COMMIT:-unknown}"
 plan_digest="${DAVDEPLOY_CUSTOMER_PLAN_DIGEST:-customer-workload-pilot-local-approval}"
 image_identifier="${DAVDEPLOY_CUSTOMER_IMAGE_IDENTIFIER:-placeholder.invalid/davdeploy-customer-workload:unset}"
 enable_service="${DAVDEPLOY_ENABLE_CUSTOMER_SERVICE:-false}"
+result_uri="${DAVDEPLOY_EXECUTION_RESULT_S3_URI}"
+saved_plan_uri="${DAVDEPLOY_EXECUTION_SAVED_PLAN_S3_URI:-${result_uri%/result.json}/terraform.tfplan}"
+saved_plan_sha256="${DAVDEPLOY_EXECUTION_SAVED_PLAN_SHA256:-}"
+result_file="/tmp/davdeploy-execution-result.json"
+saved_plan_file="/tmp/davdeploy-${DAVDEPLOY_EXECUTION_RUN_ID}.tfplan"
 
 aws_args=()
 if [[ -n "${AWS_PROFILE:-}" ]]; then
   aws_args+=(--profile "$AWS_PROFILE")
 fi
 
-account="$(aws sts get-caller-identity "${aws_args[@]}" --query Account --output text)"
-[[ "$account" == "$EXPECTED_AWS_ACCOUNT_ID" ]] || { echo "AWS account guard failed: got ${account}, expected ${EXPECTED_AWS_ACCOUNT_ID}" >&2; exit 3; }
+external_id="$(aws secretsmanager get-secret-value "${aws_args[@]}" --secret-id "$DAVDEPLOY_EXTERNAL_ID_SECRET_ARN" --query SecretString --output text)"
+[[ -n "$external_id" && "$external_id" != "None" ]] || { echo "Customer connection ExternalId is unavailable" >&2; exit 3; }
 [[ "$deployment_scope" == "customer-sandbox" ]] || { echo "Customer deployment scope guard failed" >&2; exit 3; }
 [[ "$customer_vpc_cidr" != "$platform_vpc_cidr" ]] || { echo "Customer and platform VPC CIDRs must differ" >&2; exit 3; }
 
@@ -39,6 +52,11 @@ tf_vars=(
   "-var=region=${AWS_REGION}"
   "-var=expected_account_id=${EXPECTED_AWS_ACCOUNT_ID}"
   "-var=deployment_scope=${deployment_scope}"
+  "-var=connection_id=${connection_id}"
+  "-var=app_runner_ecr_access_role_arn=${DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN}"
+  "-var=app_runner_runtime_role_arn=${DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN}"
+  "-var=customer_execution_role_arn=${DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN}"
+  "-var=customer_execution_external_id=${external_id}"
   "-var=customer_vpc_cidr=${customer_vpc_cidr}"
   "-var=platform_vpc_cidr=${platform_vpc_cidr}"
   "-var=service_name=${service_name}"
@@ -53,13 +71,34 @@ tf_vars=(
 tf_init() {
   terraform -chdir="$root" init -input=false -reconfigure \
     -backend-config="bucket=${TF_STATE_BUCKET}" \
-    -backend-config="key=davdeploy/customer-sandbox/workload-app-runner.tfstate" \
+    -backend-config="key=davdeploy/customer/${connection_id}/workload-app-runner.tfstate" \
     -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
     -backend-config="region=${AWS_REGION}"
 }
 
 tf_output() {
   terraform -chdir="$root" output -json
+}
+
+write_result() {
+  local phase="$1"
+  local status="$2"
+  local detail_file="${3:-}"
+  local detail='{}'
+  if [[ -n "$detail_file" && -f "$detail_file" ]]; then
+    detail="$(cat "$detail_file")"
+  fi
+  jq -n \
+    --arg run_id "$DAVDEPLOY_EXECUTION_RUN_ID" \
+    --arg phase "$phase" \
+    --arg status "$status" \
+    --arg connection_id "$connection_id" \
+    --arg digest "$plan_digest" \
+    --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --argjson detail "$detail" \
+    '{schema_version:"davdeploy.customer_execution_result.v1",run_id:$run_id,phase:$phase,status:$status,connection_id:$connection_id,plan_digest:$digest,generated_at:$generated_at,detail:$detail}' \
+    >"$result_file"
+  aws s3 cp "$result_file" "$result_uri" --only-show-errors
 }
 
 service_arn() {
@@ -73,14 +112,38 @@ service_url() {
 case "$operation" in
   plan)
     tf_init
-    terraform -chdir="$root" plan -input=false "${tf_vars[@]}"
+    terraform -chdir="$root" plan -input=false -out="$saved_plan_file" "${tf_vars[@]}"
+    plan_sha256="$(shasum -a 256 "$saved_plan_file" | awk '{print $1}')"
+    terraform -chdir="$root" show -json "$saved_plan_file" | jq '{
+      format_version,
+      terraform_version,
+      resource_changes: [(.resource_changes // [])[] | {
+        address,
+        mode,
+        type,
+        name,
+        provider_name,
+        actions: .change.actions
+      }]
+    }' >/tmp/davdeploy-plan-summary.json
+    aws s3 cp "$saved_plan_file" "$saved_plan_uri" --only-show-errors
+    jq -n --arg saved_plan_s3_uri "$saved_plan_uri" --arg saved_plan_sha256 "$plan_sha256" --slurpfile summary /tmp/davdeploy-plan-summary.json \
+      '{saved_plan_s3_uri:$saved_plan_s3_uri,saved_plan_sha256:$saved_plan_sha256,plan_summary:$summary[0]}' \
+      >/tmp/davdeploy-plan-result.json
+    write_result "plan" "SUCCEEDED" /tmp/davdeploy-plan-result.json
     ;;
-  apply-foundation)
-    [[ "${CONFIRM_CUSTOMER_WORKLOAD_FOUNDATION_APPLY:-}" == "APPLY_CUSTOMER_WORKLOAD_FOUNDATION" ]] || {
-      echo "Set CONFIRM_CUSTOMER_WORKLOAD_FOUNDATION_APPLY=APPLY_CUSTOMER_WORKLOAD_FOUNDATION after reviewing the plan" >&2; exit 2;
+  apply-saved-plan)
+    [[ -n "$saved_plan_sha256" ]] || {
+      echo "DAVDEPLOY_EXECUTION_SAVED_PLAN_SHA256 is required for an artifact-bound apply" >&2; exit 2;
     }
     tf_init
-    terraform -chdir="$root" apply -input=false -auto-approve "${tf_vars[@]}"
+    aws s3 cp "$saved_plan_uri" "$saved_plan_file" --only-show-errors
+    echo "${saved_plan_sha256}  ${saved_plan_file}" | shasum -a 256 --check --status || {
+      echo "Saved Terraform plan digest mismatch" >&2; exit 3;
+    }
+    terraform -chdir="$root" apply -input=false "$saved_plan_file"
+    tf_output >/tmp/davdeploy-apply-outputs.json
+    write_result "apply" "SUCCEEDED" /tmp/davdeploy-apply-outputs.json
     ;;
   build-push-image)
     require DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_URL
@@ -98,15 +161,6 @@ case "$operation" in
       -f "${DAVDEPLOY_CUSTOMER_SOURCE_DIR}/control-plane/Dockerfile" \
       "${DAVDEPLOY_CUSTOMER_SOURCE_DIR}"
     printf '%s:%s\n' "$repo" "$tag"
-    ;;
-  apply-service)
-    [[ "${enable_service}" == "true" ]] || { echo "Set DAVDEPLOY_ENABLE_CUSTOMER_SERVICE=true" >&2; exit 2; }
-    [[ "${image_identifier}" != "placeholder.invalid/davdeploy-customer-workload:unset" ]] || { echo "Set DAVDEPLOY_CUSTOMER_IMAGE_IDENTIFIER" >&2; exit 2; }
-    [[ "${CONFIRM_CUSTOMER_WORKLOAD_SERVICE_APPLY:-}" == "APPLY_CUSTOMER_WORKLOAD_SERVICE" ]] || {
-      echo "Set CONFIRM_CUSTOMER_WORKLOAD_SERVICE_APPLY=APPLY_CUSTOMER_WORKLOAD_SERVICE after reviewing the plan" >&2; exit 2;
-    }
-    tf_init
-    terraform -chdir="$root" apply -input=false -auto-approve "${tf_vars[@]}"
     ;;
   wait-ready)
     tf_init
@@ -152,20 +206,14 @@ case "$operation" in
       echo "Customer sandbox VPC still exists" >&2
       exit 1
     fi
-    for role_name in davdeploy-customer-sandbox-apprunner-ecr davdeploy-customer-sandbox-apprunner-runtime; do
-      if aws iam get-role "${aws_args[@]}" --role-name "$role_name" >/dev/null 2>&1; then
-        echo "Customer sandbox IAM role still exists: ${role_name}" >&2
-        exit 1
-      fi
-    done
-    echo "Customer workload AWS resources absent: service=${missing_service}, ecr_repository=deleted, vpc=deleted, roles=deleted"
+    echo "Customer workload AWS resources absent: service=${missing_service}, ecr_repository=deleted, vpc=deleted. Connection roles are retained for future approved workloads."
     ;;
   output)
     tf_init
     tf_output
     ;;
   *)
-    echo "usage: $0 {plan|apply-foundation|build-push-image|apply-service|wait-ready|smoke|destroy|verify-absent|output}" >&2
+    echo "usage: $0 {plan|apply-saved-plan|build-push-image|wait-ready|smoke|destroy|verify-absent|output}" >&2
     exit 2
     ;;
 esac

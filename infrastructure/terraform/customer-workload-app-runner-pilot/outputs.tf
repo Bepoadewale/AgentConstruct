@@ -14,8 +14,8 @@ output "app_runner_service_arn" {
 }
 
 output "runtime_role_arn" {
-  value       = aws_iam_role.runtime.arn
-  description = "Minimal App Runner runtime role for the customer workload pilot."
+  value       = var.app_runner_runtime_role_arn
+  description = "Customer-created minimal App Runner runtime role used by this workload."
 }
 
 output "customer_sandbox_vpc_id" {

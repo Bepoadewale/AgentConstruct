@@ -8,6 +8,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from httpx import HTTPError
 from opentelemetry import trace
 from sqlalchemy import select
@@ -24,6 +26,7 @@ from davdeploy.connection_secrets import (
 from davdeploy.contracts import TenantScope
 from davdeploy.day2 import FixtureDay2Advisor
 from davdeploy.domain import (
+    CloudInventorySnapshot,
     EnvironmentName,
     InfrastructurePlanDecision,
     InfrastructurePlanState,
@@ -1697,6 +1700,7 @@ class ProductService:
             "provider": connection.provider,
             "account_id": connection.account_id,
             "role_arn": connection.discovery_role_arn,
+            "execution_role_arn": connection.execution_role_arn,
             "setup_state": connection.setup_state,
             "authorized_regions": snapshot.get("approved_regions", []),
             "capabilities": [
@@ -1706,7 +1710,11 @@ class ProductService:
             "verified_at": latest.captured_at.isoformat() if latest else None,
             "verification_provenance": latest.provenance if latest else None,
             "credentials_stored": False,
-            "deployment_permission": "not granted",
+            "deployment_permission": (
+                "customer-approved execution role pending verification"
+                if connection.execution_role_arn
+                else "not granted"
+            ),
         }
 
     def disconnect_cloud_connection(self, principal: Principal, connection_id: str) -> None:
@@ -1738,17 +1746,24 @@ class ProductService:
     ) -> dict[str, object]:
         """Generate a one-click AWS Console setup; it does not create AWS resources itself."""
         connection = self._cloud_connection(principal, connection_id)
-        control_plane_role_arn = os.getenv("DAVDEPLOY_CONTROL_PLANE_ROLE_ARN")
+        discovery_broker_role_arn = os.getenv("DAVDEPLOY_DISCOVERY_BROKER_ROLE_ARN")
+        execution_broker_role_arn = os.getenv("DAVDEPLOY_EXECUTION_BROKER_ROLE_ARN")
+        # Compatibility is intentionally temporary for pre-split hosted configurations.
+        legacy_broker_role_arn = os.getenv("DAVDEPLOY_CONTROL_PLANE_ROLE_ARN")
+        discovery_broker_role_arn = discovery_broker_role_arn or legacy_broker_role_arn
+        execution_broker_role_arn = execution_broker_role_arn or legacy_broker_role_arn
         template_url = os.getenv("DAVDEPLOY_AWS_CONNECTION_TEMPLATE_URL")
-        if not control_plane_role_arn or not template_url:
+        if not discovery_broker_role_arn or not execution_broker_role_arn or not template_url:
             raise RuntimeError(
-                "AWS customer connection setup is not configured with a hosted template"
+                "AWS customer connection setup is not configured with broker roles and a hosted template"
             )
         external_id = secrets.token_urlsafe(32)
         stack_name = f"davdeploy-Discovery-{connection.id[:8]}"
         discovery_role_arn = f"arn:aws:iam::{account_id}:role/davdeployDiscovery-{connection.id}"
+        execution_role_arn = f"arn:aws:iam::{account_id}:role/davdeployExecution-{connection.id}"
         parameters = {
-            "davdeployControlPlaneRoleArn": control_plane_role_arn,
+            "davdeployDiscoveryBrokerRoleArn": discovery_broker_role_arn,
+            "davdeployExecutionBrokerRoleArn": execution_broker_role_arn,
             "ExternalId": external_id,
             "ConnectionId": connection.id,
         }
@@ -1760,6 +1775,7 @@ class ProductService:
         )
         connection.account_id = account_id
         connection.discovery_role_arn = discovery_role_arn
+        connection.execution_role_arn = execution_role_arn
         connection.external_id_secret_ref = self.connection_secrets.put_external_id(
             principal.organization_id, connection.id, external_id
         )
@@ -1786,10 +1802,10 @@ class ProductService:
             "quick_create_url": quick_create_url,
             "customer_steps": [
                 "Open the AWS Quick Create link.",
-                "Review the one read-only IAM role and acknowledge IAM resource creation.",
+                "Review the separate read-only discovery and bounded execution IAM roles, then acknowledge IAM resource creation.",
                 "Create the stack, then return to davdeploy to verify the connection.",
             ],
-            "boundary": "This action only creates a setup link. davdeploy does not create customer AWS resources until the customer creates the stack in their own account.",
+            "boundary": "This action only creates a setup link and does not create customer AWS resources. The execution role has no reusable credentials and is separate from discovery. davdeploy does not create a workload until an exact approved plan is applied.",
         }
 
     def queue_aws_connection_verification(
@@ -2504,7 +2520,7 @@ class ProductService:
             {
                 "revision_id": revision.id,
                 "digest": revision.content_digest,
-                "state": state,
+                "state": publication.state,
                 "boundary": "local fixture PR/check state only; no GitHub write, merge or deployment",
             },
         )
@@ -3262,6 +3278,71 @@ class ProductService:
         )
         self.db.add(stored)
         self.db.flush()
+        if stored.state == "AUTHENTICATED_PLAN_ALLOWED_NOT_EXECUTED":
+            connection_id = str((revision.content.get("target") or {}).get("connection_id") or "")
+            connection = self._cloud_connection(principal, connection_id) if connection_id else None
+            runner_bucket = os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_STATE_BUCKET", "")
+            runner_artifact = os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_ARTIFACT_S3_URI", "")
+            runtime_enabled = (
+                os.getenv("DAVDEPLOY_ENABLE_APP_RUNNER_EXECUTION", "").lower() == "true"
+                and os.getenv("DAVDEPLOY_CLOUD_EXECUTION_COMMAND_ENABLED", "").lower() == "true"
+            )
+            if not connection or connection.setup_state != "VERIFIED" or not connection.execution_role_arn:
+                stored.state = "BLOCKED_CLOUD_CONNECTION_NOT_VERIFIED"
+                stored.evidence = {**stored.evidence, "blockers": ["Authenticated Terraform plan requires a verified customer connection with an execution role."]}
+            elif not connection.external_id_secret_ref or not runner_bucket or not runner_artifact or not runtime_enabled:
+                stored.state = "BLOCKED_CLOUD_EXECUTION_RUNTIME_NOT_CONFIGURED"
+                stored.evidence = {**stored.evidence, "blockers": ["Authenticated Terraform plan runner configuration is incomplete or disabled."]}
+            else:
+                plan_run = CloudExecutionRun(
+                    organization_id=principal.organization_id,
+                    revision_id=revision.id,
+                    project_id=infrastructure_plan.project_id,
+                    terraform_render_id=render.id if render else None,
+                    preflight_id=preflight.id if preflight else None,
+                    terraform_plan_review_id=stored.id,
+                    profile="aws-app-runner",
+                    state="SUBMITTING",
+                    mode="AUTHENTICATED_TERRAFORM_PLAN",
+                    command={"operation": "plan", "artifact_bound_apply": True},
+                    evidence={},
+                    outputs={"status": "submitting", "resources_created": []},
+                    content_digest=revision.content_digest,
+                    requested_by_subject=principal.subject,
+                )
+                self.db.add(plan_run)
+                self.db.flush()
+                execution_environment = {
+                    "AWS_REGION": str(region or connection.region),
+                    "EXPECTED_AWS_ACCOUNT_ID": str(connection.account_id),
+                    "TF_STATE_BUCKET": runner_bucket,
+                    "TF_LOCK_TABLE": os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_LOCK_TABLE", ""),
+                    "DAVDEPLOY_CUSTOMER_CONNECTION_ID": connection.id,
+                    "DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN": connection.execution_role_arn,
+                    "DAVDEPLOY_EXTERNAL_ID_SECRET_ARN": connection.external_id_secret_ref,
+                    "DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN": f"arn:aws:iam::{connection.account_id}:role/davdeployAppRunnerEcr-{connection.id}",
+                    "DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN": f"arn:aws:iam::{connection.account_id}:role/davdeployAppRunnerRuntime-{connection.id}",
+                    "DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI": runner_artifact,
+                    "DAVDEPLOY_EXECUTION_OPERATION": "plan",
+                    "DAVDEPLOY_EXECUTION_RUN_ID": plan_run.id,
+                    "DAVDEPLOY_EXECUTION_RESULT_S3_URI": f"s3://{runner_bucket}/davdeploy/customer/{connection.id}/runs/{plan_run.id}/result.json",
+                    "DAVDEPLOY_CUSTOMER_PLAN_DIGEST": revision.content_digest,
+                }
+                if not execution_environment["TF_LOCK_TABLE"]:
+                    stored.state = "BLOCKED_CLOUD_EXECUTION_RUNTIME_NOT_CONFIGURED"
+                    stored.evidence = {**stored.evidence, "blockers": ["Customer execution lock table is not configured."]}
+                    plan_run.state = "BLOCKED_CLOUD_EXECUTION_RUNTIME_NOT_CONFIGURED"
+                else:
+                    plan_run.evidence = {
+                        "execution_environment": execution_environment,
+                        "result_s3_uri": execution_environment["DAVDEPLOY_EXECUTION_RESULT_S3_URI"],
+                        "boundary": "A bounded runner may generate a Terraform plan artifact only. It cannot apply this request.",
+                    }
+                    result = self.cloud_execution.execute({"run_id": plan_run.id, "environment": execution_environment})
+                    plan_run.state = result.state
+                    plan_run.outputs = {**plan_run.outputs, **result.outputs, "operations": list(result.operations), "failure_reason": result.failure_reason}
+                    stored.state = "AUTHENTICATED_PLAN_SUBMITTED" if result.state == "SUBMITTED" else "BLOCKED_CLOUD_EXECUTION_RUNTIME_NOT_CONFIGURED"
+                    stored.evidence = {**stored.evidence, "execution_run_id": plan_run.id, "runner_state": result.state}
         self.audit(
             principal,
             "terraform.plan_only_review_recorded",
@@ -3369,10 +3450,7 @@ class ProductService:
         if plan_review is None:
             blockers.append("Record Terraform plan-only review first.")
             state = "BLOCKED_TERRAFORM_PLAN_REVIEW_REQUIRED"
-        elif plan_review.state not in {
-            "LOCAL_CONTRACT_PLAN_REVIEWED",
-            "AUTHENTICATED_PLAN_ALLOWED_NOT_EXECUTED",
-        }:
+        elif plan_review.state not in {"LOCAL_CONTRACT_PLAN_REVIEWED", "AUTHENTICATED_PLAN_REVIEWED"}:
             blockers.append(f"Terraform plan review is {plan_review.state}.")
             state = "BLOCKED_TERRAFORM_PLAN_REVIEW"
         if expected_account_id and account_id not in {
@@ -3390,6 +3468,67 @@ class ProductService:
         cloud_apply_env = os.getenv("ALLOW_CLOUD_APPLY", "").lower() == "true"
         runtime_enabled = os.getenv("DAVDEPLOY_ENABLE_APP_RUNNER_EXECUTION", "").lower() == "true"
         confirmation_ok = confirmation == "EXECUTE_APP_RUNNER_WORKLOAD"
+        connection_id = str((revision.content.get("target") or {}).get("connection_id") or "")
+        connection: CloudConnection | None = None
+        if mode == "AUTHENTICATED_APP_RUNNER_APPLY":
+            if not connection_id:
+                blockers.append(
+                    "Authenticated execution requires a verified customer cloud connection."
+                )
+                state = "BLOCKED_CLOUD_CONNECTION_REQUIRED"
+            else:
+                connection = self._cloud_connection(principal, connection_id)
+                if connection.setup_state != "VERIFIED":
+                    blockers.append("Selected customer cloud connection is not verified.")
+                    state = "BLOCKED_CLOUD_CONNECTION_NOT_VERIFIED"
+                if not connection.execution_role_arn:
+                    blockers.append("Selected customer cloud connection has no bounded execution role.")
+                    state = "BLOCKED_CLOUD_EXECUTION_ROLE_REQUIRED"
+                if account_id in {None, "customer-account-selected-at-apply-time"}:
+                    account_id = connection.account_id
+                if connection.account_id and account_id != connection.account_id:
+                    blockers.append(
+                        "Terraform contract account does not match the verified customer connection."
+                    )
+                    state = "BLOCKED_ACCOUNT_GUARD"
+                real_plan_artifact = (plan_review.evidence or {}).get("real_plan_artifact") or {}
+                if not real_plan_artifact.get("saved_plan_s3_uri") or not real_plan_artifact.get("saved_plan_sha256"):
+                    blockers.append("Authenticated execution requires a reviewed saved Terraform plan artifact.")
+                    state = "BLOCKED_TERRAFORM_PLAN_ARTIFACT_REQUIRED"
+        execution_environment: dict[str, str] = {}
+        if connection and connection.execution_role_arn and connection.external_id_secret_ref:
+            execution_environment = {
+                "AWS_REGION": str(region or ""),
+                "EXPECTED_AWS_ACCOUNT_ID": str(account_id or ""),
+                "TF_STATE_BUCKET": os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_STATE_BUCKET", ""),
+                "TF_LOCK_TABLE": os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_LOCK_TABLE", ""),
+                "DAVDEPLOY_CUSTOMER_CONNECTION_ID": connection.id,
+                "DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN": connection.execution_role_arn,
+                "DAVDEPLOY_EXTERNAL_ID_SECRET_ARN": connection.external_id_secret_ref,
+                "DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN": (
+                    f"arn:aws:iam::{account_id}:role/davdeployAppRunnerEcr-{connection.id}"
+                ),
+                "DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN": (
+                    f"arn:aws:iam::{account_id}:role/davdeployAppRunnerRuntime-{connection.id}"
+                ),
+                "DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI": os.getenv(
+                    "DAVDEPLOY_CUSTOMER_EXECUTION_ARTIFACT_S3_URI", ""
+                ),
+                "DAVDEPLOY_EXECUTION_OPERATION": "apply-saved-plan",
+                "DAVDEPLOY_EXECUTION_SAVED_PLAN_S3_URI": str(real_plan_artifact.get("saved_plan_s3_uri") if mode == "AUTHENTICATED_APP_RUNNER_APPLY" else ""),
+                "DAVDEPLOY_EXECUTION_SAVED_PLAN_SHA256": str(real_plan_artifact.get("saved_plan_sha256") if mode == "AUTHENTICATED_APP_RUNNER_APPLY" else ""),
+                "DAVDEPLOY_CUSTOMER_PLAN_DIGEST": revision.content_digest,
+            }
+            required_runner_values = (
+                "AWS_REGION",
+                "EXPECTED_AWS_ACCOUNT_ID",
+                "TF_STATE_BUCKET",
+                "TF_LOCK_TABLE",
+                "DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI",
+            )
+            if not all(execution_environment[key] for key in required_runner_values):
+                blockers.append("Customer execution runner configuration is incomplete.")
+                state = "BLOCKED_CLOUD_EXECUTION_RUNTIME_NOT_CONFIGURED"
         if mode == "AUTHENTICATED_APP_RUNNER_APPLY":
             if not cloud_apply_env or not runtime_enabled or not confirmation_ok:
                 blockers.append(
@@ -3446,6 +3585,9 @@ class ProductService:
             "runtime_enabled": runtime_enabled,
             "allow_cloud_apply_env": cloud_apply_env,
             "confirmation_ok": confirmation_ok,
+            "cloud_connection_id": connection_id or None,
+            "execution_role_configured": bool(connection and connection.execution_role_arn),
+            "execution_environment": execution_environment,
             "blockers": blockers,
             "boundary": (
                 "This run records a guarded execution request. It does not deploy unless the "
@@ -3472,6 +3614,13 @@ class ProductService:
         )
         self.db.add(run)
         self.db.flush()
+        if execution_environment:
+            execution_environment["DAVDEPLOY_EXECUTION_RUN_ID"] = run.id
+            execution_environment["DAVDEPLOY_EXECUTION_RESULT_S3_URI"] = (
+                f"s3://{execution_environment['TF_STATE_BUCKET']}/davdeploy/customer/"
+                f"{execution_environment['DAVDEPLOY_CUSTOMER_CONNECTION_ID']}/runs/{run.id}/result.json"
+            )
+            run.evidence = {**run.evidence, "execution_environment": execution_environment}
         self.audit(
             principal,
             "cloud_execution.run_requested",
@@ -3561,6 +3710,79 @@ class ProductService:
             "cloud_execution_run",
             run.id,
             {"state": result.state, "failure_reason": result.failure_reason},
+        )
+        self.db.commit()
+        return True
+
+    def reconcile_cloud_execution_build(self, build_id: str) -> bool:
+        """Persist one CodeBuild completion received through the SQS event bridge."""
+        run = next(
+            (
+                item
+                for item in self.db.scalars(
+                    select(CloudExecutionRun).where(CloudExecutionRun.state == "SUBMITTED")
+                )
+                if (item.outputs or {}).get("codebuild_build_id") == build_id
+            ),
+            None,
+        )
+        if not run:
+            return False
+        response = boto3.client("codebuild").batch_get_builds(ids=[build_id])
+        builds = response.get("builds") or []
+        if not builds:
+            return False
+        build = builds[0]
+        status = str(build.get("buildStatus") or "IN_PROGRESS")
+        if status in {"IN_PROGRESS", "QUEUED"}:
+            return False
+        artifact: dict[str, Any] = {}
+        artifact_error: str | None = None
+        result_uri = str((run.evidence or {}).get("result_s3_uri") or "")
+        if status == "SUCCEEDED":
+            try:
+                if not result_uri.startswith("s3://"):
+                    raise ValueError("runner result artifact URI is missing")
+                bucket, key = result_uri[5:].split("/", 1)
+                payload = boto3.client("s3").get_object(Bucket=bucket, Key=key)["Body"].read()
+                artifact = json.loads(payload.decode("utf-8"))
+                if artifact.get("run_id") != run.id or artifact.get("status") != "SUCCEEDED":
+                    raise ValueError("runner result artifact does not match the execution run")
+            except (BotoCoreError, ClientError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
+                # Artifact integrity failure must never become deployment success.
+                artifact_error = str(error)
+        if status != "SUCCEEDED" or artifact_error:
+            run.state = "FAILED"
+        elif run.mode == "AUTHENTICATED_TERRAFORM_PLAN":
+            review = self.db.get(TerraformPlanReview, run.terraform_plan_review_id)
+            detail = artifact.get("detail") or {}
+            if not review or not detail.get("saved_plan_s3_uri") or not detail.get("saved_plan_sha256"):
+                run.state = "FAILED"
+                artifact_error = "authenticated plan completion did not contain a saved plan artifact"
+            else:
+                review.state = "AUTHENTICATED_PLAN_REVIEWED"
+                review.evidence = {
+                    **(review.evidence or {}),
+                    "real_plan_artifact": detail,
+                    "runner_result_s3_uri": result_uri,
+                    "reviewed_at": datetime.now(UTC).isoformat(),
+                }
+                run.state = "AUTHENTICATED_PLAN_REVIEWED"
+        else:
+            run.state = "SUCCEEDED_AWAITING_OBSERVATION"
+        run.outputs = {
+            **(run.outputs or {}),
+            "codebuild_status": status,
+            "codebuild_completed_at": str(build.get("buildComplete") or ""),
+            "runner_artifact": artifact or None,
+            "failure_reason": artifact_error or (None if status == "SUCCEEDED" else "Bounded CodeBuild runner failed."),
+        }
+        self.audit(
+            Principal("system-cloud-worker", run.organization_id, "operator"),
+            "cloud_execution.codebuild_completed",
+            "cloud_execution_run",
+            run.id,
+            {"build_id": build_id, "status": status},
         )
         self.db.commit()
         return True
@@ -3850,7 +4072,7 @@ class ProductService:
             raise ValueError(f"missing material requirements: {', '.join(spec.unknowns)}")
         connection_id = str(intent.spec.get("cloud_connection_id") or "local-aws-fixture")
         requested_region = spec.region_constraints[0] if spec.region_constraints else "us-east-1"
-        inventory = self.cloud_discovery.inventory(connection_id, requested_region)
+        inventory = self._planning_inventory(principal, connection_id, requested_region)
         architecture = self.planner.plan(spec, inventory)
         stored = self.db.scalar(
             select(StoredArchitecturePlan).where(StoredArchitecturePlan.intent_id == intent.id)
@@ -3904,6 +4126,34 @@ class ProductService:
         )
         self.db.commit()
         return plan
+
+    def _planning_inventory(
+        self, principal: Principal, connection_id: str, requested_region: str
+    ) -> CloudInventorySnapshot:
+        """Use the freshest verified customer discovery evidence when a connection is selected.
+
+        The planner does not call AWS from a browser request. It consumes a durable,
+        tenant-scoped snapshot produced by the trusted discovery worker. Fixture
+        discovery remains the explicit fallback for local planning without a connection.
+        """
+        if connection_id == "local-aws-fixture":
+            return self.cloud_discovery.inventory(connection_id, requested_region)
+        connection = self._cloud_connection(principal, connection_id)
+        if connection.setup_state != "VERIFIED":
+            raise ValueError("selected cloud connection must be verified before planning")
+        snapshot = self.db.scalar(
+            select(StoredCloudInventorySnapshot)
+            .where(
+                StoredCloudInventorySnapshot.organization_id == principal.organization_id,
+                StoredCloudInventorySnapshot.cloud_connection_id == connection.id,
+                StoredCloudInventorySnapshot.region == requested_region,
+            )
+            .order_by(StoredCloudInventorySnapshot.captured_at.desc())
+            .limit(1)
+        )
+        if not snapshot:
+            raise ValueError("selected cloud connection has no verified inventory for this region")
+        return CloudInventorySnapshot.model_validate(snapshot.snapshot)
 
     def _plan(self, principal: Principal, plan_id: str) -> DeploymentPlan:
         plan = self.db.get(DeploymentPlan, plan_id)

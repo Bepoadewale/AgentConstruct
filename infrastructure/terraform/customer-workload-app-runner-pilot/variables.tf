@@ -19,6 +19,37 @@ variable "deployment_scope" {
   }
 }
 
+variable "connection_id" {
+  type        = string
+  description = "DavDeploy customer connection identifier. It scopes deterministic workload names and tags."
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9-]{8,40}$", var.connection_id))
+    error_message = "connection_id must be the non-secret DavDeploy connection identifier."
+  }
+}
+
+variable "app_runner_ecr_access_role_arn" {
+  type        = string
+  description = "Customer-created App Runner ECR access role from the connection stack."
+}
+
+variable "app_runner_runtime_role_arn" {
+  type        = string
+  description = "Customer-created App Runner runtime role from the connection stack."
+}
+
+variable "customer_execution_role_arn" {
+  type        = string
+  description = "Customer-created bounded execution role assumed only by Terraform's AWS provider."
+}
+
+variable "customer_execution_external_id" {
+  type        = string
+  description = "Control-plane-held ExternalId for the bounded customer execution role."
+  sensitive   = true
+}
+
 variable "customer_vpc_cidr" {
   type        = string
   description = "Dedicated same-account customer-sandbox VPC CIDR."
@@ -56,13 +87,13 @@ variable "image_identifier" {
 variable "service_name" {
   type        = string
   description = "App Runner service name."
-  default     = "davdeploy-customer-sandbox-workload"
+  default     = ""
 }
 
 variable "ecr_repository_name" {
   type        = string
   description = "ECR repository name for the customer workload image."
-  default     = "davdeploy-customer-sandbox-workload"
+  default     = ""
 }
 
 variable "source_repository" {
