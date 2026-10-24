@@ -48,6 +48,28 @@ external_id="$(aws secretsmanager get-secret-value "${aws_args[@]}" --secret-id 
 [[ "$deployment_scope" == "customer-sandbox" ]] || { echo "Customer deployment scope guard failed" >&2; exit 3; }
 [[ "$customer_vpc_cidr" != "$platform_vpc_cidr" ]] || { echo "Customer and platform VPC CIDRs must differ" >&2; exit 3; }
 
+assume_customer_execution_role() {
+  local credentials
+  credentials="$(aws sts assume-role "${aws_args[@]}" \
+    --role-arn "$DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN" \
+    --role-session-name "davdeploy-customer-${DAVDEPLOY_EXECUTION_RUN_ID}" \
+    --external-id "$external_id" \
+    --duration-seconds 3600 \
+    --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+    --output text)"
+  read -r AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN <<<"$credentials"
+  export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+  unset external_id
+  aws_args=()
+  [[ -n "$AWS_ACCESS_KEY_ID" && -n "$AWS_SECRET_ACCESS_KEY" && -n "$AWS_SESSION_TOKEN" ]] || {
+    echo "Scoped customer execution role assumption returned incomplete credentials" >&2
+    exit 3
+  }
+  echo "Assumed scoped customer execution role for this bounded run"
+}
+
+assume_customer_execution_role
+
 tf_vars=(
   "-var=region=${AWS_REGION}"
   "-var=expected_account_id=${EXPECTED_AWS_ACCOUNT_ID}"
