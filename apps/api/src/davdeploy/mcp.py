@@ -160,6 +160,19 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "build_customer_image",
+        "description": "Build and push exactly one commit pinned from the repository already selected by an approved plan. This cannot create or update an App Runner service.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["revision_id", "content_digest", "region", "confirmation"],
+            "properties": {
+                "revision_id": {"type": "string"}, "content_digest": {"type": "string"},
+                "expected_account_id": {"type": "string"}, "region": {"type": "string"},
+                "confirmation": {"type": "string", "description": "Must be BUILD_CUSTOMER_IMAGE."},
+            },
+        },
+    },
+    {
         "name": "queue_customer_cloud_run",
         "description": "Queue an already-ready exact cloud execution request. The API independently verifies role, digest, policy, approval, and confirmation.",
         "inputSchema": {
@@ -345,6 +358,17 @@ class davdeployMcp:
                     "expected_region": arguments["region"],
                     "mode": "AUTHENTICATED_APP_RUNNER_DESTROY" if bool(arguments.get("destroy")) else "AUTHENTICATED_APP_RUNNER_APPLY",
                     "confirmation": arguments.get("confirmation"),
+                },
+            )
+        if name == "build_customer_image":
+            return self.client.request(
+                "POST",
+                f"/api/v1/customer-plan-revisions/{arguments['revision_id']}/customer-image-builds",
+                {
+                    "content_digest": arguments["content_digest"],
+                    "expected_account_id": arguments.get("expected_account_id"),
+                    "expected_region": arguments["region"],
+                    "confirmation": arguments["confirmation"],
                 },
             )
         if name == "queue_customer_cloud_run":

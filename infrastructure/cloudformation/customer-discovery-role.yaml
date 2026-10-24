@@ -205,6 +205,19 @@ Resources:
                     iam:PassedToService:
                       - build.apprunner.amazonaws.com
                       - tasks.apprunner.amazonaws.com
+              - Sid: PushOnlyConnectionScopedWorkloadImage
+                Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:CompleteLayerUpload
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource: !Sub "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/davdeploy-${ConnectionId}-workload"
+              - Sid: GetEcrAuthorizationTokenForScopedImagePush
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: "*"
 
   AppRunnerEcrAccessRole:
     Type: AWS::IAM::Role
