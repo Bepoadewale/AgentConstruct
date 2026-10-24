@@ -28,11 +28,13 @@ PR #149 introduced a connection-scoped ECR upload policy. The actual customer co
 
 ## Acceptance status
 
-In progress.
+Implemented locally. The live connection-stack update and governed retry remain gated on review and release.
 
 ## Tests / validation performed
 
-Pending implementation.
+- `.venv/bin/python -m pytest -q tests/test_customer_connection_template.py tests/test_cloud_execution.py` passed: 14 tests.
+- `.venv/bin/python scripts/check_doc_conventions.py` passed.
+- `git diff --check` passed.
 
 ## Evidence files produced
 
