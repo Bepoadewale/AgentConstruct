@@ -65,6 +65,11 @@ def test_state_and_teardown_are_scope_specific_and_account_guarded():
     assert "Connection roles are retained" in CUSTOMER_SCRIPT
     assert "ensure_app_runner_service_linked_role" in CUSTOMER_SCRIPT
     assert "--aws-service-name apprunner.amazonaws.com" in CUSTOMER_SCRIPT
+    assert "aws sts assume-role" in CUSTOMER_SCRIPT
+    assert '"$DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN"' in CUSTOMER_SCRIPT
+    assert '--external-id "$external_id"' in CUSTOMER_SCRIPT
+    assert "export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN" in CUSTOMER_SCRIPT
+    assert "unset external_id" in CUSTOMER_SCRIPT
     combined = CUSTOMER_MAIN + CUSTOMER_SCRIPT + PLATFORM_MAIN + PLATFORM_SCRIPT
     assert "organizations create-account" not in combined
     assert "organizations invite-account" not in combined
