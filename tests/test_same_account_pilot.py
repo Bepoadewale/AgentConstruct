@@ -59,6 +59,7 @@ def test_customer_workload_tags_match_the_bounded_connection_role_contract():
     assert 'ManagedBy             = "davdeploy"' in CUSTOMER_MAIN
     assert "aws:RequestTag/ManagedBy: davdeploy" in template
     assert "aws:RequestTag/ConnectionId: !Ref ConnectionId" in template
+    assert "networking.apprunner.amazonaws.com" in template
 
 
 def test_state_and_teardown_are_scope_specific_and_account_guarded():
@@ -69,7 +70,8 @@ def test_state_and_teardown_are_scope_specific_and_account_guarded():
     assert "Customer sandbox VPC still exists" in CUSTOMER_SCRIPT
     assert "Connection roles are retained" in CUSTOMER_SCRIPT
     assert "ensure_app_runner_service_linked_role" in CUSTOMER_SCRIPT
-    assert "--aws-service-name apprunner.amazonaws.com" in CUSTOMER_SCRIPT
+    assert 'ensure_app_runner_service_linked_role apprunner.amazonaws.com "App Runner"' in CUSTOMER_SCRIPT
+    assert "networking.apprunner.amazonaws.com" in CUSTOMER_SCRIPT
     assert "aws sts assume-role" in CUSTOMER_SCRIPT
     assert '"$DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN"' in CUSTOMER_SCRIPT
     assert '--external-id "$external_id"' in CUSTOMER_SCRIPT
