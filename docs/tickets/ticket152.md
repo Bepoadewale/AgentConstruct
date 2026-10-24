@@ -26,6 +26,8 @@ and correctly falls back to its fixture connection.
 
 - Load the App private key from a dedicated Secrets Manager secret at Lambda runtime.
 - Add least-privilege runtime permission and non-secret environment references.
+- Pass non-secret App identifiers and the dedicated secret ARN only through protected Terraform
+  workflow variables.
 - Preserve fixture behaviour when live App mode is not explicitly configured.
 - Add focused tests and a deployment/operator handoff for the secret prerequisite.
 
