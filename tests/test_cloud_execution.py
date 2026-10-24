@@ -137,6 +137,52 @@ def test_admin_can_reconcile_only_the_safe_encrypted_result_read_failure(monkeyp
     assert result["outputs"]["terraform_outputs"] == {"output": "ok"}
 
 
+def test_reconciliation_reads_a_generated_legacy_result_uri(monkeypatch):
+    service, _ = make_service()
+    build_id = "davdeploy-customer-executor:legacy-result"
+    run = CloudExecutionRun(
+        organization_id=founder().organization_id,
+        revision_id="revision-legacy-result",
+        project_id="project-legacy-result",
+        profile="aws-app-runner",
+        state="SUBMITTED",
+        mode="AUTHENTICATED_APP_RUNNER_APPLY",
+        attempt=1,
+        command={},
+        evidence={
+            "execution_environment": {
+                "DAVDEPLOY_EXECUTION_RESULT_S3_URI": "s3://runner-results/legacy/result.json"
+            }
+        },
+        outputs={"codebuild_build_id": build_id},
+        content_digest="d" * 64,
+        requested_by_subject=founder().subject,
+    )
+    service.db.add(run)
+    service.db.commit()
+
+    class Body:
+        def read(self):
+            return ('{"run_id": "' + run.id + '", "status": "SUCCEEDED", "detail": {}}').encode()
+
+    class CodeBuild:
+        def batch_get_builds(self, *, ids):
+            return {"builds": [{"buildStatus": "SUCCEEDED", "buildComplete": True}]}
+
+    class S3:
+        def get_object(self, *, Bucket, Key):
+            assert (Bucket, Key) == ("runner-results", "legacy/result.json")
+            return {"Body": Body()}
+
+    monkeypatch.setattr(
+        "davdeploy.service.boto3.client",
+        lambda service_name: CodeBuild() if service_name == "codebuild" else S3(),
+    )
+
+    assert service.reconcile_cloud_execution_build(build_id) is True
+    assert service.db.get(CloudExecutionRun, run.id).state == "SUCCEEDED_AWAITING_OBSERVATION"
+
+
 def test_result_reconciliation_rejects_non_retryable_failure():
     service, _ = make_service()
     run = CloudExecutionRun(

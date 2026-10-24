@@ -3819,7 +3819,17 @@ class ProductService:
             return False
         artifact: dict[str, Any] = {}
         artifact_error: str | None = None
-        result_uri = str((run.evidence or {}).get("result_s3_uri") or "")
+        evidence = run.evidence or {}
+        # Runs created before ticket147 stored the generated URI only inside
+        # the durable execution context. Accept that generated legacy value,
+        # while preferring the current explicit reconciliation field.
+        result_uri = str(
+            evidence.get("result_s3_uri")
+            or (evidence.get("execution_environment") or {}).get(
+                "DAVDEPLOY_EXECUTION_RESULT_S3_URI"
+            )
+            or ""
+        )
         if status == "SUCCEEDED":
             try:
                 if not result_uri.startswith("s3://"):
