@@ -217,6 +217,11 @@ resource "aws_iam_role_policy" "api" {
         ]
       }
       ],
+      var.github_app_private_key_secret_arn == "" ? [] : [{
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = var.github_app_private_key_secret_arn
+      }],
       var.ses_identity_arn == "" ? [] : [{
         Effect   = "Allow"
         Action   = ["ses:SendEmail"]
@@ -448,6 +453,10 @@ locals {
     DAVDEPLOY_CUSTOMER_EXECUTION_STATE_BUCKET    = var.customer_execution_state_bucket
     DAVDEPLOY_CUSTOMER_EXECUTION_LOCK_TABLE      = var.customer_execution_lock_table
     DAVDEPLOY_WORKER_QUEUE_URL                   = aws_sqs_queue.worker.id
+    DAVDEPLOY_GITHUB_APP_READ_ONLY               = tostring(var.enable_github_app_read_only)
+    DAVDEPLOY_GITHUB_APP_ID                      = var.github_app_id
+    DAVDEPLOY_GITHUB_APP_INSTALLATION_ID         = var.github_app_installation_id
+    DAVDEPLOY_GITHUB_APP_PRIVATE_KEY_SECRET_ARN  = var.github_app_private_key_secret_arn
   }
 }
 
