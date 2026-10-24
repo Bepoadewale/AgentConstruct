@@ -931,6 +931,20 @@ def execute_cloud_execution_run(
         translate(error)
 
 
+@app.post("/api/v1/cloud-execution-runs/{run_id}/reconcile-result")
+def reconcile_cloud_execution_run_result(
+    run_id: str,
+    principal: Principal = Depends(verify_token),
+    service: ProductService = Depends(product_service),
+):
+    """Replay a decrypt/read failure for a completed immutable runner result."""
+    REQUESTS.labels("cloud_execution.result_reconcile").inc()
+    try:
+        return service.reconcile_cloud_execution_run_result(principal, run_id)
+    except (PermissionError, ValueError, KeyError) as error:
+        translate(error)
+
+
 @app.get("/api/v1/cloud-execution-runs/{run_id}/evidence")
 def get_cloud_execution_run_evidence(
     run_id: str,

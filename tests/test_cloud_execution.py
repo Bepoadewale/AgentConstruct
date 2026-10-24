@@ -86,6 +86,78 @@ def test_codebuild_completion_accepts_the_eventbridge_build_arn(monkeypatch):
     assert calls == [[short_id]]
 
 
+def test_admin_can_reconcile_only_the_safe_encrypted_result_read_failure(monkeypatch):
+    service, _ = make_service()
+    build_id = "davdeploy-customer-executor:build-safe-retry"
+    run = CloudExecutionRun(
+        organization_id=founder().organization_id,
+        revision_id="revision-safe-retry",
+        project_id="project-safe-retry",
+        profile="aws-app-runner",
+        state="FAILED",
+        mode="AUTHENTICATED_APP_RUNNER_APPLY",
+        attempt=1,
+        command={},
+        evidence={"result_s3_uri": "s3://runner-results/run/result.json"},
+        outputs={"codebuild_build_id": build_id, "failure_reason": "runner result artifact URI is missing"},
+        content_digest="b" * 64,
+        requested_by_subject=founder().subject,
+    )
+    service.db.add(run)
+    service.db.commit()
+
+    class Body:
+        def read(self):
+            return ('{"run_id": "' + run.id + '", "status": "SUCCEEDED", "detail": {"output": "ok"}}').encode()
+
+    class CodeBuild:
+        def batch_get_builds(self, *, ids):
+            assert ids == [build_id]
+            return {"builds": [{"buildStatus": "SUCCEEDED", "buildComplete": True}]}
+
+    class S3:
+        def get_object(self, *, Bucket, Key):
+            assert (Bucket, Key) == ("runner-results", "run/result.json")
+            return {"Body": Body()}
+
+    monkeypatch.setattr(
+        "davdeploy.service.boto3.client",
+        lambda service_name: CodeBuild() if service_name == "codebuild" else S3(),
+    )
+
+    result = service.reconcile_cloud_execution_run_result(operator(), run.id)
+
+    assert result["state"] == "SUCCEEDED_AWAITING_OBSERVATION"
+    assert result["outputs"]["terraform_outputs"] == {"output": "ok"}
+
+
+def test_result_reconciliation_rejects_non_retryable_failure():
+    service, _ = make_service()
+    run = CloudExecutionRun(
+        organization_id=founder().organization_id,
+        revision_id="revision-no-retry",
+        project_id="project-no-retry",
+        profile="aws-app-runner",
+        state="FAILED",
+        mode="AUTHENTICATED_APP_RUNNER_APPLY",
+        attempt=1,
+        command={},
+        evidence={},
+        outputs={"failure_reason": "Bounded CodeBuild runner failed."},
+        content_digest="c" * 64,
+        requested_by_subject=founder().subject,
+    )
+    service.db.add(run)
+    service.db.commit()
+
+    try:
+        service.reconcile_cloud_execution_run_result(operator(), run.id)
+    except ValueError as error:
+        assert "not eligible" in str(error)
+    else:
+        raise AssertionError("non-retryable execution failure was reconciled")
+
+
 def test_ready_cloud_run_is_queued_and_observed_by_trusted_worker():
     service, _ = make_service()
     adapter = FakeCloudExecutionAdapter()

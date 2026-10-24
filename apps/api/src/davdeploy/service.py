@@ -3783,8 +3783,16 @@ class ProductService:
             (
                 item
                 for item in self.db.scalars(
-                    select(CloudExecutionRun).where(CloudExecutionRun.state == "SUBMITTED")
+                    select(CloudExecutionRun).where(
+                        CloudExecutionRun.state.in_(("SUBMITTED", "FAILED"))
+                    )
                 )
+                # A failed execution is replayable only when the exact bounded
+                # CodeBuild job succeeded but artifact decryption/reading failed.
+                # Other failures must remain immutable and require a new run.
+                if item.state == "SUBMITTED"
+                or (item.outputs or {}).get("failure_reason")
+                == "runner result artifact URI is missing"
                 if normalized_build_id == (item.outputs or {}).get("codebuild_build_id")
                 or build_id == (item.outputs or {}).get("codebuild_build_arn")
             ),
@@ -3863,6 +3871,34 @@ class ProductService:
         )
         self.db.commit()
         return True
+
+    def reconcile_cloud_execution_run_result(
+        self, principal: Principal, run_id: str
+    ) -> dict[str, Any]:
+        """Replay only a safely retryable completed CodeBuild result read."""
+        if not self._is_workspace_administrator(principal):
+            raise PermissionError("only a workspace administrator can reconcile cloud runs")
+        run = self.db.get(CloudExecutionRun, run_id)
+        if not run or run.organization_id != principal.organization_id:
+            raise PermissionError("cloud execution run not found in this organization")
+        if (run.outputs or {}).get("failure_reason") != "runner result artifact URI is missing":
+            raise ValueError("cloud execution run is not eligible for result reconciliation")
+        build_id = str((run.outputs or {}).get("codebuild_build_id") or "")
+        if not build_id:
+            raise ValueError("cloud execution run has no CodeBuild build identifier")
+        if not self.reconcile_cloud_execution_build(build_id):
+            raise ValueError("cloud execution result is not ready for reconciliation")
+        refreshed = self.db.get(CloudExecutionRun, run_id)
+        assert refreshed is not None
+        self.audit(
+            principal,
+            "cloud_execution.result_reconciled",
+            "cloud_execution_run",
+            run_id,
+            {"build_id": build_id, "state": refreshed.state},
+        )
+        self.db.commit()
+        return self._cloud_execution_run_payload(refreshed)
 
     def _latest_execution_dependency(
         self,

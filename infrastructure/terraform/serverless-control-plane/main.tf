@@ -196,6 +196,14 @@ resource "aws_iam_role_policy" "api" {
         Resource = ["arn:aws:s3:::${var.customer_execution_state_bucket}/davdeploy/customer/*"]
       },
       {
+        # Customer runner results are encrypted. The control-plane worker needs
+        # decrypt-only access to verify the immutable result artifact; it never
+        # writes customer execution artifacts.
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = var.customer_execution_kms_key_arns
+      },
+      {
         Effect   = "Allow"
         Action   = ["secretsmanager:CreateSecret", "secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue", "secretsmanager:PutSecretValue"]
         Resource = ["arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:davdeploy/customer-connections/*"]
