@@ -258,7 +258,7 @@ case "$operation" in
       -t "${repo}:${tag}" \
       -f "$source_dir/control-plane/Dockerfile" \
       "$source_dir"
-    image_digest="$(aws ecr describe-images "${customer_aws_args[@]}" --repository-name "$repository_name" --image-ids "imageTag=${tag}" --query 'imageDetails[0].imageDigest' --output text)"
+    image_digest="$(aws ecr batch-get-image "${customer_aws_args[@]}" --repository-name "$repository_name" --image-ids "imageTag=${tag}" --query 'images[0].imageId.imageDigest' --output text)"
     [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "ECR did not return an immutable image digest" >&2; exit 3; }
     jq -n \
       --arg repository "$source_repository" \
