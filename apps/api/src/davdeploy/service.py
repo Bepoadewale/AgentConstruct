@@ -4524,6 +4524,7 @@ class ProductService:
                     "captured_at": snapshot.captured_at.isoformat(),
                     "provenance": snapshot.provenance,
                     "resources": snapshot.snapshot.get("approved_resources", []),
+                    "pricing_evidence": snapshot.snapshot.get("pricing_evidence"),
                 }
         content = {
             "kind": "davdeploy.aws.infrastructure-plan.review.v1",
@@ -4569,8 +4570,13 @@ class ProductService:
             "risks_and_limitations": architecture["risks"],
             "policy_findings": deployment.payload["policy"],
             "evidence": {
-                "planner": "deterministic local fixture pricing and capability catalogue",
+                "planner": "deterministic estimate; not an AWS bill",
                 "cloud": "read-only discovery snapshot when one is selected; no deployment permission",
+                "pricing": (
+                    inventory_snapshot.get("pricing_evidence")
+                    if inventory_snapshot
+                    else {"state": "NOT_AVAILABLE_NO_CLOUD_CONNECTION"}
+                ),
                 "execution": "unexecuted customer plan review",
             },
         }
