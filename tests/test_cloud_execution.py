@@ -412,3 +412,75 @@ def test_authenticated_cloud_run_requires_verified_connection_and_execution_role
 
     assert run["state"] != "READY_FOR_OPERATOR_APP_RUNNER_EXECUTION"
     assert "verified customer cloud connection" in " ".join(run["evidence"]["blockers"])
+
+
+def test_customer_image_build_pins_source_and_requires_foundation(monkeypatch):
+    service, _ = make_service()
+    approved = approved_app_runner_customer_review(service)
+    service.cloud_execution = FakeCloudExecutionAdapter(state="SUBMITTED")
+    monkeypatch.setenv("ALLOW_CLOUD_APPLY", "true")
+    monkeypatch.setenv("DAVDEPLOY_ENABLE_APP_RUNNER_EXECUTION", "true")
+    monkeypatch.setenv("DAVDEPLOY_CUSTOMER_EXECUTION_STATE_BUCKET", "customer-state")
+    monkeypatch.setenv("DAVDEPLOY_CUSTOMER_EXECUTION_LOCK_TABLE", "customer-locks")
+    monkeypatch.setenv("DAVDEPLOY_CUSTOMER_EXECUTION_ARTIFACT_S3_URI", "s3://releases/runner.zip")
+    connection = service.create_cloud_connection(
+        founder(), "Verified customer cloud", "aws", "byoc_role_contract"
+    )
+    connection.setup_state = "VERIFIED"
+    connection.account_id = "654654474502"
+    connection.execution_role_arn = "arn:aws:iam::654654474502:role/davdeployExecution-test"
+    connection.external_id_secret_ref = "arn:aws:secretsmanager:us-east-1:654654474502:secret:test"
+    revision = service.db.get(InfrastructurePlanRevision, approved.id)
+    assert revision is not None
+    revision.content = {
+        **revision.content,
+        "target": {**revision.content["target"], "connection_id": connection.id, "account_id": connection.account_id},
+    }
+    revision.content_digest = plan_hash(revision.content)
+    decision = service.db.scalar(
+        select(InfrastructurePlanDecisionRecord).where(
+            InfrastructurePlanDecisionRecord.revision_id == revision.id
+        )
+    )
+    assert decision is not None
+    decision.approved_digest = revision.content_digest
+    _, infrastructure_plan, _ = service._approved_customer_revision(operator(), revision.id)
+    foundation = CloudExecutionRun(
+        organization_id=founder().organization_id,
+        revision_id=revision.id,
+        project_id=infrastructure_plan.project_id,
+        profile="aws-app-runner",
+        state="SUCCEEDED_AWAITING_OBSERVATION",
+        mode="AUTHENTICATED_APP_RUNNER_APPLY",
+        command={},
+        evidence={},
+        outputs={"terraform_outputs": {"ecr_repository_url": {"value": f"654654474502.dkr.ecr.us-east-1.amazonaws.com/davdeploy-{connection.id}-workload"}}},
+        content_digest=revision.content_digest,
+        requested_by_subject=operator().subject,
+    )
+    service.db.add(foundation)
+    service.db.commit()
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"sha": "a" * 40}
+
+    monkeypatch.setattr("davdeploy.service.httpx.get", lambda *args, **kwargs: Response())
+    run = service.create_customer_image_build_for_revision(
+        operator(),
+        revision.id,
+        content_digest=revision.content_digest,
+        expected_account_id=connection.account_id,
+        expected_region="us-east-1",
+        confirmation="BUILD_CUSTOMER_IMAGE",
+    )
+
+    assert run["state"] == "READY_FOR_OPERATOR_APP_RUNNER_EXECUTION"
+    persisted = service.db.get(CloudExecutionRun, run["id"])
+    assert persisted is not None
+    assert persisted.mode == "AUTHENTICATED_APP_RUNNER_IMAGE_BUILD"
+    assert persisted.evidence["source"]["commit"] == "a" * 40
+    assert persisted.evidence["execution_environment"]["DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_URL"].endswith("-workload")

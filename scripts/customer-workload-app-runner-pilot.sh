@@ -45,6 +45,13 @@ fi
 customer_aws_args=()
 customer_credentials_file="/tmp/davdeploy-customer-${DAVDEPLOY_EXECUTION_RUN_ID}.credentials"
 customer_profile="davdeploy-customer"
+source_dir=""
+
+cleanup() {
+  rm -f "$customer_credentials_file" "$result_file" "$saved_plan_file"
+  [[ -z "$source_dir" ]] || rm -rf "$source_dir"
+}
+trap cleanup EXIT
 
 external_id="$(aws secretsmanager get-secret-value "${aws_args[@]}" --secret-id "$DAVDEPLOY_EXTERNAL_ID_SECRET_ARN" --query SecretString --output text)"
 [[ -n "$external_id" && "$external_id" != "None" ]] || { echo "Customer connection ExternalId is unavailable" >&2; exit 3; }
@@ -223,8 +230,23 @@ case "$operation" in
     ;;
   build-push-image)
     require DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_URL
-    require DAVDEPLOY_CUSTOMER_SOURCE_DIR
-    tag="${DAVDEPLOY_CUSTOMER_IMAGE_TAG:-$(date -u +%Y%m%d%H%M%S)}"
+    [[ "$source_repository" =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || {
+      echo "DAVDEPLOY_CUSTOMER_SOURCE_REPOSITORY must be a canonical GitHub HTTPS URL" >&2; exit 2;
+    }
+    [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]] || {
+      echo "DAVDEPLOY_CUSTOMER_SOURCE_COMMIT must be a full immutable SHA-1 commit" >&2; exit 2;
+    }
+    tag="${DAVDEPLOY_CUSTOMER_IMAGE_TAG:-sha-${source_commit}}"
+    source_dir="$(mktemp -d /tmp/davdeploy-source-${DAVDEPLOY_EXECUTION_RUN_ID}-XXXXXX)"
+    git clone --no-checkout --filter=blob:none "$source_repository" "$source_dir"
+    git -C "$source_dir" checkout --detach "$source_commit"
+    checked_out_commit="$(git -C "$source_dir" rev-parse HEAD)"
+    [[ "$checked_out_commit" == "$source_commit" ]] || {
+      echo "Pinned repository checkout did not match the approved commit" >&2; exit 3;
+    }
+    [[ -f "$source_dir/control-plane/Dockerfile" ]] || {
+      echo "Approved repository does not contain control-plane/Dockerfile" >&2; exit 3;
+    }
     repo="${DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_URL}"
     registry="${repo%%/*}"
     aws ecr get-login-password "${customer_aws_args[@]}" --region "$AWS_REGION" | docker login --username AWS --password-stdin "$registry"
@@ -234,9 +256,19 @@ case "$operation" in
       --sbom=false \
       --push \
       -t "${repo}:${tag}" \
-      -f "${DAVDEPLOY_CUSTOMER_SOURCE_DIR}/control-plane/Dockerfile" \
-      "${DAVDEPLOY_CUSTOMER_SOURCE_DIR}"
-    printf '%s:%s\n' "$repo" "$tag"
+      -f "$source_dir/control-plane/Dockerfile" \
+      "$source_dir"
+    image_digest="$(aws ecr describe-images "${customer_aws_args[@]}" --repository-name "$repository_name" --image-ids "imageTag=${tag}" --query 'imageDetails[0].imageDigest' --output text)"
+    [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "ECR did not return an immutable image digest" >&2; exit 3; }
+    jq -n \
+      --arg repository "$source_repository" \
+      --arg commit "$checked_out_commit" \
+      --arg image_uri "${repo}:${tag}" \
+      --arg image_digest "$image_digest" \
+      --arg image_identifier "${repo}@${image_digest}" \
+      '{source_repository:$repository,source_commit:$commit,image_uri:$image_uri,image_digest:$image_digest,image_identifier:$image_identifier}' \
+      >/tmp/davdeploy-image-build-result.json
+    write_result "build-push-image" "SUCCEEDED" /tmp/davdeploy-image-build-result.json
     ;;
   wait-ready)
     tf_init

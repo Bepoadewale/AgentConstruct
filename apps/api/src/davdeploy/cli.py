@@ -103,6 +103,13 @@ def _parser() -> argparse.ArgumentParser:
     cloud_run.add_argument("--confirmation", required=True)
     cloud_run.add_argument("--destroy", action="store_true")
 
+    image_build = subparsers.add_parser("build-customer-image")
+    image_build.add_argument("--revision-id", required=True)
+    image_build.add_argument("--content-digest", required=True)
+    image_build.add_argument("--expected-account-id")
+    image_build.add_argument("--region", required=True)
+    image_build.add_argument("--confirmation", required=True)
+
     queue_cloud_run = subparsers.add_parser("queue-customer-cloud-run")
     queue_cloud_run.add_argument("--run-id", required=True)
     queue_cloud_run.add_argument("--content-digest", required=True)
@@ -224,6 +231,17 @@ def run(
                 "expected_account_id": args.expected_account_id,
                 "expected_region": args.region,
                 "mode": "AUTHENTICATED_APP_RUNNER_DESTROY" if args.destroy else "AUTHENTICATED_APP_RUNNER_APPLY",
+                "confirmation": args.confirmation,
+            },
+        )
+    if args.command == "build-customer-image":
+        return client.request(
+            "POST",
+            f"/api/v1/customer-plan-revisions/{args.revision_id}/customer-image-builds",
+            {
+                "content_digest": args.content_digest,
+                "expected_account_id": args.expected_account_id,
+                "expected_region": args.region,
                 "confirmation": args.confirmation,
             },
         )

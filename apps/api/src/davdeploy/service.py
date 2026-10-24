@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import boto3
+import httpx
 from botocore.exceptions import BotoCoreError, ClientError
 from httpx import HTTPError
 from opentelemetry import trace
@@ -3438,6 +3439,8 @@ class ProductService:
         """
         if not self._is_workspace_administrator(principal):
             raise PermissionError("only a workspace administrator can request cloud execution")
+        if mode == "AUTHENTICATED_APP_RUNNER_IMAGE_BUILD":
+            raise ValueError("use the governed customer-image-build endpoint for image delivery")
         revision, infrastructure_plan, _ = self._approved_customer_revision(principal, revision_id)
         if (
             revision.content_digest != content_digest
@@ -3699,6 +3702,169 @@ class ProductService:
         self._wake_worker("cloud_execution", run.id)
         return self._cloud_execution_run_payload(run)
 
+    @staticmethod
+    def _terraform_output_value(outputs: object, name: str) -> str:
+        """Extract one non-secret Terraform output from a runner result artifact."""
+        if not isinstance(outputs, dict):
+            return ""
+        value = outputs.get(name)
+        if isinstance(value, dict):
+            value = value.get("value")
+        return value if isinstance(value, str) else ""
+
+    def create_customer_image_build_for_revision(
+        self,
+        principal: Principal,
+        revision_id: str,
+        *,
+        content_digest: str,
+        expected_account_id: str | None,
+        expected_region: str | None,
+        confirmation: str | None,
+    ) -> dict[str, Any]:
+        """Queue a bounded, commit-pinned public repository image build.
+
+        This deliberately does not create or update an App Runner service. The
+        resulting image digest is evidence for a separate Terraform service plan.
+        """
+        if not self._is_workspace_administrator(principal):
+            raise PermissionError("only a workspace administrator can build customer images")
+        revision, infrastructure_plan, _ = self._approved_customer_revision(principal, revision_id)
+        if revision.content_digest != content_digest or plan_hash(revision.content) != content_digest:
+            raise ValueError("stale customer image build request: approved digest changed")
+        content = revision.content
+        application = content.get("application_analysis") or {}
+        target = content.get("target") or {}
+        repository_url = str(application.get("repository") or "")
+        branch = str(application.get("branch") or "")
+        connection_id = str(target.get("connection_id") or "")
+        if not repository_url or not branch:
+            raise ValueError("approved plan has no selected repository and branch")
+        if not connection_id:
+            raise ValueError("authenticated image build requires a verified customer cloud connection")
+        connection = self._cloud_connection(principal, connection_id)
+        if connection.setup_state != "VERIFIED" or not connection.execution_role_arn:
+            raise ValueError("selected customer cloud connection is not verified for bounded execution")
+        if expected_account_id and connection.account_id != expected_account_id:
+            raise ValueError("expected AWS account does not match the verified customer connection")
+        region = str(target.get("region") or connection.region or "")
+        if expected_region and region != expected_region:
+            raise ValueError("expected AWS region does not match the approved plan")
+        if not region:
+            raise ValueError("approved plan has no target region")
+        if confirmation != "BUILD_CUSTOMER_IMAGE":
+            raise ValueError("explicit BUILD_CUSTOMER_IMAGE confirmation is required")
+        if os.getenv("ALLOW_CLOUD_APPLY", "").lower() != "true" or os.getenv(
+            "DAVDEPLOY_ENABLE_APP_RUNNER_EXECUTION", ""
+        ).lower() != "true":
+            raise ValueError("customer image build runtime is disabled")
+
+        repository_connection = self.db.scalar(
+            select(RepositoryConnection).where(
+                RepositoryConnection.organization_id == principal.organization_id,
+                RepositoryConnection.project_id == infrastructure_plan.project_id,
+                RepositoryConnection.repository_url == repository_url,
+            )
+        )
+        if repository_connection is None or (
+            repository_connection.selected_branch and repository_connection.selected_branch != branch
+        ):
+            raise ValueError("selected repository is no longer connected to the approved project")
+        try:
+            repository_name = self.public_github.repository_name(repository_url)
+            response = httpx.get(
+                f"https://api.github.com/repos/{repository_name}/commits/{branch}",
+                headers=self.public_github._headers(),
+                timeout=10,
+            )
+            response.raise_for_status()
+            source_commit = str(response.json().get("sha") or "")
+        except (HTTPError, ValueError) as error:
+            raise ValueError(
+                "the current bounded image builder supports a readable public GitHub repository; "
+                "private GitHub archive delivery must be configured before use"
+            ) from error
+        if len(source_commit) != 40 or any(character not in "0123456789abcdef" for character in source_commit.lower()):
+            raise ValueError("GitHub did not return a valid immutable source commit")
+
+        foundation = self.db.scalar(
+            select(CloudExecutionRun)
+            .where(
+                CloudExecutionRun.organization_id == principal.organization_id,
+                CloudExecutionRun.revision_id == revision.id,
+                CloudExecutionRun.mode == "AUTHENTICATED_APP_RUNNER_APPLY",
+                CloudExecutionRun.state == "SUCCEEDED_AWAITING_OBSERVATION",
+            )
+            .order_by(CloudExecutionRun.created_at.desc())
+            .limit(1)
+        )
+        ecr_repository_url = self._terraform_output_value(
+            (foundation.outputs or {}).get("terraform_outputs") if foundation else None,
+            "ecr_repository_url",
+        )
+        if not ecr_repository_url:
+            raise ValueError("a successful customer foundation with an ECR output is required")
+        bucket = os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_STATE_BUCKET", "")
+        lock_table = os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_LOCK_TABLE", "")
+        artifact_uri = os.getenv("DAVDEPLOY_CUSTOMER_EXECUTION_ARTIFACT_S3_URI", "")
+        if not bucket or not lock_table or not artifact_uri or not connection.external_id_secret_ref:
+            raise ValueError("customer image build runner configuration is incomplete")
+        previous = self.db.scalar(
+            select(CloudExecutionRun)
+            .where(
+                CloudExecutionRun.organization_id == principal.organization_id,
+                CloudExecutionRun.revision_id == revision.id,
+            )
+            .order_by(CloudExecutionRun.attempt.desc())
+            .limit(1)
+        )
+        run = CloudExecutionRun(
+            organization_id=principal.organization_id,
+            revision_id=revision.id,
+            project_id=infrastructure_plan.project_id,
+            profile="aws-app-runner",
+            state="READY_FOR_OPERATOR_APP_RUNNER_EXECUTION",
+            mode="AUTHENTICATED_APP_RUNNER_IMAGE_BUILD",
+            attempt=1 if not previous else previous.attempt + 1,
+            command={"operation": "build-push-image", "source": "approved-repository-commit"},
+            evidence={},
+            outputs={"status": "submitting", "resources_created": []},
+            content_digest=revision.content_digest,
+            requested_by_subject=principal.subject,
+        )
+        self.db.add(run)
+        self.db.flush()
+        environment = {
+            "AWS_REGION": region,
+            "EXPECTED_AWS_ACCOUNT_ID": str(connection.account_id),
+            "TF_STATE_BUCKET": bucket,
+            "TF_LOCK_TABLE": lock_table,
+            "DAVDEPLOY_CUSTOMER_CONNECTION_ID": connection.id,
+            "DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN": connection.execution_role_arn,
+            "DAVDEPLOY_EXTERNAL_ID_SECRET_ARN": connection.external_id_secret_ref,
+            "DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN": f"arn:aws:iam::{connection.account_id}:role/davdeployAppRunnerEcr-{connection.id}",
+            "DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN": f"arn:aws:iam::{connection.account_id}:role/davdeployAppRunnerRuntime-{connection.id}",
+            "DAVDEPLOY_EXECUTION_ARTIFACT_S3_URI": artifact_uri,
+            "DAVDEPLOY_EXECUTION_OPERATION": "build-push-image",
+            "DAVDEPLOY_EXECUTION_RUN_ID": run.id,
+            "DAVDEPLOY_EXECUTION_RESULT_S3_URI": f"s3://{bucket}/davdeploy/customer/{connection.id}/runs/{run.id}/result.json",
+            "DAVDEPLOY_CUSTOMER_PLAN_DIGEST": revision.content_digest,
+            "DAVDEPLOY_CUSTOMER_SOURCE_REPOSITORY": repository_url,
+            "DAVDEPLOY_CUSTOMER_SOURCE_COMMIT": source_commit,
+            "DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_URL": ecr_repository_url,
+            "DAVDEPLOY_CUSTOMER_IMAGE_TAG": f"sha-{source_commit}",
+        }
+        run.evidence = {
+            "result_s3_uri": environment["DAVDEPLOY_EXECUTION_RESULT_S3_URI"],
+            "execution_environment": environment,
+            "source": {"repository": repository_url, "branch": branch, "commit": source_commit},
+            "foundation_run_id": foundation.id,
+            "boundary": "The runner may build and push one pinned repository commit to the connection-scoped ECR repository. It cannot create an App Runner service.",
+        }
+        self.audit(principal, "cloud_execution.image_build_requested", "cloud_execution_run", run.id, {"revision_id": revision.id, "digest": revision.content_digest, "source_commit": source_commit})
+        self.db.commit()
+        return self._cloud_execution_run_payload(run)
+
     def queue_cloud_execution_run(
         self,
         principal: Principal,
@@ -3716,11 +3882,10 @@ class ProductService:
             raise ValueError("stale cloud execution run digest")
         if run.state != "READY_FOR_OPERATOR_APP_RUNNER_EXECUTION":
             raise ValueError(f"cloud execution run is not ready: {run.state}")
-        expected_confirmation = (
-            "DESTROY_APP_RUNNER_WORKLOAD"
-            if run.mode == "AUTHENTICATED_APP_RUNNER_DESTROY"
-            else "EXECUTE_APP_RUNNER_WORKLOAD"
-        )
+        expected_confirmation = {
+            "AUTHENTICATED_APP_RUNNER_DESTROY": "DESTROY_APP_RUNNER_WORKLOAD",
+            "AUTHENTICATED_APP_RUNNER_IMAGE_BUILD": "BUILD_CUSTOMER_IMAGE",
+        }.get(run.mode, "EXECUTE_APP_RUNNER_WORKLOAD")
         if confirmation != expected_confirmation:
             raise ValueError("explicit App Runner operation confirmation is required")
         run.state = "QUEUED"
@@ -3870,6 +4035,14 @@ class ProductService:
             detail = artifact.get("detail") or {}
             if run.mode == "AUTHENTICATED_APP_RUNNER_DESTROY":
                 run.state = "DESTROYED_VERIFIED" if detail.get("destroy_proof") == "confirmed_absent" else "FAILED"
+            elif run.mode == "AUTHENTICATED_APP_RUNNER_IMAGE_BUILD":
+                run.state = (
+                    "IMAGE_BUILT_AWAITING_SERVICE_PLAN"
+                    if detail.get("image_identifier") and detail.get("source_commit")
+                    else "FAILED"
+                )
+                if run.state == "FAILED":
+                    artifact_error = "image build completion did not contain immutable image evidence"
             else:
                 run.state = "SUCCEEDED_AWAITING_OBSERVATION"
         run.outputs = {
@@ -3878,6 +4051,7 @@ class ProductService:
             "codebuild_completed_at": str(build.get("buildComplete") or ""),
             "runner_artifact": artifact or None,
             "terraform_outputs": (artifact.get("detail") or {}) if run.mode == "AUTHENTICATED_APP_RUNNER_APPLY" else None,
+            "image_build": (artifact.get("detail") or {}) if run.mode == "AUTHENTICATED_APP_RUNNER_IMAGE_BUILD" else None,
             "destroy_proof": (artifact.get("detail") or {}).get("destroy_proof"),
             "failure_reason": artifact_error or (None if status == "SUCCEEDED" else "Bounded CodeBuild runner failed."),
         }
