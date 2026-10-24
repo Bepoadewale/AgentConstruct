@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from sqlalchemy import select
-
 from davdeploy.cloud_execution import (
     CloudExecutionResult,
     CodeBuildCloudExecutionAdapter,
@@ -13,6 +11,7 @@ from davdeploy.models import (
     InfrastructurePlanRevision,
 )
 from davdeploy.service import plan_hash
+from sqlalchemy import select
 from test_customer_plan_review import approved_app_runner_customer_review
 from test_product import founder, make_service, operator
 
