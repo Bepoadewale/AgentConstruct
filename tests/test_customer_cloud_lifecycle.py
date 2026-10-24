@@ -76,9 +76,11 @@ def test_customer_cloudformation_contract_keeps_execution_separate_from_discover
     assert "logs:ListTagsForResource" in execution
     assert "ReconcileOnlyTaggedCustomerWorkloadResources" in execution
     assert "logs:PutRetentionPolicy" in execution
-    assert "CreateOnlyAppRunnerServiceLinkedRole" in execution
+    assert "CreateOnlyAppRunnerServiceLinkedRoles" in execution
     assert "iam:CreateServiceLinkedRole" in execution
-    assert "iam:AWSServiceName: apprunner.amazonaws.com" in execution
+    assert "iam:AWSServiceName:" in execution
+    assert "- apprunner.amazonaws.com" in execution
+    assert "- networking.apprunner.amazonaws.com" in execution
     assert "aws:RequestedRegion: !Ref AWS::Region" in execution
     assert "aws:RequestTag/ConnectionId" in execution
     assert "aws:ResourceTag/ConnectionId" in execution

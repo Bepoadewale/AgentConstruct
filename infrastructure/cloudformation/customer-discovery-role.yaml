@@ -185,13 +185,15 @@ Resources:
                   StringEquals:
                     aws:ResourceTag/ManagedBy: davdeploy
                     aws:ResourceTag/ConnectionId: !Ref ConnectionId
-              - Sid: CreateOnlyAppRunnerServiceLinkedRole
+              - Sid: CreateOnlyAppRunnerServiceLinkedRoles
                 Effect: Allow
                 Action: iam:CreateServiceLinkedRole
                 Resource: "*"
                 Condition:
                   StringEquals:
-                    iam:AWSServiceName: apprunner.amazonaws.com
+                    iam:AWSServiceName:
+                      - apprunner.amazonaws.com
+                      - networking.apprunner.amazonaws.com
               - Sid: PassOnlyConnectionAppRunnerRoles
                 Effect: Allow
                 Action: iam:PassRole

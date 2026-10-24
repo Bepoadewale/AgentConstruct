@@ -112,14 +112,16 @@ tf_output() {
 }
 
 ensure_app_runner_service_linked_role() {
+  local service_name="$1"
+  local display_name="$2"
   local output
   if output="$(aws iam create-service-linked-role "${customer_aws_args[@]}" \
-    --aws-service-name apprunner.amazonaws.com 2>&1)"; then
-    echo "Created the AWS-managed App Runner service-linked role"
+    --aws-service-name "$service_name" 2>&1)"; then
+    echo "Created the AWS-managed ${display_name} service-linked role"
     return 0
   fi
   if [[ "$output" == *"has been taken"* || "$output" == *"already exists"* ]]; then
-    echo "AWS-managed App Runner service-linked role already exists"
+    echo "AWS-managed ${display_name} service-linked role already exists"
     return 0
   fi
   echo "$output" >&2
@@ -189,7 +191,8 @@ case "$operation" in
     echo "${saved_plan_sha256}  ${saved_plan_file}" | shasum -a 256 --check --status || {
       echo "Saved Terraform plan digest mismatch" >&2; exit 3;
     }
-    ensure_app_runner_service_linked_role
+    ensure_app_runner_service_linked_role apprunner.amazonaws.com "App Runner"
+    ensure_app_runner_service_linked_role networking.apprunner.amazonaws.com "App Runner networking"
     terraform -chdir="$root" apply -input=false "$saved_plan_file"
     tf_output >/tmp/davdeploy-apply-outputs.json
     write_result "apply" "SUCCEEDED" /tmp/davdeploy-apply-outputs.json
