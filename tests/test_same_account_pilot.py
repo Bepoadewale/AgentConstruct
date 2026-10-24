@@ -46,6 +46,10 @@ def test_customer_sandbox_has_a_dedicated_low_cost_vpc_boundary():
     assert "assume_role" not in CUSTOMER_VERSIONS
     assert "customer_execution_external_id" not in CUSTOMER_VARIABLES
     assert "customer_execution_external_id" not in CUSTOMER_SCRIPT
+    assert 'profile = "davdeploy-customer"' in CUSTOMER_VERSIONS
+    assert "AWS_SHARED_CREDENTIALS_FILE" in CUSTOMER_SCRIPT
+    assert "customer_aws_args=(--profile \"$customer_profile\")" in CUSTOMER_SCRIPT
+    assert 'Name=tag:ConnectionId,Values=${connection_id}' in CUSTOMER_SCRIPT
 
 
 def test_customer_workload_tags_match_the_bounded_connection_role_contract():
@@ -69,7 +73,7 @@ def test_state_and_teardown_are_scope_specific_and_account_guarded():
     assert "aws sts assume-role" in CUSTOMER_SCRIPT
     assert '"$DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN"' in CUSTOMER_SCRIPT
     assert '--external-id "$external_id"' in CUSTOMER_SCRIPT
-    assert "export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN" in CUSTOMER_SCRIPT
+    assert "export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN" not in CUSTOMER_SCRIPT
     assert "unset external_id" in CUSTOMER_SCRIPT
     combined = CUSTOMER_MAIN + CUSTOMER_SCRIPT + PLATFORM_MAIN + PLATFORM_SCRIPT
     assert "organizations create-account" not in combined
