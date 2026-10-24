@@ -77,8 +77,6 @@ tf_vars=(
   "-var=connection_id=${connection_id}"
   "-var=app_runner_ecr_access_role_arn=${DAVDEPLOY_CUSTOMER_APP_RUNNER_ECR_ROLE_ARN}"
   "-var=app_runner_runtime_role_arn=${DAVDEPLOY_CUSTOMER_APP_RUNNER_RUNTIME_ROLE_ARN}"
-  "-var=customer_execution_role_arn=${DAVDEPLOY_CUSTOMER_EXECUTION_ROLE_ARN}"
-  "-var=customer_execution_external_id=${external_id}"
   "-var=customer_vpc_cidr=${customer_vpc_cidr}"
   "-var=platform_vpc_cidr=${platform_vpc_cidr}"
   "-var=service_name=${service_name}"
