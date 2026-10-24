@@ -217,10 +217,10 @@ resource "aws_iam_role_policy" "api" {
         ]
       }
       ],
-      var.github_app_private_key_secret_arn == "" ? [] : [{
+      var.github_app_credential_secret_arn == "" ? [] : [{
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = var.github_app_private_key_secret_arn
+        Resource = var.github_app_credential_secret_arn
       }],
       var.ses_identity_arn == "" ? [] : [{
         Effect   = "Allow"
@@ -456,7 +456,7 @@ locals {
     DAVDEPLOY_GITHUB_APP_READ_ONLY               = tostring(var.enable_github_app_read_only)
     DAVDEPLOY_GITHUB_APP_ID                      = var.github_app_id
     DAVDEPLOY_GITHUB_APP_INSTALLATION_ID         = var.github_app_installation_id
-    DAVDEPLOY_GITHUB_APP_PRIVATE_KEY_SECRET_ARN  = var.github_app_private_key_secret_arn
+    DAVDEPLOY_GITHUB_APP_CREDENTIAL_SECRET_ARN   = var.github_app_credential_secret_arn
   }
 }
 

@@ -54,7 +54,7 @@ def test_configured_github_connection_reads_private_key_from_secret(monkeypatch)
     monkeypatch.setenv("DAVDEPLOY_GITHUB_APP_ID", "5159790")
     monkeypatch.setenv("DAVDEPLOY_GITHUB_APP_INSTALLATION_ID", "167128937")
     monkeypatch.setenv(
-        "DAVDEPLOY_GITHUB_APP_PRIVATE_KEY_SECRET_ARN",
+        "DAVDEPLOY_GITHUB_APP_CREDENTIAL_SECRET_ARN",
         "arn:aws:secretsmanager:us-east-1:123456789012:secret:davdeploy/github-app",
     )
     monkeypatch.delenv("DAVDEPLOY_GITHUB_APP_PRIVATE_KEY_PATH", raising=False)
@@ -72,7 +72,7 @@ def test_configured_github_connection_rejects_ambiguous_private_key_sources(monk
     monkeypatch.setenv("DAVDEPLOY_GITHUB_APP_ID", "5159790")
     monkeypatch.setenv("DAVDEPLOY_GITHUB_APP_INSTALLATION_ID", "167128937")
     monkeypatch.setenv("DAVDEPLOY_GITHUB_APP_PRIVATE_KEY_PATH", "/private/key.pem")
-    monkeypatch.setenv("DAVDEPLOY_GITHUB_APP_PRIVATE_KEY_SECRET_ARN", "arn:example")
+    monkeypatch.setenv("DAVDEPLOY_GITHUB_APP_CREDENTIAL_SECRET_ARN", "arn:example")
 
     with pytest.raises(RuntimeError, match="either"):
         configured_github_connection()

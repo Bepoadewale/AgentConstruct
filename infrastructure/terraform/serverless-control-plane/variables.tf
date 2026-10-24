@@ -75,7 +75,7 @@ variable "github_app_installation_id" {
   default     = ""
 }
 
-variable "github_app_private_key_secret_arn" {
+variable "github_app_credential_secret_arn" {
   type        = string
   description = "Dedicated Secrets Manager ARN holding a JSON private-key.pem value; never place the key in Terraform variables or state."
   default     = ""
@@ -84,7 +84,7 @@ variable "github_app_private_key_secret_arn" {
     condition = !var.enable_github_app_read_only || alltrue([
       var.github_app_id != "",
       var.github_app_installation_id != "",
-      var.github_app_private_key_secret_arn != "",
+      var.github_app_credential_secret_arn != "",
     ])
     error_message = "Enabled GitHub App onboarding requires the App ID, installation ID, and a dedicated private-key secret ARN."
   }

@@ -791,7 +791,7 @@ def configured_github_connection() -> GitHubConnection:
     app_id = os.getenv("DAVDEPLOY_GITHUB_APP_ID")
     installation_id = os.getenv("DAVDEPLOY_GITHUB_APP_INSTALLATION_ID")
     key_path = os.getenv("DAVDEPLOY_GITHUB_APP_PRIVATE_KEY_PATH")
-    key_secret_arn = os.getenv("DAVDEPLOY_GITHUB_APP_PRIVATE_KEY_SECRET_ARN")
+    key_secret_arn = os.getenv("DAVDEPLOY_GITHUB_APP_CREDENTIAL_SECRET_ARN")
     if not enabled:
         return FixtureGitHubConnection()
     if not all([app_id, installation_id]) or not (key_path or key_secret_arn):
