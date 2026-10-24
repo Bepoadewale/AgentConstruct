@@ -15,6 +15,7 @@ AWS region: Not applicable
 
 - `.venv/bin/python -m pytest -q tests/test_integration_contracts.py`
 - `.venv/bin/ruff check apps/api/src/davdeploy/integrations.py tests/test_integration_contracts.py`
+- `.venv/bin/python scripts/check_actions_configuration.py`
 - `terraform -chdir=infrastructure/terraform/serverless-control-plane init -backend=false -input=false`
 - `terraform -chdir=infrastructure/terraform/serverless-control-plane validate`
 - `terraform fmt -check -recursive infrastructure/terraform/serverless-control-plane`
