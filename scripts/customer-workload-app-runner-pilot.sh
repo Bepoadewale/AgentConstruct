@@ -42,6 +42,9 @@ aws_args=()
 if [[ -n "${AWS_PROFILE:-}" ]]; then
   aws_args+=(--profile "$AWS_PROFILE")
 fi
+customer_aws_args=()
+customer_credentials_file="/tmp/davdeploy-customer-${DAVDEPLOY_EXECUTION_RUN_ID}.credentials"
+customer_profile="davdeploy-customer"
 
 external_id="$(aws secretsmanager get-secret-value "${aws_args[@]}" --secret-id "$DAVDEPLOY_EXTERNAL_ID_SECRET_ARN" --query SecretString --output text)"
 [[ -n "$external_id" && "$external_id" != "None" ]] || { echo "Customer connection ExternalId is unavailable" >&2; exit 3; }
@@ -57,14 +60,22 @@ assume_customer_execution_role() {
     --duration-seconds 3600 \
     --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
     --output text)"
-  read -r AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN <<<"$credentials"
-  export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+  local customer_access_key_id customer_secret_access_key customer_session_token
+  read -r customer_access_key_id customer_secret_access_key customer_session_token <<<"$credentials"
   unset external_id
-  aws_args=()
-  [[ -n "$AWS_ACCESS_KEY_ID" && -n "$AWS_SECRET_ACCESS_KEY" && -n "$AWS_SESSION_TOKEN" ]] || {
+  [[ -n "$customer_access_key_id" && -n "$customer_secret_access_key" && -n "$customer_session_token" ]] || {
     echo "Scoped customer execution role assumption returned incomplete credentials" >&2
     exit 3
   }
+  umask 077
+  cat >"$customer_credentials_file" <<EOF
+[${customer_profile}]
+aws_access_key_id=${customer_access_key_id}
+aws_secret_access_key=${customer_secret_access_key}
+aws_session_token=${customer_session_token}
+EOF
+  export AWS_SHARED_CREDENTIALS_FILE="$customer_credentials_file"
+  customer_aws_args=(--profile "$customer_profile")
   echo "Assumed scoped customer execution role for this bounded run"
 }
 
@@ -102,7 +113,7 @@ tf_output() {
 
 ensure_app_runner_service_linked_role() {
   local output
-  if output="$(aws iam create-service-linked-role "${aws_args[@]}" \
+  if output="$(aws iam create-service-linked-role "${customer_aws_args[@]}" \
     --aws-service-name apprunner.amazonaws.com 2>&1)"; then
     echo "Created the AWS-managed App Runner service-linked role"
     return 0
@@ -193,13 +204,13 @@ case "$operation" in
       echo "Saved Terraform destroy plan digest mismatch" >&2; exit 3;
     }
     terraform -chdir="$root" apply -input=false "$saved_plan_file"
-    if aws apprunner list-services "${aws_args[@]}" --query "ServiceSummaryList[?ServiceName=='${service_name}'].ServiceArn | [0]" --output text | grep -qv '^None$'; then
+    if aws apprunner list-services "${customer_aws_args[@]}" --query "ServiceSummaryList[?ServiceName=='${service_name}'].ServiceArn | [0]" --output text | grep -qv '^None$'; then
       echo "App Runner service still exists: ${service_name}" >&2; exit 1
     fi
-    if aws ecr describe-repositories "${aws_args[@]}" --repository-names "$repository_name" >/dev/null 2>&1; then
+    if aws ecr describe-repositories "${customer_aws_args[@]}" --repository-names "$repository_name" >/dev/null 2>&1; then
       echo "ECR repository still exists: ${repository_name}" >&2; exit 1
     fi
-    if aws ec2 describe-vpcs "${aws_args[@]}" --region "$AWS_REGION" --filters "Name=tag:Scope,Values=customer-sandbox" --query 'Vpcs[0].VpcId' --output text | grep -qv '^None$'; then
+    if aws ec2 describe-vpcs "${customer_aws_args[@]}" --region "$AWS_REGION" --filters "Name=tag:Scope,Values=customer-sandbox" "Name=tag:ConnectionId,Values=${connection_id}" --query 'Vpcs[0].VpcId' --output text | grep -qv '^None$'; then
       echo "Customer sandbox VPC still exists" >&2; exit 1
     fi
     jq -n --arg proof "confirmed_absent" --arg scope "$deployment_scope" \
@@ -213,7 +224,7 @@ case "$operation" in
     tag="${DAVDEPLOY_CUSTOMER_IMAGE_TAG:-$(date -u +%Y%m%d%H%M%S)}"
     repo="${DAVDEPLOY_CUSTOMER_ECR_REPOSITORY_URL}"
     registry="${repo%%/*}"
-    aws ecr get-login-password "${aws_args[@]}" --region "$AWS_REGION" | docker login --username AWS --password-stdin "$registry"
+    aws ecr get-login-password "${customer_aws_args[@]}" --region "$AWS_REGION" | docker login --username AWS --password-stdin "$registry"
     docker buildx build \
       --platform linux/amd64 \
       --provenance=false \
@@ -228,7 +239,7 @@ case "$operation" in
     tf_init
     arn="$(service_arn)"
     for _ in {1..90}; do
-      status="$(aws apprunner describe-service "${aws_args[@]}" --service-arn "$arn" --query 'Service.Status' --output text)"
+      status="$(aws apprunner describe-service "${customer_aws_args[@]}" --service-arn "$arn" --query 'Service.Status' --output text)"
       echo "App Runner status: ${status}"
       [[ "$status" == "RUNNING" ]] && exit 0
       [[ "$status" == "CREATE_FAILED" || "$status" == "DELETE_FAILED" || "$status" == "OPERATION_IN_PROGRESS" || "$status" == "PAUSED" ]] || true
@@ -252,18 +263,18 @@ case "$operation" in
     ;;
   verify-absent)
     missing_service="false"
-    if aws apprunner list-services "${aws_args[@]}" --query "ServiceSummaryList[?ServiceName=='${service_name}'].ServiceArn | [0]" --output text | grep -qv '^None$'; then
+    if aws apprunner list-services "${customer_aws_args[@]}" --query "ServiceSummaryList[?ServiceName=='${service_name}'].ServiceArn | [0]" --output text | grep -qv '^None$'; then
       echo "App Runner service still exists: ${service_name}" >&2
       exit 1
     else
       missing_service="true"
     fi
-    if aws ecr describe-repositories "${aws_args[@]}" --repository-names "$repository_name" >/dev/null 2>&1; then
+    if aws ecr describe-repositories "${customer_aws_args[@]}" --repository-names "$repository_name" >/dev/null 2>&1; then
       echo "ECR repository still exists: ${repository_name}" >&2
       exit 1
     fi
-    if aws ec2 describe-vpcs "${aws_args[@]}" --region "$AWS_REGION" \
-      --filters "Name=tag:Scope,Values=customer-sandbox" \
+    if aws ec2 describe-vpcs "${customer_aws_args[@]}" --region "$AWS_REGION" \
+      --filters "Name=tag:Scope,Values=customer-sandbox" "Name=tag:ConnectionId,Values=${connection_id}" \
       --query 'Vpcs[0].VpcId' --output text | grep -qv '^None$'; then
       echo "Customer sandbox VPC still exists" >&2
       exit 1
