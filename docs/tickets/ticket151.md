@@ -28,11 +28,14 @@ The connection-scoped policy from PR #150 permits `ecr:BatchGetImage`, which ret
 
 ## Acceptance status
 
-In progress.
+Implemented locally. The live retry remains gated on review and the Terraform-controlled runner release.
 
 ## Tests / validation performed
 
-Pending implementation.
+- `bash -n scripts/customer-workload-app-runner-pilot.sh` passed.
+- `.venv/bin/python -m pytest -q tests/test_customer_executor_script.py tests/test_cloud_execution.py` passed: 14 tests.
+- `.venv/bin/python scripts/check_doc_conventions.py` passed.
+- `git diff --check` passed.
 
 ## Evidence files produced
 
