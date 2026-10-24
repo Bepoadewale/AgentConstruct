@@ -111,6 +111,9 @@ def _parser() -> argparse.ArgumentParser:
     cloud_evidence = subparsers.add_parser("get-customer-cloud-run-evidence")
     cloud_evidence.add_argument("--run-id", required=True)
 
+    reconcile_cloud_run = subparsers.add_parser("reconcile-customer-cloud-run-result")
+    reconcile_cloud_run.add_argument("--run-id", required=True)
+
     customer_queue = subparsers.add_parser("list-customer-reviews")
     customer_queue.add_argument("--state")
 
@@ -232,6 +235,8 @@ def run(
         )
     if args.command == "get-customer-cloud-run-evidence":
         return client.request("GET", f"/api/v1/cloud-execution-runs/{args.run_id}/evidence")
+    if args.command == "reconcile-customer-cloud-run-result":
+        return client.request("POST", f"/api/v1/cloud-execution-runs/{args.run_id}/reconcile-result")
     if args.command == "list-customer-reviews":
         suffix = f"?state={args.state}" if args.state else ""
         return client.request("GET", f"/api/v1/admin/customer-plan-revisions{suffix}")

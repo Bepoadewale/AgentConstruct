@@ -174,6 +174,11 @@ TOOL_DEFINITIONS = [
         "inputSchema": {"type": "object", "required": ["run_id"], "properties": {"run_id": {"type": "string"}}},
     },
     {
+        "name": "reconcile_customer_cloud_run_result",
+        "description": "Replay only an administrator-authorized, completed runner result whose encrypted artifact could not previously be read. It never reruns Terraform.",
+        "inputSchema": {"type": "object", "required": ["run_id"], "properties": {"run_id": {"type": "string"}}},
+    },
+    {
         "name": "execute_approved_plan",
         "description": "Ask the governed API to execute an already executable plan. API policy and exact-plan approval remain authoritative.",
         "inputSchema": {
@@ -350,6 +355,8 @@ class davdeployMcp:
             )
         if name == "get_customer_cloud_run_evidence":
             return self.client.request("GET", f"/api/v1/cloud-execution-runs/{arguments['run_id']}/evidence")
+        if name == "reconcile_customer_cloud_run_result":
+            return self.client.request("POST", f"/api/v1/cloud-execution-runs/{arguments['run_id']}/reconcile-result")
         if name == "execute_approved_plan":
             return self.client.request(
                 "POST", f"/api/v1/deployment-plans/{arguments['plan_id']}/execute"
