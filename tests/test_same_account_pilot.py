@@ -43,8 +43,9 @@ def test_customer_sandbox_has_a_dedicated_low_cost_vpc_boundary():
     assert "davdeploy-${var.connection_id}-workload" in CUSTOMER_MAIN
     assert "app_runner_ecr_access_role_arn" in CUSTOMER_MAIN
     assert "app_runner_runtime_role_arn" in CUSTOMER_MAIN
-    assert "customer_execution_role_arn" in CUSTOMER_VERSIONS
-    assert "customer_execution_external_id" in CUSTOMER_VERSIONS
+    assert "assume_role" not in CUSTOMER_VERSIONS
+    assert "customer_execution_external_id" not in CUSTOMER_VARIABLES
+    assert "customer_execution_external_id" not in CUSTOMER_SCRIPT
 
 
 def test_customer_workload_tags_match_the_bounded_connection_role_contract():

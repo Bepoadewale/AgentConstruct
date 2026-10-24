@@ -13,10 +13,4 @@ terraform {
 
 provider "aws" {
   region = var.region
-
-  assume_role {
-    role_arn     = var.customer_execution_role_arn
-    external_id  = var.customer_execution_external_id
-    session_name = "davdeploy-customer-workload"
-  }
 }
