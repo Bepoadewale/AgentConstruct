@@ -3536,7 +3536,9 @@ class ProductService:
                         "Terraform contract account does not match the verified customer connection."
                     )
                     state = "BLOCKED_ACCOUNT_GUARD"
-                real_plan_artifact = (plan_review.evidence or {}).get("real_plan_artifact") or {}
+                real_plan_artifact = (
+                    (plan_review.evidence or {}).get("real_plan_artifact") if plan_review else {}
+                ) or {}
                 if not real_plan_artifact.get("saved_plan_s3_uri") or not real_plan_artifact.get("saved_plan_sha256"):
                     blockers.append("Authenticated execution requires a reviewed saved Terraform plan artifact.")
                     state = "BLOCKED_TERRAFORM_PLAN_ARTIFACT_REQUIRED"
@@ -3672,7 +3674,14 @@ class ProductService:
                     f"{execution_environment['DAVDEPLOY_CUSTOMER_CONNECTION_ID']}/runs/{run.id}/result.json"
                 ),
             }
-            run.evidence = {**run.evidence, "execution_environment": execution_environment}
+            run.evidence = {
+                **run.evidence,
+                "execution_environment": execution_environment,
+                # Reconciliation deliberately reads this durable, top-level
+                # immutable artifact location rather than trusting a later
+                # worker environment reconstruction.
+                "result_s3_uri": execution_environment["DAVDEPLOY_EXECUTION_RESULT_S3_URI"],
+            }
         self.audit(
             principal,
             "cloud_execution.run_requested",
