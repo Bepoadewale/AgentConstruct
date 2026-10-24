@@ -17,9 +17,11 @@ log group, and ECR repository remain intentionally present. No App Runner servic
 created and no destroy plan or destroy has run.
 
 On 2026-10-24, the founder account authenticated successfully, but has no customer plan or
-cloud-connection records. Its GitHub connection reports `SIMULATED`: the production API has no
-GitHub App configuration. The existing customer user's credential is not present in the local
-Keychain, so its tenant-scoped approval and execution records cannot be safely continued.
+cloud-connection records. The existing customer workspace was subsequently restored with its
+stored Cognito refresh session and contains the approved pilot revision and verified connection.
+The GitHub App (`5159790`) is installed for `Bepoadewale` as installation `167128937`, but the
+production API remains in fixture mode until the separate GitHub App runtime deployment is merged
+and applied.
 
 ## Research / references used
 
@@ -31,9 +33,10 @@ Keychain, so its tenant-scoped approval and execution records cannot be safely c
 ## Work planned for the PR
 
 - Reconcile the completed authenticated plan artifact through the event-driven worker.
-- Configure and install a least-privilege GitHub App before claiming private repository onboarding.
-- Restore authorised access to the existing customer workspace, or explicitly create a new
-  customer workspace and connection for this pilot.
+- Merge and apply the least-privilege GitHub App runtime configuration before claiming private
+  repository onboarding.
+- Create a fresh customer plan using live private-repository discovery and current pricing
+  provenance; the existing approved revision retains fixture pricing evidence.
 - Start the service-enabled apply only after a reviewed saved plan is recorded.
 - Record actual service outputs and observed state.
 - Produce, review, and execute a separately saved destroy plan.
@@ -43,8 +46,9 @@ Keychain, so its tenant-scoped approval and execution records cannot be safely c
 
 - [x] Customer-sandbox foundation apply uses a saved, reviewed plan artifact.
 - [x] Foundation outputs are ingested from the real run.
-- [ ] Private GitHub onboarding uses an installed, non-fixture GitHub App.
-- [ ] Customer tenant approval workflow is validated with authorised customer access.
+- [x] Existing customer tenant access is restored through a short-lived refreshed session.
+- [ ] Private GitHub onboarding uses the installed, non-fixture GitHub App in production.
+- [ ] Customer tenant approval workflow is revalidated against the fresh live-evidence revision.
 - [ ] Service-enabled apply uses a saved, reviewed plan artifact.
 - [ ] Service outputs and observed state are recorded from the real run.
 - [ ] Destroy uses its own reviewed saved destroy plan.
@@ -53,9 +57,10 @@ Keychain, so its tenant-scoped approval and execution records cannot be safely c
 
 ## Acceptance status
 
-Partially complete. Foundation apply and immutable image delivery are evidenced, but the private
-GitHub integration and authorised existing-customer session are prerequisites for the remaining
-service apply, observation, and governed-destroy stages.
+Partially complete. Foundation apply and immutable image delivery are evidenced. The customer
+session and an installed GitHub App are available, but the App configuration must be deployed and
+a fresh plan must replace the prior fixture-pricing evidence before service apply, observation,
+and governed destroy.
 
 ## Tests / validation performed
 
@@ -79,7 +84,7 @@ owner approval after the service smoke test.
 
 The API, worker, CodeBuild runner, and Terraform controls are defined by merged control-plane PRs
 through #151. Live account, CodeBuild, S3 artifact, API, Cognito, GitHub and Cloudflare checks are
-recorded in `docs/test/test130.md`. Configure and install the GitHub App, restore authorised
-customer access or create an explicitly approved replacement customer workspace, then complete
-the service and destruction stages with fresh evidence.
+recorded in `docs/test/test130.md`. Deploy the GitHub App runtime configuration, create the fresh
+private-repository plan and execute the remaining service and destruction stages with fresh
+evidence.
 
